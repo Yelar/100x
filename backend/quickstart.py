@@ -8,12 +8,17 @@ from googleapiclient.errors import HttpError
 
 # If modifying these scopes, delete the file token.json.
 SCOPES = ["https://www.googleapis.com/auth/gmail.readonly"]
-
-
-def main():
-  """Shows basic usage of the Gmail API.
-  Lists the user's Gmail labels.
-  """
+# it kind of looks like a scope for reading emails
+def main(): 
+  """Shows basic usage of the Gmail API. 
+  Lists the user's Gmail labels. 
+  """ 
+  #todo: update the scopes to include sending emails
+  # The file token.json stores the user's access and refresh tokens, and is
+  # created automatically when the authorization flow completes for the first
+  # time.
+  # If modifying these scopes, delete the file token.json.
+  # The file token.json stores the user's access and refresh tokens, and is
   creds = None
   # The file token.json stores the user's access and refresh tokens, and is
   # created automatically when the authorization flow completes for the first
@@ -24,7 +29,7 @@ def main():
   if not creds or not creds.valid:
     if creds and creds.expired and creds.refresh_token:
       creds.refresh(Request())
-    else:
+    else: 
       flow = InstalledAppFlow.from_client_secrets_file(
           "credentials.json", SCOPES
       )
@@ -32,7 +37,7 @@ def main():
     # Save the credentials for the next run
     with open("token.json", "w") as token:
       token.write(creds.to_json())
-
+ 
   try:
     # Call the Gmail API
     service = build("gmail", "v1", credentials=creds)
@@ -40,16 +45,14 @@ def main():
     labels = results.get("labels", [])
 
     if not labels:
-      print("No labels found.")
-      return
-    print("Labels:")
-    for label in labels:
-      print(label["name"])
+      print("No labels found. Nuh uh") 
+      return 
+    print("Labels:")     
+    for label in labels: 
+      print(label["name"]) 
 
   except HttpError as error:
-    # TODO(developer) - Handle errors from gmail API.
     print(f"An error occurred: {error}")
 
-
 if __name__ == "__main__":
-  main()
+  main()            
