@@ -40,3 +40,4 @@ coverage/
 # System Files
 .DS_Store
 *.pem
+backend/

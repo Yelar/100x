@@ -3,7 +3,7 @@
 import { useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 
-const BACKEND_URL = 'http://localhost:8000';
+const BACKEND_URL = 'http://localhost:3000';
 
 export default function Login() {
   const router = useRouter();
@@ -23,51 +23,20 @@ export default function Login() {
       console.error('Authentication error:', error);
       alert('Authentication failed. Please try again.');
     }
-
-    // Test backend connection on component mount
-    fetch(`${BACKEND_URL}/`)
-      .then(res => res.json())
-      .then(data => {
-        console.log('Backend connection test successful:', data);
-      })
-      .catch(error => {
-        console.error('Backend connection test failed:', error);
-      });
   }, [router]);
 
   const handleGoogleLogin = async () => {
     try {
-      console.log(`Attempting to connect to backend at ${BACKEND_URL}/api/auth/google`);
-      
-      const response = await fetch(`${BACKEND_URL}/api/auth/google`, {
-        method: 'GET',
-        headers: {
-          'Accept': 'application/json',
-          'Origin': 'http://localhost:3000'
-        }
-      });
-      
-      console.log('Response status:', response.status);
-      console.log('Response headers:', Object.fromEntries(response.headers.entries()));
-      
-      if (!response.ok) {
-        const errorText = await response.text();
-        console.error('Error response:', errorText);
-        throw new Error(`HTTP error! status: ${response.status}, message: ${errorText}`);
-      }
-      
+      const response = await fetch('/api/auth/google');
       const data = await response.json();
-      console.log('Received data from backend:', data);
       
       if (data.url) {
-        console.log('Redirecting to Google OAuth URL:', data.url);
         window.location.href = data.url;
       } else {
-        throw new Error('No authorization URL received from server');
-      } 
+        console.error('No auth URL received');
+      }
     } catch (error) {
-      console.error('Detailed error:', error);
-      alert(`Failed to connect to the server at ${BACKEND_URL}. Please check the browser console for details.`);
+      console.error('Error initiating Google login:', error);
     }
   };
 
@@ -101,4 +70,4 @@ export default function Login() {
       </div>
     </div>
   );
-} 
+}
