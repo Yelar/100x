@@ -55,7 +55,7 @@ export default function Login() {
         window.location.href = data.url;
       } else {
         throw new Error('No authorization URL received from server');
-      }
+      } 
     } catch (error) {
       console.error('Detailed error:', error);
       alert(`Failed to connect to the server at ${BACKEND_URL}. Please check the browser console for details.`);
