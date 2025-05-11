@@ -13,6 +13,15 @@ export default function Login() {
     const userInfo = localStorage.getItem('user_info');
     if (userInfo) {
       router.push('/dashboard');
+      return;
+    }
+
+    // Check for error parameter in URL
+    const urlParams = new URLSearchParams(window.location.search);
+    const error = urlParams.get('error');
+    if (error) {
+      console.error('Authentication error:', error);
+      alert('Authentication failed. Please try again.');
     }
 
     // Test backend connection on component mount

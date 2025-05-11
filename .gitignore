@@ -1,1 +1,42 @@
+# Backend
+backend/credentials.json
+backend/venv/
+backend/tokens/
+backend/__pycache__/
+backend/.env
+
+# Frontend
+frontend/node_modules/
+frontend/.next/
+frontend/out/
+frontend/dist/
+frontend/build/
+frontend/coverage/
+frontend/.env
+
+# Bot
 bot/
+bot/tokens/
+bot/token.json
+
+# Dependencies
+node_modules/
+__pycache__/
+*.pyc
+
+# Environment
+.env
+.env.local
+.env.development.local
+.env.test.local
+.env.production.local
+
+# Build and Cache
+.next/
+dist/
+build/
+coverage/
+
+# System Files
+.DS_Store
+*.pem

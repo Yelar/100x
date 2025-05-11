@@ -20,7 +20,7 @@ export default function Dashboard() {
       router.push('/login');
       return;
     }
-
+    console.log("storedUserInfo", storedUserInfo)
     setUserInfo(JSON.parse(storedUserInfo));
   }, [router]);
 
