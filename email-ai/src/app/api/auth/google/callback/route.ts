@@ -15,7 +15,7 @@ export async function GET(request: Request) {
 
     // Get tokens from Google
     const tokens = await getTokens(code);
-    
+     
     // Get user info
     const userInfo = await getUserInfo(tokens.access_token!);
 
@@ -28,7 +28,7 @@ export async function GET(request: Request) {
       httpOnly: true,
       secure: process.env.NODE_ENV === 'production',
       sameSite: 'lax',
-      maxAge: 7 * 24 * 60 * 60 // 7 days
+      maxAge: 3600 // 1 hour, matching Google's typical expiry
     });
 
     if (tokens.refresh_token) {
@@ -94,7 +94,7 @@ export async function POST(request: Request) {
       httpOnly: true,
       secure: process.env.NODE_ENV === 'production',
       sameSite: 'lax',
-      maxAge: 7 * 24 * 60 * 60 // 7 days
+      maxAge: 3600 // 1 hour, matching Google's typical expiry
     });
 
     if (tokens.refresh_token) {

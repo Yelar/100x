@@ -14,8 +14,42 @@ export async function GET() {
       );
     }
 
-    const emails = await getGmailMessages(accessTokenCookie);
-    return NextResponse.json({ emails });
+    try {
+      const emails = await getGmailMessages(accessTokenCookie);
+      return NextResponse.json({ emails });
+    } catch (error: any) {
+      // Check if error is due to token expiration
+      if (error?.response?.status === 401) {
+        // Try to refresh the token
+        const refreshResponse = await fetch('http://localhost:3000/api/auth/refresh', {
+          method: 'POST',
+        });
+
+        if (!refreshResponse.ok) {
+          return NextResponse.json(
+            { error: 'Token refresh failed' },
+            { status: 401 }
+          );
+        }
+
+        // Get the new access token from cookies
+        const newCookiesList = await cookies();
+        const newAccessToken = newCookiesList.get('access_token')?.value;
+
+        if (!newAccessToken) {
+          return NextResponse.json(
+            { error: 'Token refresh failed' },
+            { status: 401 }
+          );
+        }
+
+        // Retry the request with new token
+        const emails = await getGmailMessages(newAccessToken);
+        return NextResponse.json({ emails });
+      }
+
+      throw error; // Re-throw if it's not a token expiration error
+    }
   } catch (error) {
     console.error('Error fetching emails:', error);
     return NextResponse.json(
