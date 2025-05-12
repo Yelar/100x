@@ -5,6 +5,7 @@ const CLIENT_SECRETS_FILE = process.env.GOOGLE_CLIENT_SECRETS || '{}';
 const SCOPES = [
   'https://www.googleapis.com/auth/userinfo.email',
   'https://www.googleapis.com/auth/gmail.readonly',
+  'https://www.googleapis.com/auth/gmail.send',
   'https://www.googleapis.com/auth/userinfo.profile',
   'openid'
 ];
@@ -43,14 +44,25 @@ export const getUserInfo = async (accessToken: string) => {
   return userInfo.data;
 };
 
-export const getGmailMessages = async (accessToken: string) => {
+interface GetEmailsOptions {
+  pageToken?: string;
+  query?: string;
+  maxResults?: number;
+}
+
+export const getGmailMessages = async (accessToken: string, options: GetEmailsOptions = {}) => {
+  const { pageToken, query, maxResults = 20 } = options;
+  
   oauth2Client.setCredentials({ access_token: accessToken });
   const gmail = google.gmail({ version: 'v1', auth: oauth2Client });
   
+  // List messages with search query if provided
   const response = await gmail.users.messages.list({
     userId: 'me',
-    maxResults: 20,
-    labelIds: ['INBOX']
+    maxResults,
+    pageToken,
+    q: query, // Gmail search query
+    labelIds: query ? undefined : ['INBOX'] // Only filter by INBOX if not searching
   });
 
   const messages = response.data.messages || [];
@@ -99,7 +111,10 @@ export const getGmailMessages = async (accessToken: string) => {
     })
   );
 
-  return detailedMessages;
+  return {
+    emails: detailedMessages,
+    nextPageToken: response.data.nextPageToken
+  };
 };
 
 export const getEmailContent = async (accessToken: string, messageId: string) => {
