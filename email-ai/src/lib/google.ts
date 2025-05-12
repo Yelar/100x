@@ -59,20 +59,83 @@ export const getGmailMessages = async (accessToken: string) => {
       const msg = await gmail.users.messages.get({
         userId: 'me',
         id: message.id!,
-        format: 'metadata',
-        metadataHeaders: ['From', 'Subject', 'Date']
+        format: 'full'
       });
 
       const headers = msg.data.payload?.headers || [];
+      const parts = msg.data.payload?.parts || [];
+      
+      // Get the email body
+      let body = '';
+      if (msg.data.payload?.body?.data) {
+        body = Buffer.from(msg.data.payload.body.data, 'base64').toString();
+      } else if (parts.length > 0) {
+        // Try to find HTML or plain text part
+        const htmlPart = parts.find(part => part.mimeType === 'text/html');
+        const textPart = parts.find(part => part.mimeType === 'text/plain');
+        const selectedPart = htmlPart || textPart;
+        
+        if (selectedPart?.body?.data) {
+          body = Buffer.from(selectedPart.body.data, 'base64').toString();
+        }
+      }
+
+      // If no HTML content is found, convert plain text to HTML
+      if (!body.includes('<')) {
+        body = body
+          .split('\n')
+          .map(line => `<p>${line}</p>`)
+          .join('');
+      }
+
       return {
         id: msg.data.id,
         from: headers.find(h => h.name === 'From')?.value || 'Unknown',
         subject: headers.find(h => h.name === 'Subject')?.value || 'No Subject',
         date: headers.find(h => h.name === 'Date')?.value || 'Unknown',
-        snippet: msg.data.snippet || ''
+        snippet: msg.data.snippet || '',
+        body: body || msg.data.snippet || ''
       };
     })
   );
 
   return detailedMessages;
+};
+
+export const getEmailContent = async (accessToken: string, messageId: string) => {
+  oauth2Client.setCredentials({ access_token: accessToken });
+  const gmail = google.gmail({ version: 'v1', auth: oauth2Client });
+
+  const msg = await gmail.users.messages.get({
+    userId: 'me',
+    id: messageId,
+    format: 'full'
+  });
+
+  const headers = msg.data.payload?.headers || [];
+  const parts = msg.data.payload?.parts || [];
+  
+  // Get the email body
+  let body = '';
+  if (msg.data.payload?.body?.data) {
+    body = Buffer.from(msg.data.payload.body.data, 'base64').toString();
+  } else if (parts.length > 0) {
+    // Try to find HTML or plain text part
+    const htmlPart = parts.find(part => part.mimeType === 'text/html');
+    const textPart = parts.find(part => part.mimeType === 'text/plain');
+    const selectedPart = htmlPart || textPart;
+    
+    if (selectedPart?.body?.data) {
+      body = Buffer.from(selectedPart.body.data, 'base64').toString();
+    }
+  }
+
+  return {
+    id: msg.data.id,
+    from: headers.find(h => h.name === 'From')?.value || 'Unknown',
+    subject: headers.find(h => h.name === 'Subject')?.value || 'No Subject',
+    date: headers.find(h => h.name === 'Date')?.value || 'Unknown',
+    snippet: msg.data.snippet || '',
+    body: body || msg.data.snippet || ''
+  };
 }; 

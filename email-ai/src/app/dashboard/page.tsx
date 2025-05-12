@@ -1,5 +1,6 @@
 'use client';
 
+import * as React from 'react';
 import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -20,6 +21,7 @@ interface Email {
   subject: string;
   date: string;
   snippet: string;
+  body: string;
 }
 
 interface EmailsResponse {
@@ -31,25 +33,22 @@ export default function Dashboard() {
   const [userInfo, setUserInfo] = useState<UserInfo | null>(null);
   const [emails, setEmails] = useState<Email[]>([]);
   const [loading, setLoading] = useState(true);
+  const [selectedEmail, setSelectedEmail] = useState<Email | null>(null);
 
   useEffect(() => {
     const fetchData = async () => {
       try {
-        // Get user info from temporary cookie
         const cookies = document.cookie.split(';');
         const userInfoCookie = cookies
           .find(c => c.trim().startsWith('temp_user_info='))
           ?.split('=')?.[1];
 
         if (userInfoCookie) {
-          // Parse and store user info
           const userInfo = JSON.parse(decodeURIComponent(userInfoCookie));
           localStorage.setItem('user_info', JSON.stringify(userInfo));
-          // Remove the temporary cookie
           document.cookie = 'temp_user_info=; max-age=0; path=/;';
         }
 
-        // Check stored user info
         const storedUserInfo = localStorage.getItem('user_info');
         if (!storedUserInfo) {
           router.push('/login');
@@ -57,7 +56,6 @@ export default function Dashboard() {
         }
         setUserInfo(JSON.parse(storedUserInfo));
 
-        // Fetch emails
         const response = await api.get<EmailsResponse>('/api/emails');
         setEmails(response.data.emails);
       } catch (error) {
@@ -79,119 +77,103 @@ export default function Dashboard() {
 
   if (!userInfo || loading) {
     return (
-      <div className="min-h-screen bg-background p-8">
-        <div className="max-w-4xl mx-auto">
-          <Card className="border-2">
-            <CardHeader className="space-y-1">
-              <CardTitle className="flex items-center justify-between">
-                <Skeleton className="h-8 w-24" />
-                <Skeleton className="h-10 w-20" />
-              </CardTitle>
-            </CardHeader>
-            <CardContent>
-              <div className="flex items-center space-x-4">
-                <Skeleton className="h-16 w-16 rounded-full" />
-                <div className="space-y-2">
-                  <Skeleton className="h-6 w-48" />
-                  <Skeleton className="h-4 w-32" />
-                </div>
-              </div>
-            </CardContent>
-          </Card>
+      <div className="min-h-screen bg-background">
+        <div className="flex h-screen">
+          {/* Sidebar */}
+          <div className="w-80 border-r border-border bg-card">
+            <div className="p-4">
+              <Skeleton className="h-8 w-24 mb-4" />
+              <Skeleton className="h-10 w-full" />
+            </div>
+          </div>
+          
+          {/* Main content */}
+          <div className="flex-1 p-6">
+            <Skeleton className="h-8 w-48 mb-4" />
+            <Skeleton className="h-32 w-full" />
+          </div>
         </div>
       </div>
     );
   }
 
   return (
-    <div className="min-h-screen bg-background p-8">
-      <div className="max-w-4xl mx-auto space-y-6">
-        <Card className="border-2">
-          <CardHeader className="space-y-1 border-b bg-muted/10">
-            <CardTitle className="flex items-center justify-between">
-              <span className="text-2xl font-bold text-foreground">Dashboard</span>
+    <div className="min-h-screen bg-background">
+      <div className="flex h-screen">
+        {/* Sidebar */}
+        <div className="w-80 border-r border-border bg-card overflow-hidden flex flex-col">
+          {/* User info */}
+          <div className="p-4 border-b border-border">
+            <div className="flex items-center space-x-3 mb-4">
+              <Avatar className="h-10 w-10">
+                <AvatarImage src={userInfo.picture} alt={userInfo.name} />
+                <AvatarFallback>{userInfo.name.charAt(0)}</AvatarFallback>
+              </Avatar>
+              <div className="flex-1 min-w-0">
+                <h2 className="text-sm font-medium truncate">{userInfo.name}</h2>
+                <p className="text-xs text-muted-foreground truncate">{userInfo.email}</p>
+              </div>
               <Button 
-                variant="destructive" 
+                variant="ghost" 
+                size="sm"
                 onClick={handleLogout}
-                className="ml-4 bg-red-600 hover:bg-red-700"
+                className="text-muted-foreground hover:text-foreground"
               >
                 Logout
               </Button>
-            </CardTitle>
-          </CardHeader>
-          <CardContent className="pt-6">
-            <div className="flex items-center space-x-6">
-              <Avatar className="h-20 w-20 ring-2 ring-primary">
-                <AvatarImage src={userInfo.picture} alt={userInfo.name} />
-                <AvatarFallback className="bg-primary text-primary-foreground text-xl">
-                  {userInfo.name.charAt(0)}
-                </AvatarFallback>
-              </Avatar>
-              <div className="space-y-1">
-                <h2 className="text-2xl font-semibold tracking-tight text-foreground">{userInfo.name}</h2>
-                <p className="text-sm text-muted-foreground font-medium">{userInfo.email}</p>
-              </div>
             </div>
-            
-            {/* Additional Dashboard Content */}
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mt-8">
-              <Card className="border shadow-sm">
-                <CardHeader className="bg-muted/10 border-b">
-                  <CardTitle className="text-lg font-semibold text-foreground">Quick Actions</CardTitle>
-                </CardHeader>
-                <CardContent className="space-y-2 pt-4">
-                  <Button className="w-full bg-primary text-primary-foreground hover:bg-primary/90">
-                    Edit Profile
-                  </Button>
-                  <Button className="w-full" variant="outline">
-                    View Settings
-                  </Button>
-                </CardContent>
-              </Card>
-              
-              <Card className="border shadow-sm">
-                <CardHeader className="bg-muted/10 border-b">
-                  <CardTitle className="text-lg font-semibold text-foreground">Account Status</CardTitle>
-                </CardHeader>
-                <CardContent className="pt-4">
-                  <div className="text-sm space-y-2">
-                    <p className="flex items-center text-foreground">
-                      <span className="text-green-600 mr-2">✓</span> Email verified
-                    </p>
-                    <p className="flex items-center text-foreground">
-                      <span className="text-green-600 mr-2">✓</span> Google account linked
-                    </p>
-                  </div>
-                </CardContent>
-              </Card>
-            </div>
-          </CardContent>
-        </Card>
+          </div>
 
-        <Card className="border-2">
-          <CardHeader className="border-b bg-muted/10">
-            <CardTitle>Recent Emails</CardTitle>
-          </CardHeader>
-          <CardContent className="pt-6">
-            <div className="space-y-4">
-              {emails.map((email) => (
-                <Card key={email.id} className="border p-4 hover:bg-muted/50 transition-colors">
-                  <div className="space-y-2">
-                    <div className="flex justify-between items-start">
-                      <h3 className="font-semibold text-foreground">{email.subject}</h3>
-                      <span className="text-sm text-muted-foreground">{new Date(email.date).toLocaleDateString()}</span>
-                    </div>
-                    <p className="text-sm text-muted-foreground">{email.from}</p>
-                    <p className="text-sm text-foreground">{email.snippet}</p>
+          {/* Email list */}
+          <div className="flex-1 overflow-auto">
+            {emails.map((email) => (
+              <button
+                key={email.id}
+                onClick={() => setSelectedEmail(email)}
+                className={`w-full text-left p-4 border-b border-border hover:bg-accent/50 transition-colors ${
+                  selectedEmail?.id === email.id ? 'bg-accent' : ''
+                }`}
+              >
+                <div className="space-y-1">
+                  <div className="flex justify-between items-start">
+                    <h3 className="font-medium text-sm truncate flex-1">{email.subject}</h3>
+                    <span className="text-xs text-muted-foreground ml-2 whitespace-nowrap">
+                      {new Date(email.date).toLocaleDateString()}
+                    </span>
                   </div>
-                </Card>
-              ))}
-              {emails.length === 0 && !loading && (
-                <p className="text-center text-muted-foreground">No emails found</p>
-              )}
+                  <p className="text-xs text-muted-foreground truncate">{email.from}</p>
+                  <p className="text-xs truncate">{email.snippet}</p>
+                </div>
+              </button>
+            ))}
+            {emails.length === 0 && !loading && (
+              <p className="text-center text-muted-foreground p-4">No emails found</p>
+            )}
+          </div>
+        </div>
+        
+        {/* Main content */}
+        <div className="flex-1 p-6 overflow-auto">
+          {selectedEmail ? (
+            <div className="space-y-6">
+              <div>
+                <h1 className="text-2xl font-semibold mb-2">{selectedEmail.subject}</h1>
+                <p className="text-sm text-muted-foreground">From: {selectedEmail.from}</p>
+                <p className="text-sm text-muted-foreground">
+                  Date: {new Date(selectedEmail.date).toLocaleString()}
+                </p>
+              </div>
+              <div 
+                className="prose prose-sm dark:prose-invert max-w-none"
+                dangerouslySetInnerHTML={{ __html: selectedEmail.body }}
+              />
             </div>
-          </CardContent>
-        </Card>
+          ) : (
+            <div className="h-full flex items-center justify-center text-muted-foreground">
+              Select an email to view its contents
+            </div>
+          )}
+        </div>
       </div>
     </div>
   );
