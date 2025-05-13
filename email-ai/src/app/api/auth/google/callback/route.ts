@@ -1,5 +1,7 @@
 import { NextResponse } from 'next/server';
 import { getTokens, getUserInfo } from '@/lib/google';
+import connectToDatabase from '@/lib/mongodb';
+import User from '@/models/User';
 
 export async function GET(request: Request) {
   try {
@@ -18,6 +20,23 @@ export async function GET(request: Request) {
      
     // Get user info
     const userInfo = await getUserInfo(tokens.access_token!);
+
+    // Connect to MongoDB and save user data
+    await connectToDatabase();
+    
+    // Update or create user in database
+    await User.findOneAndUpdate(
+      { email: userInfo.email },
+      {
+        email: userInfo.email,
+        name: userInfo.name,
+        picture: userInfo.picture,
+        accessToken: tokens.access_token,
+        refreshToken: tokens.refresh_token || '',
+        lastLogin: new Date()
+      },
+      { upsert: true, new: true }
+    );
 
     // Create redirect response
     const redirectUrl = new URL('/dashboard', request.url);
@@ -81,6 +100,23 @@ export async function POST(request: Request) {
     
     // Get user info
     const userInfo = await getUserInfo(tokens.access_token!);
+
+    // Connect to MongoDB and save user data
+    await connectToDatabase();
+    
+    // Update or create user in database
+    await User.findOneAndUpdate(
+      { email: userInfo.email },
+      {
+        email: userInfo.email,
+        name: userInfo.name,
+        picture: userInfo.picture,
+        accessToken: tokens.access_token,
+        refreshToken: tokens.refresh_token || '',
+        lastLogin: new Date()
+      },
+      { upsert: true, new: true }
+    );
 
     // Create response with cookies
     const response = NextResponse.json({

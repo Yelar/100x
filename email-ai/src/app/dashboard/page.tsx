@@ -193,7 +193,7 @@ export default function Dashboard() {
       const iframe = iframeRef.current;
       
       const handleIframeLoad = () => {
-        try {
+        try { 
           const doc = iframe.contentDocument || iframe.contentWindow?.document;
           if (doc) {
             const resizeObserver = new ResizeObserver(() => {

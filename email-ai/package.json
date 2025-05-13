@@ -19,6 +19,7 @@
     "@types/axios": "^0.9.36",
     "@types/dompurify": "^3.0.5",
     "@types/lodash": "^4.17.16",
+    "@types/uuid": "^10.0.0",
     "axios": "^1.9.0",
     "class-variance-authority": "^0.7.1",
     "clsx": "^2.1.1",
@@ -27,12 +28,15 @@
     "googleapis": "^148.0.0",
     "lodash": "^4.17.21",
     "lucide-react": "^0.509.0",
+    "mongodb": "^6.16.0",
+    "mongoose": "^8.14.3",
     "next": "^15.3.2",
     "next-themes": "^0.4.6",
     "react": "^19.1.0",
     "react-dom": "^19.1.0",
     "react-resizable-panels": "^3.0.1",
-    "tailwind-merge": "^3.3.0"
+    "tailwind-merge": "^3.3.0",
+    "uuid": "^11.1.0"
   },
   "devDependencies": {
     "@eslint/eslintrc": "^3",
