@@ -1,0 +1,530 @@
+'use client';
+
+import { useState, useRef, useEffect } from 'react';
+import { Message, useChat } from 'ai/react';
+import ReactMarkdown from 'react-markdown';
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Card, CardContent, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
+import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
+import { ScrollArea } from "@/components/ui/scroll-area";
+import { Send, Bot, User, Mail, Info, Search, Loader2, CheckCircle2, Activity, ExternalLink } from 'lucide-react';
+import { Badge } from "@/components/ui/badge";
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
+
+interface ParsedAIResponse {
+  thoughts?: string[];
+  answer: string;
+}
+
+export function ChatWith100x() {
+  const [errorMessage, setErrorMessage] = useState<string | null>(null);
+  
+  const { messages, input, handleInputChange, handleSubmit, isLoading } = useChat({
+    api: '/api/chat',
+    onResponse: (response) => {
+      // This is called when the API response starts streaming
+      console.log("Response started:", response.status);
+      setIsProcessing(true); // Ensure we show processing indicator
+      
+      // Check for error status
+      if (!response.ok) {
+        response.text().then((text) => {
+          console.error('Error response from API:', text);
+          setErrorMessage(`Error: ${response.status} - ${response.statusText}`);
+          setIsProcessing(false);
+        });
+      } else {
+        setErrorMessage(null);
+      }
+    },
+    onFinish: (message) => {
+      // This is called when the response finishes streaming
+      console.log("Response finished");
+      setIsProcessing(false);
+    },
+    onError: (error) => {
+      console.error("Chat API error:", error);
+      setErrorMessage(error.message || "An error occurred while communicating with the AI");
+      setIsProcessing(false);
+    }
+  });
+  
+  const messagesEndRef = useRef<HTMLDivElement>(null);
+  const [contextLoaded, setContextLoaded] = useState(false);
+  const [isProcessing, setIsProcessing] = useState(false);
+  const [emailCount, setEmailCount] = useState(0);
+  const [currentThoughts, setCurrentThoughts] = useState<string[]>([]);
+  const [currentThoughtIndex, setCurrentThoughtIndex] = useState(0);
+  
+  // Function to safely try to parse JSON from a string that might contain text before/after the JSON
+  const extractJsonFromString = (str: string): any => {
+    try {
+      // First try direct parsing
+      return JSON.parse(str);
+    } catch (error) {
+      try {
+        // Try to find a JSON object in the string using a more robust regex
+        const match = str.match(/\{[\s\S]*\}/);
+        if (match) {
+          try {
+            return JSON.parse(match[0]);
+          } catch (jsonError) {
+            console.log("Found JSON-like string but failed to parse:", jsonError);
+            // Try to clean the match before parsing
+            const cleaned = match[0].replace(/\\n/g, ' ').replace(/\\"/g, '"');
+            try {
+              return JSON.parse(cleaned);
+            } catch (cleanError) {
+              console.log("Failed to parse cleaned JSON:", cleanError);
+            }
+          }
+        }
+      } catch (innerError) {
+        console.log("Failed to extract JSON from string:", innerError);
+      }
+    }
+    return null;
+  };
+  
+  // Parse AI responses to extract structured data
+  const parseAIMessage = (content: string): ParsedAIResponse => {
+    console.log("Parsing message content:", content);
+    
+    // Handle empty content
+    if (!content || content.trim() === '') {
+      return {
+        thoughts: ["Processing your question"],
+        answer: "I'm working on your answer..."
+      };
+    }
+    
+    // Try different ways to get structured data
+    try {
+      const jsonData = extractJsonFromString(content);
+      console.log("Extracted JSON data:", jsonData);
+      
+      if (jsonData && jsonData.thoughts && jsonData.answer) {
+        return jsonData as ParsedAIResponse;
+      } else if (jsonData && jsonData.answer) {
+        return {
+          thoughts: ["Analyzed your question", "Searched through emails", "Found relevant information"],
+          answer: jsonData.answer
+        };
+      }
+    } catch (error) {
+      console.log('Error parsing AI response:', error);
+    }
+    
+    // Look for patterns in unstructured text if JSON parsing failed
+    try {
+      // Try to find "thoughts" and "answer" sections in the text
+      const thoughtsMatch = content.match(/("thoughts":|thoughts:)\s*\[([\s\S]*?)\]/i);
+      const answerMatch = content.match(/("answer":|answer:)\s*"([\s\S]*?)"/i);
+      
+      if (thoughtsMatch && answerMatch) {
+        const thoughtsText = thoughtsMatch[2];
+        const answerText = answerMatch[2];
+        
+        const thoughts = thoughtsText
+          .split(/",\s*"/g)
+          .map(t => t.replace(/^"/, '').replace(/"$/, '').trim())
+          .filter(t => t.length > 0);
+          
+        return {
+          thoughts,
+          answer: answerText.trim()
+        };
+      }
+    } catch (patternError) {
+      console.log("Error extracting patterns from text:", patternError);
+    }
+    
+    // Default fallback if all parsing methods fail
+    // If content looks like plain text (no JSON-like structures), just use it as the answer
+    if (!content.includes('{') && !content.includes('"thoughts":') && !content.includes('"answer":')) {
+      return { 
+        thoughts: ["Analyzed your question", "Searched through emails", "Found relevant information"],
+        answer: content.trim()
+      };
+    }
+    
+    // Final fallback
+    return { 
+      thoughts: ["Analyzed your question", "Searched through emails", "Found relevant information"],
+      answer: "I encountered an issue processing your request. Please try asking your question again."
+    };
+  };
+  
+  // Handle email reference clicks
+  const handleEmailReferenceClick = async (emailId: string) => {
+    // This function would open the email in the app
+    console.log("Opening email:", emailId);
+    window.open(`/emails/${emailId}`, '_blank');
+  };
+  
+  // Format answer text with clickable email references
+  const formatAnswerWithEmailReferences = (answer: string) => {
+    if (!answer) return null;
+    
+    // Handle different possible email reference formats: [Email:ID123], [Email:ID123 Subject], [EmailID123], etc.
+    const emailRefRegex = /\[Email:([a-zA-Z0-9_-]+)(?:[^\]]*)\]|\[EmailID:?([a-zA-Z0-9_-]+)(?:[^\]]*)\]/gi;
+    
+    try {
+      // Split the text to find all email references
+      const matches = Array.from(answer.matchAll(new RegExp(emailRefRegex)));
+      
+      if (!matches || matches.length === 0) {
+        return <span>{answer}</span>;
+      }
+      
+      // Build segments of text and buttons
+      const elements: React.ReactNode[] = [];
+      let lastIndex = 0;
+      
+      matches.forEach((match, index) => {
+        // Add text before the match
+        if (match.index && match.index > lastIndex) {
+          elements.push(
+            <span key={`text-${index}`}>
+              {answer.substring(lastIndex, match.index)}
+            </span>
+          );
+        }
+        
+        // Extract the email ID from the match
+        const emailId = match[1] || match[2];
+        
+        // Add the email button
+        elements.push(
+          <Button 
+            key={`email-${index}`}
+            variant="link" 
+            className="px-1 py-0 h-auto text-primary inline-flex items-center gap-1 underline underline-offset-2" 
+            onClick={() => handleEmailReferenceClick(emailId)}
+          >
+            <Mail className="h-3 w-3" />
+            <span>View Email</span>
+            <ExternalLink className="h-3 w-3" />
+          </Button>
+        );
+        
+        // Update the lastIndex
+        lastIndex = (match.index || 0) + match[0].length;
+      });
+      
+      // Add any remaining text after the last match
+      if (lastIndex < answer.length) {
+        elements.push(
+          <span key="text-last">{answer.substring(lastIndex)}</span>
+        );
+      }
+      
+      return <>{elements}</>;
+    } catch (error) {
+      console.error("Error formatting email references:", error);
+      return <span>{answer}</span>;
+    }
+  };
+  
+  // Auto scroll to bottom when new messages arrive
+  useEffect(() => {
+    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+    
+    // When a new message arrives, we're no longer processing
+    if (messages.length > 0 && isProcessing) {
+      // Only stop processing if the last message is not empty
+      const lastMessage = messages[messages.length - 1];
+      if (lastMessage && lastMessage.content && lastMessage.content.trim() !== '') {
+        console.log("New message received, stopping processing");
+        setIsProcessing(false);
+        setCurrentThoughts([]);
+        setCurrentThoughtIndex(0);
+      }
+    }
+  }, [messages, isProcessing]);
+  
+  // Check if email context has been loaded
+  useEffect(() => {
+    const checkEmailContext = async () => {
+      try {
+        const response = await fetch('/api/emails/context');
+        if (response.ok) {
+          const data = await response.json();
+          const hasEmails = data.emailContext && data.emailContext.length > 0;
+          setContextLoaded(hasEmails);
+          if (hasEmails) {
+            setEmailCount(data.emailContext.length);
+          }
+        }
+      } catch (error) {
+        console.error('Error checking email context:', error);
+      }
+    };
+    
+    checkEmailContext();
+  }, []);
+  
+  // Effect to simulate thinking process when processing
+  useEffect(() => {
+    if (isProcessing) {
+      const defaultThoughts = [
+        "Analyzing your question...",
+        "Generating search keywords...",
+        "Searching for relevant emails...",
+        "Summarizing key points from relevant emails...",
+        "Analyzing email content...",
+        "Preparing concise answer..."
+      ];
+      
+      setCurrentThoughts(defaultThoughts);
+      
+      // Simulate progression through thoughts
+      const interval = setInterval(() => {
+        setCurrentThoughtIndex((prev) => {
+          if (prev < defaultThoughts.length - 1) {
+            return prev + 1;
+          }
+          return prev;
+        });
+      }, 1000);
+      
+      return () => clearInterval(interval);
+    }
+  }, [isProcessing]);
+  
+  // Clean up any active timeouts when component unmounts
+  const timeoutRefs = useRef<NodeJS.Timeout[]>([]);
+  
+  const addToCleanup = (timeout: NodeJS.Timeout) => {
+    timeoutRefs.current.push(timeout);
+  };
+  
+  useEffect(() => {
+    // Clean up all timeouts when component unmounts
+    return () => {
+      timeoutRefs.current.forEach(timeout => clearTimeout(timeout));
+    };
+  }, []);
+  
+  // Custom submit handler to show processing state
+  const handleCustomSubmit = (e: React.FormEvent<HTMLFormElement>) => {
+    e.preventDefault();
+    if (!input.trim()) return;
+    
+    setIsProcessing(true);
+    setCurrentThoughtIndex(0);
+    
+    // Safety timeout - ensure UI updates if streaming fails
+    const safetyTimeout = setTimeout(() => {
+      if (isProcessing) {
+        console.log("Safety timeout triggered - forcing UI update");
+        setIsProcessing(false);
+      }
+    }, 30000); // Increase to 30 seconds to allow for processing time
+    
+    // Add to cleanup
+    addToCleanup(safetyTimeout);
+    
+    handleSubmit(e);
+  };
+  
+  // Render a single message
+  const renderMessage = (message: Message) => {
+    // For assistant messages, try to parse structured format
+    if (message.role === 'assistant') {
+      try {
+        const parsedResponse = parseAIMessage(message.content);
+        
+        return (
+          <div className="flex gap-3 max-w-[80%]">
+            <Avatar className="h-8 w-8 mt-0.5">
+              <AvatarFallback className="bg-primary/10 text-primary">
+                <Bot className="h-4 w-4" />
+              </AvatarFallback>
+            </Avatar>
+            <div className="space-y-4">
+              {parsedResponse.thoughts && parsedResponse.thoughts.length > 0 && (
+                <div className="bg-muted/50 rounded-lg p-3 space-y-2">
+                  <div className="text-xs text-muted-foreground flex items-center gap-1">
+                    <Activity className="h-3 w-3" />
+                    <span>Thought process:</span>
+                  </div>
+                  <ul className="pl-5 space-y-1.5">
+                    {parsedResponse.thoughts.map((thought, index) => (
+                      <li key={index} className="text-xs text-muted-foreground flex items-start gap-2">
+                        <CheckCircle2 className="h-3 w-3 mt-0.5 text-primary/70" />
+                        <span>{thought}</span>
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              )}
+              <div className="rounded-lg px-4 py-2 bg-muted">
+                <div className="prose dark:prose-invert max-w-none text-sm">
+                  {formatAnswerWithEmailReferences(parsedResponse.answer)}
+                </div>
+              </div>
+            </div>
+          </div>
+        );
+      } catch (error) {
+        console.error("Error rendering assistant message:", error);
+        // Fallback rendering for assistant messages when parsing fails
+        return (
+          <div className="flex gap-3 max-w-[80%]">
+            <Avatar className="h-8 w-8 mt-0.5">
+              <AvatarFallback className="bg-primary/10 text-primary">
+                <Bot className="h-4 w-4" />
+              </AvatarFallback>
+            </Avatar>
+            <div className="space-y-4">
+              <div className="rounded-lg px-4 py-2 bg-muted">
+                <div className="prose dark:prose-invert max-w-none text-sm break-words">
+                  {message.content || "I'm having trouble processing your request."}
+                </div>
+              </div>
+            </div>
+          </div>
+        );
+      }
+    }
+    
+    // User message
+    return (
+      <div className="flex flex-row-reverse gap-3 max-w-[80%]">
+        <Avatar className="h-8 w-8 mt-0.5">
+          <AvatarFallback className="bg-primary/10 text-primary">U</AvatarFallback>
+        </Avatar>
+        <div className="rounded-lg px-4 py-2 bg-primary text-primary-foreground">
+          <div className="prose dark:prose-invert max-w-none text-sm">
+            <ReactMarkdown>{message.content}</ReactMarkdown>
+          </div>
+        </div>
+      </div>
+    );
+  };
+
+  return (
+    <Card className="flex flex-col h-full border-none shadow-none">
+      <CardHeader className="px-4 py-3 border-b">
+        <div className="flex justify-between items-center">
+          <CardTitle className="text-md flex items-center">
+            <Bot className="mr-2 h-5 w-5 text-primary" />
+            Chat with 100x
+          </CardTitle>
+          {contextLoaded && (
+            <TooltipProvider>
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <Badge variant="secondary" className="text-xs flex items-center gap-1">
+                    <Search className="h-3 w-3" />
+                    Smart Email Search
+                  </Badge>
+                </TooltipTrigger>
+                <TooltipContent>
+                  <p>Intelligent email search based on your questions</p>
+                </TooltipContent>
+              </Tooltip>
+            </TooltipProvider>
+          )}
+        </div>
+      </CardHeader>
+      
+      <ScrollArea className="flex-1 p-4">
+        <div className="space-y-4 mb-4">
+          {/* Error message display */}
+          {errorMessage && (
+            <div className="bg-destructive/10 text-destructive rounded-lg p-3 text-sm flex items-center gap-2">
+              <Info className="h-4 w-4" />
+              <span>{errorMessage}</span>
+            </div>
+          )}
+        
+          {messages.length === 0 ? (
+            <div className="text-center text-muted-foreground py-6">
+              <Bot className="h-12 w-12 mx-auto mb-2 opacity-50" />
+              <p>Ask me anything about your emails or how to use the app!</p>
+              {contextLoaded && (
+                <div className="mt-4 text-xs flex items-center justify-center gap-1 text-primary">
+                  <Info className="h-3 w-3" />
+                  <span>Ask me a question and I'll search your emails for relevant information</span>
+                </div>
+              )}
+            </div>
+          ) : (
+            messages.map(message => (
+              <div 
+                key={message.id} 
+                className={`flex ${message.role === 'user' ? 'justify-end' : 'justify-start'}`}
+              >
+                {renderMessage(message)}
+              </div>
+            ))
+          )}
+          
+          {/* Thinking state display */}
+          {isProcessing && (
+            <div className="flex justify-start">
+              <div className="flex gap-3 max-w-[80%]">
+                <Avatar className="h-8 w-8 mt-0.5">
+                  <AvatarFallback className="bg-primary/10 text-primary">
+                    <Loader2 className="h-4 w-4 animate-spin" />
+                  </AvatarFallback>
+                </Avatar>
+                <div className="space-y-4">
+                  <div className="bg-muted/50 rounded-lg p-3 space-y-2">
+                    <div className="text-xs text-muted-foreground flex items-center gap-1">
+                      <Activity className="h-3 w-3" />
+                      <span>Thinking...</span>
+                    </div>
+                    <ul className="pl-5 space-y-1.5">
+                      {currentThoughts.map((thought, index) => (
+                        <li 
+                          key={index} 
+                          className={`text-xs flex items-start gap-2 ${
+                            index <= currentThoughtIndex 
+                              ? 'text-muted-foreground' 
+                              : 'text-muted-foreground/50'
+                          }`}
+                        >
+                          {index <= currentThoughtIndex ? (
+                            <CheckCircle2 className="h-3 w-3 mt-0.5 text-primary/70" />
+                          ) : (
+                            <div className="h-3 w-3 mt-0.5 rounded-full border border-muted-foreground/30" />
+                          )}
+                          <span>{thought}</span>
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
+                </div>
+              </div>
+            </div>
+          )}
+          
+          <div ref={messagesEndRef} />
+        </div>
+      </ScrollArea>
+      
+      <CardFooter className="p-4 pt-2 border-t">
+        <form onSubmit={handleCustomSubmit} className="flex w-full gap-2">
+          <Input
+            placeholder={isProcessing ? "Searching through your emails..." : "Type your message..."}
+            value={input}
+            onChange={handleInputChange}
+            disabled={isLoading || isProcessing}
+            className="flex-1"
+          />
+          <Button type="submit" size="icon" disabled={isLoading || isProcessing || !input.trim()}>
+            {isProcessing ? (
+              <Loader2 className="h-4 w-4 animate-spin" />
+            ) : (
+              <Send className="h-4 w-4" />
+            )}
+          </Button>
+        </form>
+      </CardFooter>
+    </Card>
+  );
+} 

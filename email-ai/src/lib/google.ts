@@ -153,4 +153,20 @@ export const getEmailContent = async (accessToken: string, messageId: string) =>
     snippet: msg.data.snippet || '',
     body: body || msg.data.snippet || ''
   };
+};
+
+/**
+ * Fetch multiple email contents by IDs
+ */
+export const getBatchEmailContent = async (accessToken: string, messageIds: string[]) => {
+  if (!messageIds.length) return [];
+  
+  oauth2Client.setCredentials({ access_token: accessToken });
+  
+  // Use Promise.all to fetch emails in parallel
+  const emails = await Promise.all(
+    messageIds.map(id => getEmailContent(accessToken, id))
+  );
+  
+  return emails;
 }; 

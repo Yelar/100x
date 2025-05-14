@@ -15,6 +15,7 @@ import debounce from 'lodash/debounce';
 import { EmailComposeDialog } from "@/components/email-compose-dialog";
 import { cn } from "@/lib/utils";
 import { sanitizeHtml, createEmailDocument } from '@/lib/sanitize-html';
+import { ChatWith100x } from '@/components/chat-with-100x';
 
 interface UserInfo {
   email: string;
@@ -268,12 +269,12 @@ export default function Dashboard() {
           {/* Main content */}
           <div className="flex-1 p-3">
             <Skeleton className="h-10 w-full mb-4 rounded-full" />
-            <div className="space-y-2">
+                <div className="space-y-2">
               {[...Array(8)].map((_, i) => (
                 <Skeleton key={i} className="h-8 w-full" />
               ))}
-            </div>
-          </div>
+                </div>
+              </div>
         </div>
       </div>
     );
@@ -325,11 +326,11 @@ export default function Dashboard() {
           </div>
         </div>
         <div className="flex items-center space-x-2">
-          <Button
+              <Button 
             variant="ghost"
             size="icon"
             className="text-muted-foreground hover:text-foreground"
-            onClick={handleLogout}
+                onClick={handleLogout}
           >
             <LogOut className="h-5 w-5" />
           </Button>
@@ -464,8 +465,8 @@ export default function Dashboard() {
                   <Avatar className="h-10 w-10 mr-3">
                     <AvatarFallback className="bg-primary/10 text-primary">
                       {selectedEmail.from.charAt(0).toUpperCase()}
-                    </AvatarFallback>
-                  </Avatar>
+                </AvatarFallback>
+              </Avatar>
                   <div>
                     <div className="flex items-center">
                       <span className="font-medium text-foreground">
@@ -499,8 +500,8 @@ export default function Dashboard() {
                         <path fillRule="evenodd" d="M8.257 3.099c.765-1.36 2.722-1.36 3.486 0l5.58 9.92c.75 1.334-.213 2.98-1.742 2.98H4.42c-1.53 0-2.493-1.646-1.743-2.98l5.58-9.92zM11 13a1 1 0 11-2 0 1 1 0 012 0zm-1-8a1 1 0 00-1 1v3a1 1 0 002 0V6a1 1 0 00-1-1z" clipRule="evenodd" />
                       </svg>
                       <span className="font-medium text-foreground">This email contains complex formatting that couldn't be displayed properly.</span>
-                    </div>
-                    
+            </div>
+          
                     {/* Simple text view */}
                     <div className="mb-4 p-4 bg-card rounded-md">
                       <h3 className="text-lg font-medium mb-2 text-foreground">Plain Text Version:</h3>
@@ -556,6 +557,11 @@ export default function Dashboard() {
               </div>
             </div>
           )}
+        </div>
+        
+        {/* Chat with 100x */}
+        <div className="w-[350px] flex-none border-l border-border bg-card flex flex-col overflow-hidden">
+          <ChatWith100x />
         </div>
       </div>
 
