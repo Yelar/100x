@@ -18,9 +18,9 @@ export function usePanelLayout() {
   const chatRef = useRef<ImperativePanelHandle>(null)
   
   const [layout, setLayout] = useLocalStorage<PanelLayout>("email-panel-layout", {
-    sidebarSize: 20,
-    emailListSize: 30,
-    emailContentSize: 30,
+    sidebarSize: 15,
+    emailListSize: 25,
+    emailContentSize: 40,
     chatSize: 20
   })
   

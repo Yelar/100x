@@ -3,17 +3,14 @@
 import * as React from 'react';
 import { useEffect, useState, useRef, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
-import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Avatar, AvatarImage, AvatarFallback } from "@/components/ui/avatar";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Input } from "@/components/ui/input";
-import { Search, Mail, LogOut, Inbox, FileText, Send, Trash, Plus, ChevronLeft, ChevronRight, MoreVertical, Star, User, Tag, Flag, Archive } from "lucide-react";
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogTrigger } from "@/components/ui/dialog";
+import { Search, Mail, LogOut, Inbox, FileText, Send, Trash, Plus, ChevronLeft, ChevronRight, MoreVertical, Star, Tag, Flag, Archive } from "lucide-react";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import api from '@/lib/axios';
 import debounce from 'lodash/debounce';
-import { EmailComposeDialog } from "@/components/email-compose-dialog";
-import { cn } from "@/lib/utils";
 import { sanitizeHtml, createEmailDocument } from '@/lib/sanitize-html';
 import { ChatWith100x } from '@/components/chat-with-100x';
 import { ResizablePanelGroup, ResizablePanel } from "@/components/ui/resizable";
@@ -39,8 +36,6 @@ interface EmailsResponse {
   emails: Email[];
   nextPageToken?: string;
 }
-
-const debouncedFn = debounce((fn: Function) => fn(), 500);
 
 export default function Dashboard() {
   const router = useRouter();
@@ -116,10 +111,6 @@ export default function Dashboard() {
       fetchEmails(undefined);
     }
   }, [fetchEmails, setSearchLoading]);
-
-  const debouncedSearch = useCallback((query: string) => {
-    debouncedFn(() => search(query));
-  }, [search]);
 
   // Cleanup on unmount
   useEffect(() => {
@@ -202,20 +193,11 @@ export default function Dashboard() {
         try { 
           const doc = iframe.contentDocument || iframe.contentWindow?.document;
           if (doc) {
-            const resizeObserver = new ResizeObserver(() => {
-              const height = doc.body.scrollHeight;
-              setIframeHeight(height + 50); // Add some padding
-            });
-            
-            resizeObserver.observe(doc.body);
-            
-            // Initial height set
-            setIframeHeight(doc.body.scrollHeight + 50);
-            
-            return () => resizeObserver.disconnect();
+            // Initial reasonable height
+            setIframeHeight(500);
           }
-        } catch (e) {
-          console.error('Error resizing iframe:', e);
+        } catch {
+          setRenderError(true);
         }
       };
       
@@ -230,7 +212,8 @@ export default function Dashboard() {
 
     const handleIframeMessage = (event: MessageEvent) => {
       if (event.data && event.data.type === 'resize') {
-        setIframeHeight(event.data.height + 50); // Add padding
+        // Add small buffer without excessive space
+        setIframeHeight(event.data.height + 20);
       } else if (event.data && event.data.type === 'error') {
         setRenderError(true);
       }
@@ -244,7 +227,7 @@ export default function Dashboard() {
           if (!doc || !doc.body || doc.body.innerHTML.trim() === '') {
             setRenderError(true);
           }
-        } catch (e) {
+        } catch {
           setRenderError(true);
         }
       }
@@ -393,8 +376,8 @@ export default function Dashboard() {
         <ResizableHandleWithReset 
           leftPanelRef={refs.sidebarRef}
           rightPanelRef={refs.emailListRef}
-          defaultLeftSize={20}
-          defaultRightSize={30}
+          defaultLeftSize={15}
+          defaultRightSize={25}
         />
         
         {/* Email list */}
@@ -472,118 +455,126 @@ export default function Dashboard() {
         <ResizableHandleWithReset 
           leftPanelRef={refs.emailListRef}
           rightPanelRef={refs.emailContentRef}
-          defaultLeftSize={30}
-          defaultRightSize={30}
+          defaultLeftSize={25}
+          defaultRightSize={40}
         />
 
         {/* Email content */}
         <ResizablePanel 
           ref={refs.emailContentRef}
           defaultSize={sizes.emailContentSize} 
-          className="overflow-y-auto bg-background"
+          minSize={30}
+          className="flex flex-col overflow-hidden bg-background"
         >
           {selectedEmail ? (
-            <div className="p-6 max-w-4xl mx-auto">
-              <div className="pb-4 mb-4 border-b border-border">
-                <div className="flex items-center justify-between mb-3">
-                  <h1 className="text-xl font-bold text-foreground">{selectedEmail.subject}</h1>
+            <div className="flex-1 overflow-y-auto">
+              <div className="p-4 md:p-6 max-w-5xl mx-auto">
+                <div className="pb-4 mb-4 border-b border-border">
+                  <div className="flex items-center justify-between mb-3">
+                    <h1 className="text-xl font-bold text-foreground">{selectedEmail.subject}</h1>
+                    <div className="flex space-x-2">
+                      <Button variant="ghost" size="icon" className="text-muted-foreground">
+                        <Archive className="h-5 w-5" />
+                      </Button>
+                      <Button variant="ghost" size="icon" className="text-muted-foreground">
+                        <Flag className="h-5 w-5" />
+                      </Button>
+                      <Button variant="ghost" size="icon" className="text-muted-foreground">
+                        <MoreVertical className="h-5 w-5" />
+                      </Button>
+                    </div>
+                  </div>
+                  <div className="flex items-center mb-3">
+                    <Avatar className="h-10 w-10 mr-3">
+                      <AvatarFallback className="bg-primary/10 text-primary">
+                        {selectedEmail.from.charAt(0).toUpperCase()}
+                      </AvatarFallback>
+                    </Avatar>
+                    <div>
+                      <div className="flex items-center">
+                        <span className="font-medium text-foreground">
+                          {selectedEmail.from.split('<')[0] || selectedEmail.from}
+                        </span>
+                        <span className="text-xs text-muted-foreground ml-2">
+                          {`<${selectedEmail.from.match(/<(.+)>/)
+                            ? selectedEmail.from.match(/<(.+)>/)?.[1]
+                            : selectedEmail.from}>`}
+                        </span>
+                      </div>
+                      <div className="text-xs text-muted-foreground">
+                        to me • {new Date(selectedEmail.date).toLocaleString()}
+                      </div>
+                    </div>
+                    <div className="ml-auto">
+                      <Button variant="ghost" size="icon" className="text-muted-foreground">
+                        <ChevronLeft className="h-5 w-5" />
+                      </Button>
+                      <Button variant="ghost" size="icon" className="text-muted-foreground">
+                        <ChevronRight className="h-5 w-5" />
+                      </Button>
+                    </div>
+                  </div>
+                </div>
+                <div className="prose prose-sm dark:prose-invert max-w-none">
+                  {renderError ? (
+                    <div className="p-4 border border-muted rounded-md">
+                      <div className="flex items-center mb-4">
+                        <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 text-amber-500 mr-2" viewBox="0 0 20 20" fill="currentColor">
+                          <path fillRule="evenodd" d="M8.257 3.099c.765-1.36 2.722-1.36 3.486 0l5.58 9.92c.75 1.334-.213 2.98-1.742 2.98H4.42c-1.53 0-2.493-1.646-1.743-2.98l5.58-9.92zM11 13a1 1 0 11-2 0 1 1 0 012 0zm-1-8a1 1 0 00-1 1v3a1 1 0 002 0V6a1 1 0 00-1-1z" clipRule="evenodd" />
+                        </svg>
+                        <span className="font-medium text-foreground">This email contains complex formatting that couldn&apos;t be displayed properly.</span>
+                      </div>
+                      
+                      {/* Simple text view */}
+                      <div className="mb-4 p-4 bg-card rounded-md">
+                        <h3 className="text-lg font-medium mb-2 text-foreground">Plain Text Version:</h3>
+                        <div className="whitespace-pre-wrap text-sm text-foreground">
+                          {selectedEmail.body
+                            .replace(/<style[\s\S]*?<\/style>/gi, '') // Remove style tags
+                            .replace(/<script[\s\S]*?<\/script>/gi, '') // Remove script tags
+                            .replace(/<[^>]*>/g, '') // Remove HTML tags
+                            .replace(/&nbsp;/g, ' ') // Replace non-breaking spaces
+                            .replace(/\s+/g, ' ') // Collapse whitespace
+                            .trim()}
+                        </div>
+                      </div>
+                      
+                      {/* Toggle for HTML source */}
+                      <details className="mt-4">
+                        <summary className="cursor-pointer text-sm font-medium text-muted-foreground hover:text-foreground">
+                          View HTML source
+                        </summary>
+                        <div className="mt-2 bg-muted/30 p-4 rounded overflow-auto max-h-[300px]">
+                          <pre className="text-xs whitespace-pre-wrap text-foreground">{selectedEmail.body}</pre>
+                        </div>
+                      </details>
+                    </div>
+                  ) : (
+                    <div className="relative w-full">
+                      <iframe 
+                        ref={iframeRef}
+                        srcDoc={createEmailDocument(sanitizeHtml(selectedEmail.body))}
+                        className="w-full border-none"
+                        style={{ 
+                          height: `${iframeHeight}px`,
+                          minHeight: "300px",
+                        }}
+                        sandbox="allow-same-origin allow-popups allow-scripts"
+                        title="Email content"
+                        onError={() => setRenderError(true)}
+                      />
+                    </div>
+                  )}
+                </div>
+                <div className="mt-8 pt-4 border-t border-border">
                   <div className="flex space-x-2">
-                    <Button variant="ghost" size="icon" className="text-muted-foreground">
-                      <Archive className="h-5 w-5" />
+                    <Button variant="outline" className="text-foreground">
+                      Reply
                     </Button>
-                    <Button variant="ghost" size="icon" className="text-muted-foreground">
-                      <Flag className="h-5 w-5" />
-                    </Button>
-                    <Button variant="ghost" size="icon" className="text-muted-foreground">
-                      <MoreVertical className="h-5 w-5" />
+                    <Button variant="outline" className="text-foreground">
+                      Forward
                     </Button>
                   </div>
-                </div>
-                <div className="flex items-center mb-3">
-                  <Avatar className="h-10 w-10 mr-3">
-                    <AvatarFallback className="bg-primary/10 text-primary">
-                      {selectedEmail.from.charAt(0).toUpperCase()}
-                </AvatarFallback>
-              </Avatar>
-                  <div>
-                    <div className="flex items-center">
-                      <span className="font-medium text-foreground">
-                        {selectedEmail.from.split('<')[0] || selectedEmail.from}
-                      </span>
-                      <span className="text-xs text-muted-foreground ml-2">
-                        {`<${selectedEmail.from.match(/<(.+)>/)
-                          ? selectedEmail.from.match(/<(.+)>/)?.[1]
-                          : selectedEmail.from}>`}
-                      </span>
-                    </div>
-                    <div className="text-xs text-muted-foreground">
-                      to me • {new Date(selectedEmail.date).toLocaleString()}
-                    </div>
-                  </div>
-                  <div className="ml-auto">
-                    <Button variant="ghost" size="icon" className="text-muted-foreground">
-                      <ChevronLeft className="h-5 w-5" />
-                    </Button>
-                    <Button variant="ghost" size="icon" className="text-muted-foreground">
-                      <ChevronRight className="h-5 w-5" />
-                    </Button>
-                  </div>
-                </div>
-              </div>
-              <div className="prose prose-sm dark:prose-invert max-w-none">
-                {renderError ? (
-                  <div className="p-4 border border-muted rounded-md">
-                    <div className="flex items-center mb-4">
-                      <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 text-amber-500 mr-2" viewBox="0 0 20 20" fill="currentColor">
-                        <path fillRule="evenodd" d="M8.257 3.099c.765-1.36 2.722-1.36 3.486 0l5.58 9.92c.75 1.334-.213 2.98-1.742 2.98H4.42c-1.53 0-2.493-1.646-1.743-2.98l5.58-9.92zM11 13a1 1 0 11-2 0 1 1 0 012 0zm-1-8a1 1 0 00-1 1v3a1 1 0 002 0V6a1 1 0 00-1-1z" clipRule="evenodd" />
-                      </svg>
-                      <span className="font-medium text-foreground">This email contains complex formatting that couldn't be displayed properly.</span>
-            </div>
-          
-                    {/* Simple text view */}
-                    <div className="mb-4 p-4 bg-card rounded-md">
-                      <h3 className="text-lg font-medium mb-2 text-foreground">Plain Text Version:</h3>
-                      <div className="whitespace-pre-wrap text-sm text-foreground">
-                        {selectedEmail.body
-                          .replace(/<style[\s\S]*?<\/style>/gi, '') // Remove style tags
-                          .replace(/<script[\s\S]*?<\/script>/gi, '') // Remove script tags
-                          .replace(/<[^>]*>/g, '') // Remove HTML tags
-                          .replace(/&nbsp;/g, ' ') // Replace non-breaking spaces
-                          .replace(/\s+/g, ' ') // Collapse whitespace
-                          .trim()}
-                      </div>
-                    </div>
-                    
-                    {/* Toggle for HTML source */}
-                    <details className="mt-4">
-                      <summary className="cursor-pointer text-sm font-medium text-muted-foreground hover:text-foreground">
-                        View HTML source
-                      </summary>
-                      <div className="mt-2 bg-muted/30 p-4 rounded overflow-auto max-h-[300px]">
-                        <pre className="text-xs whitespace-pre-wrap text-foreground">{selectedEmail.body}</pre>
-                      </div>
-                    </details>
-                  </div>
-                ) : (
-                  <iframe 
-                    ref={iframeRef}
-                    srcDoc={createEmailDocument(sanitizeHtml(selectedEmail.body))}
-                    className="w-full border-none [&>*]:text-foreground"
-                    style={{ height: `${iframeHeight}px` }}
-                    sandbox="allow-same-origin allow-popups allow-scripts"
-                    title="Email content"
-                    onError={() => setRenderError(true)}
-                  />
-                )}
-              </div>
-              <div className="mt-8 pt-4 border-t border-border">
-                <div className="flex space-x-2">
-                  <Button variant="outline" className="text-foreground">
-                    Reply
-                  </Button>
-                  <Button variant="outline" className="text-foreground">
-                    Forward
-                  </Button>
                 </div>
               </div>
             </div>
@@ -600,7 +591,7 @@ export default function Dashboard() {
         <ResizableHandleWithReset 
           leftPanelRef={refs.emailContentRef}
           rightPanelRef={refs.chatRef}
-          defaultLeftSize={30}
+          defaultLeftSize={40}
           defaultRightSize={20}
         />
         

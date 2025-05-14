@@ -61,14 +61,52 @@ export function createEmailDocument(emailBody: string): string {
             color-scheme: light dark;
           }
           
+          * {
+            box-sizing: border-box;
+          }
+          
+          html, body {
+            height: auto;
+            margin: 0;
+            padding: 0;
+          }
+          
           body {
             font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
-            margin: 0;
-            padding: 16px;
+            padding: 8px;
             color: #333;
             background-color: transparent;
             line-height: 1.5;
             font-size: 16px;
+            overflow-wrap: break-word;
+            word-wrap: break-word;
+          }
+          
+          /* Make all content responsive */
+          img, table, div, p {
+            max-width: 100% !important;
+          }
+          
+          /* Remove fixed heights */
+          [style*="height:"], [style*="height="] {
+            height: auto !important;
+          }
+          
+          /* Email table containers */
+          table {
+            width: auto !important;
+            margin: 4px 0;
+            border-collapse: collapse;
+          }
+          
+          td, th {
+            padding: 6px;
+            border: 1px solid #ddd;
+          }
+
+          a {
+            color: #0070f3;
+            text-decoration: underline;
           }
           
           @media (prefers-color-scheme: dark) {
@@ -76,41 +114,13 @@ export function createEmailDocument(emailBody: string): string {
               color: #e1e1e1;
             }
             
-            /* Force all text elements to use proper color in dark mode */
-            p, div, span, h1, h2, h3, h4, h5, h6, li, td, th, blockquote {
-              color: #e1e1e1 !important;
+            a {
+              color: #3b82f6;
             }
             
-            /* Handle background colors */
-            [style*="background-color"] {
-              background-color: transparent !important;
-            }
-            
-            /* Ensure table borders are visible */
             table, td, th {
-              border-color: #555 !important;
+              border-color: #555;
             }
-            
-            a {
-              color: #3b82f6 !important;
-            }
-          }
-          
-          /* Light mode specific overrides */
-          @media (prefers-color-scheme: light) {
-            /* Force all text elements to use proper color in light mode */
-            p, div, span, h1, h2, h3, h4, h5, h6, li, td, th, blockquote {
-              color: #333 !important;
-            }
-            
-            a {
-              color: #0070f3 !important;
-            }
-          }
-          
-          img {
-            max-width: 100%;
-            height: auto;
           }
           
           pre, code {
@@ -121,28 +131,27 @@ export function createEmailDocument(emailBody: string): string {
             font-family: monospace;
           }
           
+          blockquote {
+            border-left: 3px solid #ddd;
+            padding-left: 16px;
+            margin-left: 0;
+            color: #555;
+          }
+          
           @media (prefers-color-scheme: dark) {
             pre, code {
               background-color: rgba(255, 255, 255, 0.1);
             }
-          }
-          
-          table {
-            border-collapse: collapse;
-            margin: 1em 0;
-            max-width: 100%;
-          }
-          
-          td, th {
-            padding: 8px;
-            border: 1px solid #ddd;
+            
+            blockquote {
+              border-color: #555;
+              color: #aaa;
+            }
           }
         </style>
       </head>
       <body>
-        <div id="email-content">
-          ${formattedContent}
-        </div>
+        ${formattedContent}
         <script>
           document.addEventListener('DOMContentLoaded', function() {
             try {
@@ -152,16 +161,39 @@ export function createEmailDocument(emailBody: string): string {
                 link.setAttribute('rel', 'noopener noreferrer');
               });
               
-              // Handle images
+              // Fix image display
               document.querySelectorAll('img').forEach(img => {
                 img.setAttribute('loading', 'lazy');
+                img.style.maxWidth = '100%';
+                img.style.height = 'auto';
+                
+                img.onerror = function() {
+                  this.style.display = 'none';
+                };
               });
               
-              // Report height to parent
-              const height = document.getElementById('email-content').offsetHeight + 32;
-              window.parent.postMessage({ type: 'resize', height: height }, '*');
+              // Remove empty divs and spacing elements
+              document.querySelectorAll('div:empty, span:empty').forEach(el => {
+                el.remove();
+              });
+              
+              // Calculate height precisely without adding extra space
+              function reportHeight() {
+                // Get just the exact content height
+                const height = document.body.offsetHeight;
+                window.parent.postMessage({ type: 'resize', height: height }, '*');
+              }
+              
+              // Initial height report
+              reportHeight();
+              
+              // Additional check after all content has loaded
+              window.addEventListener('load', reportHeight);
+              
+              // Safety check
+              setTimeout(reportHeight, 500);
             } catch (e) {
-              console.error(e);
+              console.error('Error in email iframe:', e);
               window.parent.postMessage({ type: 'error' }, '*');
             }
           });
