@@ -16,6 +16,9 @@ import { EmailComposeDialog } from "@/components/email-compose-dialog";
 import { cn } from "@/lib/utils";
 import { sanitizeHtml, createEmailDocument } from '@/lib/sanitize-html';
 import { ChatWith100x } from '@/components/chat-with-100x';
+import { ResizablePanelGroup, ResizablePanel } from "@/components/ui/resizable";
+import { ResizableHandleWithReset } from "@/components/ui/resizable-handle-with-reset";
+import { usePanelLayout } from "@/hooks/use-panel-layout";
 
 interface UserInfo {
   email: string;
@@ -65,6 +68,8 @@ export default function Dashboard() {
   const [iframeHeight, setIframeHeight] = useState(500);
   const iframeRef = useRef<HTMLIFrameElement>(null);
   const [renderError, setRenderError] = useState(false);
+
+  const { refs, sizes, onResize } = usePanelLayout();
 
   const fetchEmails = useCallback(async (pageToken?: string, query?: string) => {
     try {
@@ -337,9 +342,19 @@ export default function Dashboard() {
         </div>
       </div>
 
-      <div className="flex flex-1 overflow-hidden">
+      <ResizablePanelGroup 
+        direction="horizontal" 
+        className="flex-1 overflow-hidden"
+        onLayout={onResize}
+      >
         {/* Left sidebar */}
-        <div className="w-64 flex-none border-r border-border bg-card flex flex-col overflow-hidden">
+        <ResizablePanel 
+          ref={refs.sidebarRef}
+          defaultSize={sizes.sidebarSize} 
+          minSize={15} 
+          maxSize={25} 
+          className="border-r border-border bg-card flex flex-col overflow-hidden"
+        >
           <div className="p-4">
             <Button className="rounded-full px-6 py-2 h-12 w-full justify-start font-medium shadow-sm mb-6" onClick={() => setComposing(true)}>
               <Plus className="mr-2 h-5 w-5" />
@@ -373,10 +388,22 @@ export default function Dashboard() {
               </Button>
             </div>
           </div>
-        </div>
-
+        </ResizablePanel>
+        
+        <ResizableHandleWithReset 
+          leftPanelRef={refs.sidebarRef}
+          rightPanelRef={refs.emailListRef}
+          defaultLeftSize={20}
+          defaultRightSize={30}
+        />
+        
         {/* Email list */}
-        <div className="w-[450px] flex-none border-r border-border flex flex-col overflow-hidden">
+        <ResizablePanel 
+          ref={refs.emailListRef}
+          defaultSize={sizes.emailListSize} 
+          minSize={20} 
+          className="border-r border-border flex flex-col overflow-hidden"
+        >
           <div className="flex-none p-2 border-b border-border flex items-center">
             <Button variant="ghost" size="icon" className="text-muted-foreground">
               <Archive className="h-5 w-5" />
@@ -440,10 +467,21 @@ export default function Dashboard() {
               </div>
             )}
           </div>
-        </div>
+        </ResizablePanel>
+        
+        <ResizableHandleWithReset 
+          leftPanelRef={refs.emailListRef}
+          rightPanelRef={refs.emailContentRef}
+          defaultLeftSize={30}
+          defaultRightSize={30}
+        />
 
         {/* Email content */}
-        <div className="flex-1 overflow-y-auto bg-background">
+        <ResizablePanel 
+          ref={refs.emailContentRef}
+          defaultSize={sizes.emailContentSize} 
+          className="overflow-y-auto bg-background"
+        >
           {selectedEmail ? (
             <div className="p-6 max-w-4xl mx-auto">
               <div className="pb-4 mb-4 border-b border-border">
@@ -557,13 +595,25 @@ export default function Dashboard() {
               </div>
             </div>
           )}
-        </div>
+        </ResizablePanel>
+        
+        <ResizableHandleWithReset 
+          leftPanelRef={refs.emailContentRef}
+          rightPanelRef={refs.chatRef}
+          defaultLeftSize={30}
+          defaultRightSize={20}
+        />
         
         {/* Chat with 100x */}
-        <div className="w-[350px] flex-none border-l border-border bg-card flex flex-col overflow-hidden">
+        <ResizablePanel 
+          ref={refs.chatRef}
+          defaultSize={sizes.chatSize} 
+          minSize={15} 
+          className="border-l border-border bg-card flex flex-col overflow-hidden"
+        >
           <ChatWith100x />
-        </div>
-      </div>
+        </ResizablePanel>
+      </ResizablePanelGroup>
 
       {/* Email compose dialog */}
       <Dialog open={composing} onOpenChange={setComposing}>

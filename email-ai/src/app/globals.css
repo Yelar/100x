@@ -120,3 +120,23 @@
     @apply bg-background text-foreground;
   }
 }
+
+/* Resizable panel styles */
+[data-panel-group-direction="horizontal"] > [data-panel-resize-handle] {
+  transition: background-color 150ms ease;
+}
+
+[data-panel-group-direction="horizontal"] > [data-panel-resize-handle]:hover,
+[data-panel-group-direction="horizontal"] > [data-panel-resize-handle]:focus-visible {
+  background-color: hsl(var(--primary) / 0.5);
+}
+
+[data-panel-group-direction="horizontal"] > [data-panel-resize-handle] > div {
+  opacity: 0;
+  transition: opacity 150ms ease;
+}
+
+[data-panel-group-direction="horizontal"] > [data-panel-resize-handle]:hover > div,
+[data-panel-group-direction="horizontal"] > [data-panel-resize-handle]:focus-visible > div {
+  opacity: 1;
+}
