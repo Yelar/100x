@@ -11,7 +11,7 @@ const apiKey = process.env.GROQ_API_KEY;
 // Define the email interface
 interface EmailContext {
   id: string;
-  from: string;
+  from: string; 
   subject: string;
   date: string;
   snippet: string;

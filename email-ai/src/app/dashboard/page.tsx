@@ -467,7 +467,7 @@ export default function Dashboard() {
           className="flex flex-col overflow-hidden bg-background"
         >
           {selectedEmail ? (
-            <div className="flex-1 overflow-y-auto">
+            <div className="flex-1 overflow-y-auto email-content-container">
               <div className="p-4 md:p-6 max-w-5xl mx-auto">
                 <div className="pb-4 mb-4 border-b border-border">
                   <div className="flex items-center justify-between mb-3">

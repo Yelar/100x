@@ -5,12 +5,13 @@ import { Message, useChat } from 'ai/react';
 import ReactMarkdown from 'react-markdown';
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Card, CardContent, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
-import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
+import { Card, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
+import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { ScrollArea } from "@/components/ui/scroll-area";
-import { Send, Bot, User, Mail, Info, Search, Loader2, CheckCircle2, Activity, ExternalLink } from 'lucide-react';
+import { Send, Bot, Mail, Info, Search, Loader2, CheckCircle2, Activity } from 'lucide-react';
 import { Badge } from "@/components/ui/badge";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
+import { EmailPreviewDialog } from '@/components/email-preview-dialog';
 
 interface ParsedAIResponse {
   thoughts?: string[];
@@ -19,6 +20,8 @@ interface ParsedAIResponse {
 
 export function ChatWith100x() {
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
+  const [previewEmail, setPreviewEmail] = useState<string | null>(null);
+  const [previewDialogOpen, setPreviewDialogOpen] = useState(false);
   
   const { messages, input, handleInputChange, handleSubmit, isLoading } = useChat({
     api: '/api/chat',
@@ -38,7 +41,7 @@ export function ChatWith100x() {
         setErrorMessage(null);
       }
     },
-    onFinish: (message) => {
+    onFinish: () => {
       // This is called when the response finishes streaming
       console.log("Response finished");
       setIsProcessing(false);
@@ -53,35 +56,34 @@ export function ChatWith100x() {
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const [contextLoaded, setContextLoaded] = useState(false);
   const [isProcessing, setIsProcessing] = useState(false);
-  const [emailCount, setEmailCount] = useState(0);
   const [currentThoughts, setCurrentThoughts] = useState<string[]>([]);
   const [currentThoughtIndex, setCurrentThoughtIndex] = useState(0);
   
   // Function to safely try to parse JSON from a string that might contain text before/after the JSON
-  const extractJsonFromString = (str: string): any => {
+  const extractJsonFromString = (str: string): Record<string, unknown> | null => {
     try {
       // First try direct parsing
       return JSON.parse(str);
-    } catch (error) {
+    } catch {
       try {
         // Try to find a JSON object in the string using a more robust regex
         const match = str.match(/\{[\s\S]*\}/);
         if (match) {
           try {
             return JSON.parse(match[0]);
-          } catch (jsonError) {
-            console.log("Found JSON-like string but failed to parse:", jsonError);
+          } catch {
+            console.log("Found JSON-like string but failed to parse");
             // Try to clean the match before parsing
             const cleaned = match[0].replace(/\\n/g, ' ').replace(/\\"/g, '"');
             try {
               return JSON.parse(cleaned);
-            } catch (cleanError) {
-              console.log("Failed to parse cleaned JSON:", cleanError);
+            } catch {
+              console.log("Failed to parse cleaned JSON");
             }
           }
         }
-      } catch (innerError) {
-        console.log("Failed to extract JSON from string:", innerError);
+      } catch {
+        console.log("Failed to extract JSON from string");
       }
     }
     return null;
@@ -104,16 +106,21 @@ export function ChatWith100x() {
       const jsonData = extractJsonFromString(content);
       console.log("Extracted JSON data:", jsonData);
       
-      if (jsonData && jsonData.thoughts && jsonData.answer) {
-        return jsonData as ParsedAIResponse;
-      } else if (jsonData && jsonData.answer) {
-        return {
-          thoughts: ["Analyzed your question", "Searched through emails", "Found relevant information"],
-          answer: jsonData.answer
-        };
+      if (jsonData && typeof jsonData === 'object') {
+        if ('thoughts' in jsonData && 'answer' in jsonData && typeof jsonData.answer === 'string') {
+          return {
+            thoughts: Array.isArray(jsonData.thoughts) ? jsonData.thoughts as string[] : undefined,
+            answer: jsonData.answer as string
+          };
+        } else if ('answer' in jsonData && typeof jsonData.answer === 'string') {
+          return {
+            thoughts: ["Analyzed your question", "Searched through emails", "Found relevant information"],
+            answer: jsonData.answer as string
+          };
+        }
       }
-    } catch (error) {
-      console.log('Error parsing AI response:', error);
+    } catch (parseError) {
+      console.log('Error parsing AI response:', parseError);
     }
     
     // Look for patterns in unstructured text if JSON parsing failed
@@ -157,18 +164,25 @@ export function ChatWith100x() {
   };
   
   // Handle email reference clicks
-  const handleEmailReferenceClick = async (emailId: string) => {
-    // This function would open the email in the app
-    console.log("Opening email:", emailId);
-    window.open(`/emails/${emailId}`, '_blank');
+  const handleEmailReferenceClick = (emailId: string) => {
+    console.log("Opening email in preview dialog:", emailId);
+    setPreviewEmail(emailId);
+    setPreviewDialogOpen(true);
+    return false;
   };
   
   // Format answer text with clickable email references
   const formatAnswerWithEmailReferences = (answer: string) => {
     if (!answer) return null;
     
-    // Handle different possible email reference formats: [Email:ID123], [Email:ID123 Subject], [EmailID123], etc.
-    const emailRefRegex = /\[Email:([a-zA-Z0-9_-]+)(?:[^\]]*)\]|\[EmailID:?([a-zA-Z0-9_-]+)(?:[^\]]*)\]/gi;
+    // Enhanced regex to catch more email reference formats
+    // This will match formats like:
+    // - [Email:ID123]
+    // - [Email:ID123 Subject]
+    // - [EmailID123]
+    // - Email ID: ID123
+    // - Reference: ID123
+    const emailRefRegex = /\[Email:([a-zA-Z0-9_-]+)(?:[^\]]*)\]|\[EmailID:?([a-zA-Z0-9_-]+)(?:[^\]]*)\]|Email ID:?\s*([a-zA-Z0-9_-]+)|Reference:?\s*([a-zA-Z0-9_-]+)/gi;
     
     try {
       // Split the text to find all email references
@@ -193,7 +207,8 @@ export function ChatWith100x() {
         }
         
         // Extract the email ID from the match
-        const emailId = match[1] || match[2];
+        // Check all capturing groups and use the first non-undefined one
+        const emailId = match[1] || match[2] || match[3] || match[4];
         
         // Add the email button
         elements.push(
@@ -201,11 +216,15 @@ export function ChatWith100x() {
             key={`email-${index}`}
             variant="link" 
             className="px-1 py-0 h-auto text-primary inline-flex items-center gap-1 underline underline-offset-2" 
-            onClick={() => handleEmailReferenceClick(emailId)}
+            onClick={(e) => {
+              e.preventDefault();  // Prevent any default link behavior
+              e.stopPropagation(); // Stop event propagation
+              handleEmailReferenceClick(emailId);
+            }}
+            type="button" // Explicitly set as button type
           >
             <Mail className="h-3 w-3" />
             <span>View Email</span>
-            <ExternalLink className="h-3 w-3" />
           </Button>
         );
         
@@ -253,9 +272,6 @@ export function ChatWith100x() {
           const data = await response.json();
           const hasEmails = data.emailContext && data.emailContext.length > 0;
           setContextLoaded(hasEmails);
-          if (hasEmails) {
-            setEmailCount(data.emailContext.length);
-          }
         }
       } catch (error) {
         console.error('Error checking email context:', error);
@@ -406,125 +422,134 @@ export function ChatWith100x() {
   };
 
   return (
-    <Card className="flex flex-col h-full border-none shadow-none">
-      <CardHeader className="px-4 py-3 border-b">
-        <div className="flex justify-between items-center">
-          <CardTitle className="text-md flex items-center">
-            <Bot className="mr-2 h-5 w-5 text-primary" />
-            Chat with 100x
-          </CardTitle>
-          {contextLoaded && (
-            <TooltipProvider>
-              <Tooltip>
-                <TooltipTrigger asChild>
-                  <Badge variant="secondary" className="text-xs flex items-center gap-1">
-                    <Search className="h-3 w-3" />
-                    Smart Email Search
-                  </Badge>
-                </TooltipTrigger>
-                <TooltipContent>
-                  <p>Intelligent email search based on your questions</p>
-                </TooltipContent>
-              </Tooltip>
-            </TooltipProvider>
-          )}
-        </div>
-      </CardHeader>
-      
-      <ScrollArea className="flex-1 p-4">
-        <div className="space-y-4 mb-4">
-          {/* Error message display */}
-          {errorMessage && (
-            <div className="bg-destructive/10 text-destructive rounded-lg p-3 text-sm flex items-center gap-2">
-              <Info className="h-4 w-4" />
-              <span>{errorMessage}</span>
-            </div>
-          )}
+    <>
+      <Card className="flex flex-col h-full border-none shadow-none">
+        <CardHeader className="px-4 py-3 border-b">
+          <div className="flex justify-between items-center">
+            <CardTitle className="text-md flex items-center">
+              <Bot className="mr-2 h-5 w-5 text-primary" />
+              Chat with 100x
+            </CardTitle>
+            {contextLoaded && (
+              <TooltipProvider>
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <Badge variant="secondary" className="text-xs flex items-center gap-1">
+                      <Search className="h-3 w-3" />
+                      Smart Email Search
+                    </Badge>
+                  </TooltipTrigger>
+                  <TooltipContent>
+                    <p>Intelligent email search based on your questions</p>
+                  </TooltipContent>
+                </Tooltip>
+              </TooltipProvider>
+            )}
+          </div>
+        </CardHeader>
         
-          {messages.length === 0 ? (
-            <div className="text-center text-muted-foreground py-6">
-              <Bot className="h-12 w-12 mx-auto mb-2 opacity-50" />
-              <p>Ask me anything about your emails or how to use the app!</p>
-              {contextLoaded && (
-                <div className="mt-4 text-xs flex items-center justify-center gap-1 text-primary">
-                  <Info className="h-3 w-3" />
-                  <span>Ask me a question and I'll search your emails for relevant information</span>
-                </div>
-              )}
-            </div>
-          ) : (
-            messages.map(message => (
-              <div 
-                key={message.id} 
-                className={`flex ${message.role === 'user' ? 'justify-end' : 'justify-start'}`}
-              >
-                {renderMessage(message)}
+        <ScrollArea className="flex-1 p-4">
+          <div className="space-y-4 mb-4">
+            {/* Error message display */}
+            {errorMessage && (
+              <div className="bg-destructive/10 text-destructive rounded-lg p-3 text-sm flex items-center gap-2">
+                <Info className="h-4 w-4" />
+                <span>{errorMessage}</span>
               </div>
-            ))
-          )}
+            )}
           
-          {/* Thinking state display */}
-          {isProcessing && (
-            <div className="flex justify-start">
-              <div className="flex gap-3 max-w-[80%]">
-                <Avatar className="h-8 w-8 mt-0.5">
-                  <AvatarFallback className="bg-primary/10 text-primary">
-                    <Loader2 className="h-4 w-4 animate-spin" />
-                  </AvatarFallback>
-                </Avatar>
-                <div className="space-y-4">
-                  <div className="bg-muted/50 rounded-lg p-3 space-y-2">
-                    <div className="text-xs text-muted-foreground flex items-center gap-1">
-                      <Activity className="h-3 w-3" />
-                      <span>Thinking...</span>
+            {messages.length === 0 ? (
+              <div className="text-center text-muted-foreground py-6">
+                <Bot className="h-12 w-12 mx-auto mb-2 opacity-50" />
+                <p>Ask me anything about your emails or how to use the app!</p>
+                {contextLoaded && (
+                  <div className="mt-4 text-xs flex items-center justify-center gap-1 text-primary">
+                    <Info className="h-3 w-3" />
+                    <span>Ask me a question and I&apos;ll search your emails for relevant information</span>
+                  </div>
+                )}
+              </div>
+            ) : (
+              messages.map(message => (
+                <div 
+                  key={message.id} 
+                  className={`flex ${message.role === 'user' ? 'justify-end' : 'justify-start'}`}
+                >
+                  {renderMessage(message)}
+                </div>
+              ))
+            )}
+            
+            {/* Thinking state display */}
+            {isProcessing && (
+              <div className="flex justify-start">
+                <div className="flex gap-3 max-w-[80%]">
+                  <Avatar className="h-8 w-8 mt-0.5">
+                    <AvatarFallback className="bg-primary/10 text-primary">
+                      <Loader2 className="h-4 w-4 animate-spin" />
+                    </AvatarFallback>
+                  </Avatar>
+                  <div className="space-y-4">
+                    <div className="bg-muted/50 rounded-lg p-3 space-y-2">
+                      <div className="text-xs text-muted-foreground flex items-center gap-1">
+                        <Activity className="h-3 w-3" />
+                        <span>Thinking...</span>
+                      </div>
+                      <ul className="pl-5 space-y-1.5">
+                        {currentThoughts.map((thought, index) => (
+                          <li 
+                            key={index} 
+                            className={`text-xs flex items-start gap-2 ${
+                              index <= currentThoughtIndex 
+                                ? 'text-muted-foreground' 
+                                : 'text-muted-foreground/50'
+                            }`}
+                          >
+                            {index <= currentThoughtIndex ? (
+                              <CheckCircle2 className="h-3 w-3 mt-0.5 text-primary/70" />
+                            ) : (
+                              <div className="h-3 w-3 mt-0.5 rounded-full border border-muted-foreground/30" />
+                            )}
+                            <span>{thought}</span>
+                          </li>
+                        ))}
+                      </ul>
                     </div>
-                    <ul className="pl-5 space-y-1.5">
-                      {currentThoughts.map((thought, index) => (
-                        <li 
-                          key={index} 
-                          className={`text-xs flex items-start gap-2 ${
-                            index <= currentThoughtIndex 
-                              ? 'text-muted-foreground' 
-                              : 'text-muted-foreground/50'
-                          }`}
-                        >
-                          {index <= currentThoughtIndex ? (
-                            <CheckCircle2 className="h-3 w-3 mt-0.5 text-primary/70" />
-                          ) : (
-                            <div className="h-3 w-3 mt-0.5 rounded-full border border-muted-foreground/30" />
-                          )}
-                          <span>{thought}</span>
-                        </li>
-                      ))}
-                    </ul>
                   </div>
                 </div>
               </div>
-            </div>
-          )}
-          
-          <div ref={messagesEndRef} />
-        </div>
-      </ScrollArea>
-      
-      <CardFooter className="p-4 pt-2 border-t">
-        <form onSubmit={handleCustomSubmit} className="flex w-full gap-2">
-          <Input
-            placeholder={isProcessing ? "Searching through your emails..." : "Type your message..."}
-            value={input}
-            onChange={handleInputChange}
-            disabled={isLoading || isProcessing}
-            className="flex-1"
-          />
-          <Button type="submit" size="icon" disabled={isLoading || isProcessing || !input.trim()}>
-            {isProcessing ? (
-              <Loader2 className="h-4 w-4 animate-spin" />
-            ) : (
-              <Send className="h-4 w-4" />
             )}
-          </Button>
-        </form>
-      </CardFooter>
-    </Card>
+            
+            <div ref={messagesEndRef} />
+          </div>
+        </ScrollArea>
+        
+        <CardFooter className="p-4 pt-2 border-t">
+          <form onSubmit={handleCustomSubmit} className="flex w-full gap-2">
+            <Input
+              placeholder={isProcessing ? "Searching through your emails..." : "Type your message..."}
+              value={input}
+              onChange={handleInputChange}
+              disabled={isLoading || isProcessing}
+              className="flex-1"
+            />
+            <Button type="submit" size="icon" disabled={isLoading || isProcessing || !input.trim()}>
+              {isProcessing ? (
+                <Loader2 className="h-4 w-4 animate-spin" />
+              ) : (
+                <Send className="h-4 w-4" />
+              )}
+            </Button>
+          </form>
+        </CardFooter>
+      </Card>
+      
+      {/* Email preview dialog */}
+      <EmailPreviewDialog 
+        isOpen={previewDialogOpen}
+        onOpenChange={setPreviewDialogOpen}
+        emailId={previewEmail}
+      />
+    </>
   );
 } 
