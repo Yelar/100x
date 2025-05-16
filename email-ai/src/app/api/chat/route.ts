@@ -32,7 +32,7 @@ async function generateSearchKeywords(userMessage: string): Promise<string[]> {
     {
       role: 'system',
       content: `You are an assistant that generates effective search keywords for email search.
-      Given a user's question, extract 2-3 important keywords that would be most helpful for finding relevant emails.
+      Given a user's question, extract important keywords that would be most helpful for finding relevant emails.
       Return ONLY a JSON array of keywords, with no other text.`
     },
     {
@@ -52,7 +52,7 @@ async function generateSearchKeywords(userMessage: string): Promise<string[]> {
         'Authorization': `Bearer ${apiKey}`
       },
       body: JSON.stringify({
-        model: 'llama3-70b-8192',
+        model: 'compound-beta-mini',
         messages: prompt,
         temperature: 0.2,
         max_tokens: 100
@@ -184,7 +184,7 @@ async function identifyRelevantEmails(emails: EmailContext[], userMessage: strin
         'Authorization': `Bearer ${apiKey}`
       },
       body: JSON.stringify({
-        model: 'llama3-70b-8192',
+        model: 'compound-beta-mini',
         messages: prompt,
         temperature: 0.2, // Lower temperature for more focused responses
         max_tokens: 8192
@@ -336,7 +336,7 @@ async function summarizeEmailContent(emails: EmailContent[]): Promise<EmailConte
         {
           role: 'system',
           content: `You are an email summarizer that extracts key points from email content.
-          Extract 3-5 key points from the email in bullet point format.
+          Extract key points from the email in bullet point format.
           Be very concise and focus only on factual information, action items, and important details.
           Do not include introductory text or closing remarks.
           Format each bullet point with a dash (-) and a space before the text.`
@@ -361,7 +361,7 @@ async function summarizeEmailContent(emails: EmailContent[]): Promise<EmailConte
           'Authorization': `Bearer ${apiKey}`
         },
         body: JSON.stringify({
-          model: 'llama3-70b-8192',
+          model: 'compound-beta-mini',
           messages: prompt,
           temperature: 0.2,
           max_tokens: 300
@@ -568,7 +568,7 @@ Keep answers under 30 words if possible. Omit articles and unnecessary words. Us
     ${email.key_points}
     `).join('\n'));
     const result = streamText({
-      model: groq('llama3-70b-8192'),
+      model: groq('compound-beta-mini'),
       messages: augmentedMessages
     });
 

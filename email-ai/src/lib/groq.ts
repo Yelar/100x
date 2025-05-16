@@ -18,7 +18,7 @@ export async function generateEmailContent(prompt: string) {
           content: prompt,
         },
       ],
-      model: 'llama3-70b-8192',
+      model: 'compound-beta-mini',
       temperature: 0.7,
       max_tokens: 1000,
     });
@@ -44,7 +44,7 @@ export async function generateSubjectLine(prompt: string) {
           content: `Generate a subject line for an email about: ${prompt}`,
         },
       ],
-      model: 'llama3-70b-8192',
+      model: 'compound-beta-mini',
       temperature: 0.7,
       max_tokens: 100,
     });
