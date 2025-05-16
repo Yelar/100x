@@ -33,7 +33,7 @@ interface Email {
 }
 
 interface EmailsResponse {
-  emails: Email[];
+  messages: Email[];
   nextPageToken?: string;
 }
 
@@ -74,18 +74,19 @@ export default function Dashboard() {
       if (query) params.append('q', query);
 
       const response = await api.get<EmailsResponse>(`/api/emails?${params.toString()}`);
-      const data = response.data as EmailsResponse;
+      const { messages, nextPageToken } = response.data;
       
       if (pageToken) {
-        setEmails(prev => [...prev, ...data.emails]);
+        setEmails(prev => [...prev, ...messages]);
       } else {
-        setEmails(data.emails);
+        setEmails(messages || []);
       }
       
-      setNextPageToken(data.nextPageToken);
-      setHasMore(!!data.nextPageToken);
+      setNextPageToken(nextPageToken);
+      setHasMore(!!nextPageToken);
     } catch (error) {
       console.error('Error fetching emails:', error);
+      setEmails([]); // Set empty array on error
     } finally {
       setLoading(false);
       setSearchLoading(false);

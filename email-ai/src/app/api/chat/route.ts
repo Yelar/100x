@@ -39,7 +39,7 @@ async function generateSearchKeywords(userMessage: string): Promise<string[]> {
       role: 'user',
       content: `User question: "${userMessage}"
       
-      Generate 2-3 specific search keywords to find emails related to this question.
+      Generate specific search keywords (MAX 10) to find emails related to this question.
       Return as a JSON array of strings only, no other text. Format: ["keyword1", "keyword2"]`
     }
   ];
@@ -69,7 +69,7 @@ async function generateSearchKeywords(userMessage: string): Promise<string[]> {
     
     const result = await response.json();
     const content = result.choices?.[0]?.message?.content;
-    
+    console.log('[INFO] Generated keywords:', content);
     if (!content) {
       return fallbackGenerateKeywords(userMessage);
     }
@@ -152,7 +152,6 @@ async function identifyRelevantEmails(emails: EmailContext[], userMessage: strin
     Snippet: ${email.snippet}
     `;
   }).join('\n\n');
-  console.log(emailSummaries);
   // Construct the prompt for Groq
   const prompt = [
     {
@@ -425,7 +424,7 @@ async function searchEmails(query: string): Promise<ToolResult> {
     new Map(emailsByKeyword.map(email => [email.id, email])).values()
   );
   
-  console.log(`Found ${uniqueEmails.length} unique emails across ${keywords.length} keywords`);
+  console.log(`[INFO] Found ${uniqueEmails.length} unique emails across ${keywords.length} keywords`);
   
   if (uniqueEmails.length === 0) {
     return {
@@ -558,7 +557,7 @@ Keep answers under 30 words if possible. Omit articles and unnecessary words. Us
       systemFormatter,
       ...messages
     ];
-    console.log('toolResult', formattedEmails.map((email, index) => `
+    console.log('[INFO] toolResult', formattedEmails.map((email, index) => `
     EMAIL ${index + 1}:
     ID: ${email.id}
     From: ${email.from}

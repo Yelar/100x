@@ -1,5 +1,7 @@
 import { google } from 'googleapis';
 import { OAuth2Client } from 'google-auth-library';
+import { gmail_v1 } from 'googleapis';
+import { Schema$MessagePart } from 'googleapis/build/src/apis/gmail/v1';
 
 const CLIENT_SECRETS_FILE = process.env.GOOGLE_CLIENT_SECRETS || '{}';
 const SCOPES = [
@@ -50,6 +52,14 @@ interface GetEmailsOptions {
   maxResults?: number;
 }
 
+interface EmailPart {
+  mimeType?: string;
+  body?: {
+    data?: string;
+  };
+  parts?: EmailPart[];
+}
+
 export const getGmailMessages = async (accessToken: string, options: GetEmailsOptions = {}) => {
   const { pageToken, query, maxResults = 20 } = options;
   
@@ -79,24 +89,77 @@ export const getGmailMessages = async (accessToken: string, options: GetEmailsOp
       
       // Get the email body
       let body = '';
-      if (msg.data.payload?.body?.data) {
-        body = Buffer.from(msg.data.payload.body.data, 'base64').toString();
-      } else if (parts.length > 0) {
-        // Try to find HTML or plain text part
-        const htmlPart = parts.find(part => part.mimeType === 'text/html');
-        const textPart = parts.find(part => part.mimeType === 'text/plain');
-        const selectedPart = htmlPart || textPart;
-        
-        if (selectedPart?.body?.data) {
-          body = Buffer.from(selectedPart.body.data, 'base64').toString();
+      let contentType = '';
+      
+      // Helper function to decode base64 content
+      const decodeBase64 = (data: string) => {
+        try {
+          return Buffer.from(data, 'base64').toString();
+        } catch (e) {
+          console.error('Error decoding base64:', e);
+          return '';
         }
+      };
+
+      // Helper function to process email parts recursively
+      const processParts = (parts: gmail_v1.Schema$MessagePart[]): { body: string; contentType: string } => {
+        let result = { body: '', contentType: '' };
+        
+        for (const part of parts) {
+          // If this part has nested parts, process them
+          if (part.parts) {
+            const nestedResult = processParts(part.parts);
+            if (nestedResult.body) {
+              result = nestedResult;
+              break;
+            }
+          }
+          
+          // Process the current part
+          if (part.body?.data) {
+            const content = decodeBase64(part.body.data);
+            const mimeType = part.mimeType || '';
+            
+            // Prefer HTML over plain text
+            if (mimeType === 'text/html' && !result.body) {
+              result = { body: content, contentType: 'text/html' };
+            } else if (mimeType === 'text/plain' && !result.body) {
+              result = { body: content, contentType: 'text/plain' };
+            }
+          }
+        }
+        
+        return result;
+      };
+
+      // Process the email parts
+      if (parts.length > 0) {
+        const result = processParts(parts);
+        body = result.body;
+        contentType = result.contentType;
+      } else if (msg.data.payload?.body?.data) {
+        // Handle single-part messages
+        body = decodeBase64(msg.data.payload.body.data);
+        contentType = msg.data.payload.mimeType || 'text/plain';
       }
 
-      // If no HTML content is found, convert plain text to HTML
-      if (!body.includes('<')) {
+      // If no content was found, use the snippet
+      if (!body) {
+        body = msg.data.snippet || '';
+        contentType = 'text/plain';
+      }
+
+      // Convert plain text to HTML if needed
+      if (contentType === 'text/plain') {
         body = body
           .split('\n')
-          .map(line => `<p>${line}</p>`)
+          .map(line => {
+            // Preserve empty lines
+            if (!line.trim()) return '<br>';
+            // Convert URLs to clickable links
+            const urlRegex = /(https?:\/\/[^\s]+)/g;
+            return `<p>${line.replace(urlRegex, '<a href="$1" target="_blank">$1</a>')}</p>`;
+          })
           .join('');
       }
 
@@ -106,13 +169,13 @@ export const getGmailMessages = async (accessToken: string, options: GetEmailsOp
         subject: headers.find(h => h.name === 'Subject')?.value || 'No Subject',
         date: headers.find(h => h.name === 'Date')?.value || 'Unknown',
         snippet: msg.data.snippet || '',
-        body: body || msg.data.snippet || ''
+        body: body
       };
     })
   );
 
   return {
-    emails: detailedMessages,
+    messages: detailedMessages,
     nextPageToken: response.data.nextPageToken
   };
 };

@@ -17,16 +17,21 @@ export function sanitizeHtml(html: string): string {
       'a', 'b', 'blockquote', 'br', 'caption', 'code', 'div', 
       'em', 'h1', 'h2', 'h3', 'h4', 'h5', 'h6', 'hr', 'i', 'img', 'li',
       'ol', 'p', 'pre', 'span', 'strong', 'table', 'tbody', 'td', 
-      'th', 'thead', 'tr', 'ul'
+      'th', 'thead', 'tr', 'ul', 'font', 'center', 'u', 's', 'sub', 'sup',
+      'section', 'article', 'aside', 'details', 'figure', 'figcaption',
+      'main', 'nav', 'header', 'footer'
     ],
     ALLOWED_ATTR: [
       'href', 'src', 'alt', 'title', 'style', 'width', 'height', 'class',
-      'border', 'cellpadding', 'cellspacing', 'align', 'valign'
+      'border', 'cellpadding', 'cellspacing', 'align', 'valign', 'color',
+      'bgcolor', 'background', 'dir', 'lang', 'target', 'id', 'name',
+      'data-*', 'cid', 'srcset', 'loading', 'role', 'aria-*'
     ],
-    FORBID_TAGS: ['script', 'iframe', 'object', 'embed', 'form'],
-    ADD_ATTR: ['target'], 
+    FORBID_TAGS: ['script', 'iframe', 'object', 'embed', 'form', 'style'],
+    ADD_ATTR: ['target', 'loading'], 
     WHOLE_DOCUMENT: false,
-    SANITIZE_DOM: true
+    SANITIZE_DOM: true,
+    ALLOW_DATA_ATTR: true
   };
   
   return DOMPurify.sanitize(html, purifyConfig);
@@ -46,7 +51,7 @@ export function createEmailDocument(emailBody: string): string {
   const formattedContent = isPlainText 
     ? emailBody
         .split('\n')
-        .map(line => `<p>${line || '&nbsp;'}</p>`)
+        .map(line => line.trim() ? `<p>${line}</p>` : '<br>')
         .join('')
     : emailBody;
 
@@ -65,87 +70,71 @@ export function createEmailDocument(emailBody: string): string {
             box-sizing: border-box;
           }
           
-          html, body {
-            height: auto;
-            margin: 0;
-            padding: 0;
-          }
-          
           body {
-            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
-            padding: 8px;
-            color: #333;
+            margin: 0;
+            padding: 1rem;
+            font-family: inherit;
+            line-height: inherit;
+            color: inherit;
             background-color: transparent;
-            line-height: 1.5;
-            font-size: 16px;
-            overflow-wrap: break-word;
-            word-wrap: break-word;
-          }
-          
-          /* Make all content responsive */
-          img, table, div, p {
-            max-width: 100% !important;
-          }
-          
-          /* Remove fixed heights */
-          [style*="height:"], [style*="height="] {
-            height: auto !important;
-          }
-          
-          /* Email table containers */
-          table {
-            width: auto !important;
-            margin: 4px 0;
-            border-collapse: collapse;
-          }
-          
-          td, th {
-            padding: 6px;
-            border: 1px solid #ddd;
           }
 
-          a {
-            color: #0070f3;
-            text-decoration: underline;
+          /* Preserve original styles */
+          div, p, table, td, th, span, a, img {
+            max-width: 100%;
           }
           
+          img {
+            height: auto;
+          }
+          
+          /* Only handle dark mode color inversion */
           @media (prefers-color-scheme: dark) {
             body {
               color: #e1e1e1;
+              background-color: transparent;
             }
             
-            a {
+            /* Invert colors while preserving images */
+            img {
+              filter: none !important;
+            }
+            
+            /* Adjust link colors for dark mode */
+            a:link {
               color: #3b82f6;
             }
             
-            table, td, th {
-              border-color: #555;
-            }
-          }
-          
-          pre, code {
-            white-space: pre-wrap;
-            background-color: rgba(0, 0, 0, 0.05);
-            border-radius: 3px;
-            padding: 0.2em 0.4em;
-            font-family: monospace;
-          }
-          
-          blockquote {
-            border-left: 3px solid #ddd;
-            padding-left: 16px;
-            margin-left: 0;
-            color: #555;
-          }
-          
-          @media (prefers-color-scheme: dark) {
-            pre, code {
-              background-color: rgba(255, 255, 255, 0.1);
+            a:visited {
+              color: #8b5cf6;
             }
             
-            blockquote {
-              border-color: #555;
-              color: #aaa;
+            /* Preserve original borders but adjust color */
+            [style*="border"] {
+              border-color: #555 !important;
+            }
+            
+            /* Adjust background colors */
+            [style*="background"] {
+              background-color: rgba(255, 255, 255, 0.05) !important;
+            }
+            
+            /* Preserve but adjust text colors */
+            [style*="color"] {
+              color: #e1e1e1 !important;
+            }
+          }
+
+          /* Print styles - restore original colors */
+          @media print {
+            body {
+              color: #000;
+              background: #fff;
+            }
+            
+            * {
+              print-color-adjust: exact;
+              -webkit-print-color-adjust: exact;
             }
           }
         </style>
@@ -155,46 +144,38 @@ export function createEmailDocument(emailBody: string): string {
         <script>
           document.addEventListener('DOMContentLoaded', function() {
             try {
-              // Make all links open in new tab
+              // Only process links for security
               document.querySelectorAll('a').forEach(link => {
                 link.setAttribute('target', '_blank');
                 link.setAttribute('rel', 'noopener noreferrer');
               });
               
-              // Fix image display
+              // Handle image errors but preserve original styling
               document.querySelectorAll('img').forEach(img => {
                 img.setAttribute('loading', 'lazy');
-                img.style.maxWidth = '100%';
-                img.style.height = 'auto';
                 
                 img.onerror = function() {
                   this.style.display = 'none';
+                  const placeholder = document.createElement('div');
+                  placeholder.style.background = '#f5f5f5';
+                  placeholder.style.border = '1px dashed #ccc';
+                  placeholder.style.padding = '1em';
+                  placeholder.style.textAlign = 'center';
+                  placeholder.style.color = '#666';
+                  placeholder.style.fontStyle = 'italic';
+                  placeholder.textContent = 'Image failed to load';
+                  this.parentNode.insertBefore(placeholder, this);
                 };
               });
               
-              // Remove empty divs and spacing elements
-              document.querySelectorAll('div:empty, span:empty').forEach(el => {
-                el.remove();
-              });
+              // Report height to parent
+              window.parent.postMessage({
+                type: 'resize',
+                height: document.body.scrollHeight
+              }, '*');
               
-              // Calculate height precisely without adding extra space
-              function reportHeight() {
-                // Get just the exact content height
-                const height = document.body.offsetHeight;
-                window.parent.postMessage({ type: 'resize', height: height }, '*');
-              }
-              
-              // Initial height report
-              reportHeight();
-              
-              // Additional check after all content has loaded
-              window.addEventListener('load', reportHeight);
-              
-              // Safety check
-              setTimeout(reportHeight, 500);
-            } catch (e) {
-              console.error('Error in email iframe:', e);
-              window.parent.postMessage({ type: 'error' }, '*');
+            } catch (error) {
+              console.error('Error processing email content:', error);
             }
           });
         </script>

@@ -2,6 +2,13 @@ import { NextResponse } from 'next/server';
 import { cookies } from 'next/headers';
 import { getGmailMessages } from '@/lib/google';
 
+interface GmailError {
+  response?: {
+    status?: number;
+  };
+  message?: string;
+}
+
 export async function GET(request: Request) {
   try {
     // Get cookies as a plain object to avoid type issues
@@ -22,20 +29,21 @@ export async function GET(request: Request) {
     
     try {
       // Get email metadata from Gmail
-      const { emails, nextPageToken } = await getGmailMessages(accessToken, {
+      const { messages, nextPageToken } = await getGmailMessages(accessToken, {
         query,
         maxResults
       });
 
       // Return the email context data
       return NextResponse.json({
-        emailContext: emails,
+        emailContext: messages,
         nextPageToken,
         query: query || null
       });
-    } catch (error: any) {
+    } catch (error: unknown) {
       // Check if error is due to token expiration
-      if (error?.response?.status === 401) {
+      const gmailError = error as GmailError;
+      if (gmailError?.response?.status === 401) {
         // Try to refresh the token
         const refreshResponse = await fetch(`${request.url.split('/api/')[0]}/api/auth/refresh`, {
           method: 'POST',
@@ -60,13 +68,13 @@ export async function GET(request: Request) {
         }
         
         // Retry the request with new token
-        const { emails, nextPageToken } = await getGmailMessages(newAccessToken, {
+        const { messages, nextPageToken } = await getGmailMessages(newAccessToken, {
           query,
           maxResults
         });
         
         return NextResponse.json({
-          emailContext: emails,
+          emailContext: messages,
           nextPageToken,
           query: query || null
         });

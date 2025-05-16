@@ -2,6 +2,13 @@ import { NextResponse } from 'next/server';
 import { cookies } from 'next/headers';
 import { getGmailMessages } from '@/lib/google';
 
+interface GmailError {
+  response?: {
+    status?: number;
+  };
+  message?: string;
+}
+
 export async function GET(request: Request) {
   try {
     const url = new URL(request.url);
@@ -20,15 +27,16 @@ export async function GET(request: Request) {
     }
 
     try {
-      const result = await getGmailMessages(accessTokenCookie, {
+      const { messages, nextPageToken } = await getGmailMessages(accessTokenCookie, {
         pageToken: pageToken || undefined,
         query: query || undefined,
         maxResults: maxResults ? parseInt(maxResults) : undefined
       });
-      return NextResponse.json(result);
-    } catch (error: any) {
+      return NextResponse.json({ messages, nextPageToken });
+    } catch (error: unknown) {
       // Check if error is due to token expiration
-      if (error?.response?.status === 401) {
+      const gmailError = error as GmailError;
+      if (gmailError?.response?.status === 401) {
         // Try to refresh the token
         const refreshResponse = await fetch('http://localhost:3000/api/auth/refresh', {
           method: 'POST',
@@ -53,12 +61,12 @@ export async function GET(request: Request) {
         }
 
         // Retry the request with new token
-        const result = await getGmailMessages(newAccessToken, {
+        const { messages, nextPageToken } = await getGmailMessages(newAccessToken, {
           pageToken: pageToken || undefined,
           query: query || undefined,
           maxResults: maxResults ? parseInt(maxResults) : undefined
         });
-        return NextResponse.json(result);
+        return NextResponse.json({ messages, nextPageToken });
       }
 
       throw error; // Re-throw if it's not a token expiration error
