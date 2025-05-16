@@ -15,7 +15,8 @@ export async function GET(
   }
 
   try {
-    const emailId = await params.id;
+    const prms = await params;
+    const emailId = prms.id;
     
     // Use the existing function to fetch a single email by ID
     const email = await getEmailContent(accessToken, emailId);

@@ -3,7 +3,7 @@
 import { useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 
-const BACKEND_URL = 'http://localhost:3000';
+const BACKEND_URL = process.env.NEXT_PUBLIC_BASE_URL;
 
 export default function Login() {
   const router = useRouter();

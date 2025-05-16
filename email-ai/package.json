@@ -30,6 +30,7 @@
     "dompurify": "^3.2.5",
     "google-auth-library": "^9.15.1",
     "googleapis": "^148.0.0",
+    "groq-sdk": "^0.21.0",
     "lodash": "^4.17.21",
     "lucide-react": "^0.509.0",
     "mongodb": "^6.16.0",

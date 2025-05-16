@@ -7,7 +7,7 @@ import { Button } from "@/components/ui/button";
 import { Avatar, AvatarImage, AvatarFallback } from "@/components/ui/avatar";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Input } from "@/components/ui/input";
-import { Search, Mail, LogOut, Inbox, FileText, Send, Trash, Plus, ChevronLeft, ChevronRight, MoreVertical, Star, Tag, Flag, Archive } from "lucide-react";
+import { Search, Mail, LogOut, Inbox, FileText, Send, Trash, Plus, ChevronLeft, ChevronRight, MoreVertical, Star, Tag, Flag, Archive, Sparkles } from "lucide-react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import api from '@/lib/axios';
 import debounce from 'lodash/debounce';
@@ -54,6 +54,7 @@ export default function Dashboard() {
     content: ''
   });
   const [sending, setSending] = useState(false);
+  const [generating, setGenerating] = useState<'idle' | 'subject' | 'content'>('idle');
   const observer = useRef<IntersectionObserver | null>(null); // Fixed linter error
   const debouncedSearchRef = useRef(
     debounce((query: string, callback: (query: string) => void) => {
@@ -182,6 +183,45 @@ export default function Dashboard() {
       alert('Failed to send email. Please try again.');
     } finally {
       setSending(false);
+    }
+  };
+
+  const handleGenerateContent = async (type: 'subject' | 'content') => {
+    let prompt = '';
+    if (type === 'subject') {
+      prompt = newEmail.subject;
+      if (!prompt.trim()) {
+        alert('Please enter a subject to rephrase');
+        return;
+      }
+    } else if (type === 'content') {
+      prompt = newEmail.content;
+      if (!prompt.trim()) {
+        alert('Please enter some content to generate or rewrite');
+        return;
+      }
+    }
+
+    try {
+      setGenerating(type);
+      const response = await api.post('/api/generate', {
+        prompt,
+        type,
+        userName: userInfo?.name || '',
+      });
+
+      const data = response.data as { subject?: string; content?: string };
+      
+      if (type === 'subject' && data.subject) {
+        setNewEmail({ ...newEmail, subject: data.subject });
+      } else if (type === 'content' && data.content) {
+        setNewEmail({ ...newEmail, content: data.content });
+      }
+    } catch (error) {
+      console.error(`Error generating ${type}:`, error);
+      alert(`Failed to generate ${type}. Please try again.`);
+    } finally {
+      setGenerating('idle');
     }
   };
 
@@ -629,20 +669,56 @@ export default function Dashboard() {
               <label htmlFor="subject" className="text-right font-medium text-sm">
                 Subject:
               </label>
-              <Input
-                id="subject"
-                value={newEmail.subject}
-                onChange={(e) => setNewEmail({ ...newEmail, subject: e.target.value })}
-                className="col-span-3"
-              />
+              <div className="col-span-3 flex gap-2">
+                <Input
+                  id="subject"
+                  value={newEmail.subject}
+                  onChange={(e) => setNewEmail({ ...newEmail, subject: e.target.value })}
+                  className="flex-1"
+                />
+                <Button 
+                  variant="outline" 
+                  size="icon" 
+                  onClick={() => handleGenerateContent('subject')}
+                  disabled={generating !== 'idle'}
+                  title="Rephrase subject with AI"
+                >
+                  {generating === 'subject' ? (
+                    <span className="animate-spin">⟳</span>
+                  ) : (
+                    <Sparkles className="h-4 w-4" />
+                  )}
+                </Button>
+              </div>
             </div>
             <div className="grid grid-cols-4 gap-4">
-              <div className="col-span-1"></div>
-              <textarea
-                value={newEmail.content}
-                onChange={(e) => setNewEmail({ ...newEmail, content: e.target.value })}
-                className="col-span-3 border border-border rounded-md h-64 p-2 text-sm"
-              />
+              <div className="text-right font-medium text-sm pt-2">
+                Content:
+              </div>
+              <div className="col-span-3 flex flex-col gap-2">
+                <div className="flex justify-between mb-2">
+                  <Button 
+                    variant="outline" 
+                    size="sm" 
+                    onClick={() => handleGenerateContent('content')}
+                    disabled={generating !== 'idle'}
+                    className="h-8"
+                    title="Rewrite/generate email with AI"
+                  >
+                    {generating === 'content' ? (
+                      <span className="animate-spin mr-2">⟳</span>
+                    ) : (
+                      <Sparkles className="h-4 w-4 mr-2" />
+                    )}
+                    AI Generate
+                  </Button>
+                </div>
+                <textarea
+                  value={newEmail.content}
+                  onChange={(e) => setNewEmail({ ...newEmail, content: e.target.value })}
+                  className="border border-border rounded-md h-64 p-2 text-sm"
+                />
+              </div>
             </div>
           </div>
           <DialogFooter>
