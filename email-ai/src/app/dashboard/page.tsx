@@ -289,29 +289,103 @@ export default function Dashboard() {
     fetchEmails(undefined);
   };
 
-  if (!userInfo || loading) {
+  if (loading && !searchLoading && emails.length === 0) {
     return (
-      <div className="min-h-screen bg-background">
-        <div className="flex h-screen">
-          {/* Sidebar */}
-          <div className="w-64 border-r border-border bg-card">
-            <div className="p-4">
-              <Skeleton className="h-10 w-36 rounded-full mb-8" />
-              <Skeleton className="h-8 w-full mb-4" />
-              <Skeleton className="h-8 w-full mb-4" />
-              <Skeleton className="h-8 w-full mb-4" />
+      <div className="min-h-screen bg-background flex flex-col h-screen overflow-hidden">
+        {/* Header skeleton */}
+        <div className="h-16 border-b border-border/50 flex items-center px-4 bg-gradient-to-r from-orange-500/10 to-amber-500/10 backdrop-blur-xl flex-none">
+          <div className="flex items-center space-x-4 w-64">
+            <Skeleton className="h-8 w-8 rounded-full" />
+            <div className="space-y-1">
+              <Skeleton className="h-4 w-24" />
+              <Skeleton className="h-3 w-32" />
             </div>
           </div>
-          
-          {/* Main content */}
-          <div className="flex-1 p-3">
-            <Skeleton className="h-10 w-full mb-4 rounded-full" />
-                <div className="space-y-2">
+          <div className="flex-1 px-4">
+            <Skeleton className="h-10 w-full max-w-xl mx-auto rounded-full" />
+          </div>
+          <Skeleton className="h-8 w-8 rounded-md" />
+        </div>
+
+        {/* Main content skeleton */}
+        <div className="flex-1 flex">
+          {/* Left sidebar skeleton */}
+          <div className="w-[20%] border-r border-border/50 bg-gradient-to-b from-orange-500/5 to-amber-500/5">
+            <div className="p-4">
+              <Skeleton className="h-12 w-full rounded-full mb-6" />
+              <div className="space-y-2">
+                {[...Array(5)].map((_, i) => (
+                  <Skeleton key={i} className="h-10 w-full rounded-md" />
+                ))}
+              </div>
+            </div>
+          </div>
+
+          {/* Email list skeleton */}
+          <div className="w-[35%] border-r border-border/50">
+            <div className="h-12 border-b border-border/50 flex items-center px-4">
+              <div className="flex space-x-2">
+                {[...Array(3)].map((_, i) => (
+                  <Skeleton key={i} className="h-8 w-8 rounded-md" />
+                ))}
+              </div>
+              <div className="flex-1" />
+              <div className="flex space-x-2">
+                {[...Array(2)].map((_, i) => (
+                  <Skeleton key={i} className="h-8 w-8 rounded-md" />
+                ))}
+              </div>
+            </div>
+            <div className="p-4 space-y-4">
               {[...Array(8)].map((_, i) => (
-                <Skeleton key={i} className="h-8 w-full" />
+                <div key={i} className="flex items-center space-x-3">
+                  <Skeleton className="h-6 w-6 rounded-md" />
+                  <div className="flex-1 space-y-2">
+                    <div className="flex justify-between">
+                      <Skeleton className="h-4 w-32" />
+                      <Skeleton className="h-4 w-16" />
+                    </div>
+                    <Skeleton className="h-4 w-full" />
+                    <Skeleton className="h-3 w-3/4" />
+                  </div>
+                </div>
               ))}
+            </div>
+          </div>
+
+          {/* Email content skeleton */}
+          <div className="flex-1 bg-gradient-to-b from-white/50 to-white/30 dark:from-background/50 dark:to-background/30">
+            <div className="h-12 border-b border-border/50 flex items-center justify-between px-4">
+              <div className="flex space-x-2">
+                {[...Array(3)].map((_, i) => (
+                  <Skeleton key={i} className="h-8 w-8 rounded-md" />
+                ))}
+              </div>
+              <div className="flex space-x-2">
+                {[...Array(2)].map((_, i) => (
+                  <Skeleton key={i} className="h-8 w-8 rounded-md" />
+                ))}
+              </div>
+            </div>
+            <div className="p-6 space-y-6">
+              <div className="space-y-4">
+                <Skeleton className="h-8 w-3/4" />
+                <div className="flex items-center space-x-4">
+                  <Skeleton className="h-10 w-10 rounded-full" />
+                  <div className="space-y-2">
+                    <Skeleton className="h-4 w-48" />
+                    <Skeleton className="h-3 w-32" />
+                  </div>
                 </div>
               </div>
+              <div className="space-y-3">
+                {[...Array(6)].map((_, i) => (
+                  <Skeleton key={i} className="h-4 w-full" />
+                ))}
+                <Skeleton className="h-4 w-3/4" />
+              </div>
+            </div>
+          </div>
         </div>
       </div>
     );

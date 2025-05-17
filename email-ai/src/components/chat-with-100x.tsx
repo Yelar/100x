@@ -6,7 +6,6 @@ import ReactMarkdown from 'react-markdown';
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Card, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
-import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Send, Bot, Mail, Info, Search, Loader2, CheckCircle2, Activity } from 'lucide-react';
 import { Badge } from "@/components/ui/badge";
@@ -353,33 +352,26 @@ export function ChatWith100x() {
         const parsedResponse = parseAIMessage(message.content);
         
         return (
-          <div className="flex gap-3 max-w-[80%]">
-            <Avatar className="h-8 w-8 mt-0.5">
-              <AvatarFallback className="bg-primary/10 text-primary">
-                <Bot className="h-4 w-4" />
-              </AvatarFallback>
-            </Avatar>
-            <div className="space-y-4">
-              {parsedResponse.thoughts && parsedResponse.thoughts.length > 0 && (
-                <div className="bg-muted/50 rounded-lg p-3 space-y-2">
-                  <div className="text-xs text-muted-foreground flex items-center gap-1">
-                    <Activity className="h-3 w-3" />
-                    <span>Thought process:</span>
-                  </div>
-                  <ul className="pl-5 space-y-1.5">
-                    {parsedResponse.thoughts.map((thought, index) => (
-                      <li key={index} className="text-xs text-muted-foreground flex items-start gap-2">
-                        <CheckCircle2 className="h-3 w-3 mt-0.5 text-primary/70" />
-                        <span>{thought}</span>
-                      </li>
-                    ))}
-                  </ul>
+          <div className="flex flex-col gap-2 max-w-[80%] animate-slideIn">
+            {parsedResponse.thoughts && parsedResponse.thoughts.length > 0 && (
+              <div className="bg-muted/50 rounded-lg p-3 space-y-2">
+                <div className="text-xs text-muted-foreground flex items-center gap-1">
+                  <Activity className="h-3 w-3" />
+                  <span>Thought process:</span>
                 </div>
-              )}
-              <div className="rounded-lg px-4 py-2 bg-muted">
-                <div className="prose dark:prose-invert max-w-none text-sm">
-                  {formatAnswerWithEmailReferences(parsedResponse.answer)}
-                </div>
+                <ul className="pl-5 space-y-1.5">
+                  {parsedResponse.thoughts.map((thought, index) => (
+                    <li key={index} className="text-xs text-muted-foreground flex items-start gap-2">
+                      <CheckCircle2 className="h-3 w-3 mt-0.5 text-primary/70" />
+                      <span>{thought}</span>
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            )}
+            <div className="rounded-lg px-4 py-2 bg-muted">
+              <div className="prose dark:prose-invert max-w-none text-sm">
+                {formatAnswerWithEmailReferences(parsedResponse.answer)}
               </div>
             </div>
           </div>
@@ -388,17 +380,10 @@ export function ChatWith100x() {
         console.error("Error rendering assistant message:", error);
         // Fallback rendering for assistant messages when parsing fails
         return (
-          <div className="flex gap-3 max-w-[80%]">
-            <Avatar className="h-8 w-8 mt-0.5">
-              <AvatarFallback className="bg-primary/10 text-primary">
-                <Bot className="h-4 w-4" />
-              </AvatarFallback>
-            </Avatar>
-            <div className="space-y-4">
-              <div className="rounded-lg px-4 py-2 bg-muted">
-                <div className="prose dark:prose-invert max-w-none text-sm break-words">
-                  {message.content || "I'm having trouble processing your request."}
-                </div>
+          <div className="flex flex-col gap-2 max-w-[80%] animate-slideIn">
+            <div className="rounded-lg px-4 py-2 bg-muted">
+              <div className="prose dark:prose-invert max-w-none text-sm break-words">
+                {message.content || "I'm having trouble processing your request."}
               </div>
             </div>
           </div>
@@ -408,10 +393,7 @@ export function ChatWith100x() {
     
     // User message
     return (
-      <div className="flex flex-row-reverse gap-3 max-w-[80%]">
-        <Avatar className="h-8 w-8 mt-0.5">
-          <AvatarFallback className="bg-primary/10 text-primary">U</AvatarFallback>
-        </Avatar>
+      <div className="flex flex-row-reverse gap-2 max-w-[80%] animate-slideIn">
         <div className="rounded-lg px-4 py-2 bg-primary text-primary-foreground">
           <div className="prose dark:prose-invert max-w-none text-sm">
             <ReactMarkdown>{message.content}</ReactMarkdown>
@@ -483,38 +465,35 @@ export function ChatWith100x() {
             {/* Thinking state display */}
             {isProcessing && (
               <div className="flex justify-start">
-                <div className="flex gap-3 max-w-[80%]">
-                  <Avatar className="h-8 w-8 mt-0.5">
-                    <AvatarFallback className="bg-primary/10 text-primary">
-                      <Loader2 className="h-4 w-4 animate-spin" />
-                    </AvatarFallback>
-                  </Avatar>
-                  <div className="space-y-4">
-                    <div className="bg-muted/50 rounded-lg p-3 space-y-2">
-                      <div className="text-xs text-muted-foreground flex items-center gap-1">
-                        <Activity className="h-3 w-3" />
-                        <span>Thinking...</span>
-                      </div>
-                      <ul className="pl-5 space-y-1.5">
-                        {currentThoughts.map((thought, index) => (
-                          <li 
-                            key={index} 
-                            className={`text-xs flex items-start gap-2 ${
-                              index <= currentThoughtIndex 
-                                ? 'text-muted-foreground' 
-                                : 'text-muted-foreground/50'
-                            }`}
-                          >
-                            {index <= currentThoughtIndex ? (
-                              <CheckCircle2 className="h-3 w-3 mt-0.5 text-primary/70" />
-                            ) : (
-                              <div className="h-3 w-3 mt-0.5 rounded-full border border-muted-foreground/30" />
-                            )}
-                            <span>{thought}</span>
-                          </li>
-                        ))}
-                      </ul>
+                <div className="flex flex-col gap-2 max-w-[80%] animate-slideIn">
+                  <div className="bg-muted/50 rounded-lg p-3 space-y-2">
+                    <div className="text-xs text-muted-foreground flex items-center gap-1">
+                      <Activity className="h-3 w-3" />
+                      <span>Thinking...</span>
                     </div>
+                    <ul className="pl-5 space-y-1.5">
+                      {currentThoughts.map((thought, index) => (
+                        <li 
+                          key={index} 
+                          className={`text-xs flex items-start gap-2 transition-all duration-500 ease-in-out ${
+                            index <= currentThoughtIndex 
+                              ? 'opacity-100 translate-y-0' 
+                              : 'opacity-50 translate-y-1'
+                          }`}
+                        >
+                          <div className="relative">
+                            {index <= currentThoughtIndex ? (
+                              <CheckCircle2 className="h-3 w-3 mt-0.5 text-primary/70 animate-scaleIn" />
+                            ) : (
+                              <div className="h-3 w-3 mt-0.5 rounded-full border border-muted-foreground/30 animate-pulse" />
+                            )}
+                          </div>
+                          <span className={index <= currentThoughtIndex ? 'text-muted-foreground' : 'text-muted-foreground/50'}>
+                            {thought}
+                          </span>
+                        </li>
+                      ))}
+                    </ul>
                   </div>
                 </div>
               </div>

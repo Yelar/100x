@@ -1,5 +1,7 @@
 /** @type {import('tailwindcss').Config} */
-module.exports = {
+import typography from '@tailwindcss/typography';
+
+export default {
   darkMode: ["class"],
   content: [
     './pages/**/*.{ts,tsx}',
@@ -16,6 +18,20 @@ module.exports = {
       },
     },
     extend: {
+      keyframes: {
+        slideIn: {
+          '0%': { transform: 'translateY(10px)', opacity: 0 },
+          '100%': { transform: 'translateY(0)', opacity: 1 },
+        },
+        scaleIn: {
+          '0%': { transform: 'scale(0.8)', opacity: 0 },
+          '100%': { transform: 'scale(1)', opacity: 1 },
+        },
+      },
+      animation: {
+        slideIn: 'slideIn 0.3s ease-out forwards',
+        scaleIn: 'scaleIn 0.2s ease-out forwards',
+      },
       colors: {
         border: "var(--border)",
         input: "var(--input)",
@@ -123,5 +139,5 @@ module.exports = {
       },
     },
   },
-  plugins: [require("@tailwindcss/typography")],
+  plugins: [typography],
 } 
