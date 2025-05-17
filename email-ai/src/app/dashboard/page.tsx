@@ -16,6 +16,7 @@ import { ChatWith100x } from '@/components/chat-with-100x';
 import { ResizablePanelGroup, ResizablePanel } from "@/components/ui/resizable";
 import { ResizableHandleWithReset } from "@/components/ui/resizable-handle-with-reset";
 import { usePanelLayout } from "@/hooks/use-panel-layout";
+import { ReplyComposer } from '@/components/reply-composer';
 
 interface UserInfo {
   email: string;
@@ -64,6 +65,7 @@ export default function Dashboard() {
   const [iframeHeight, setIframeHeight] = useState(500);
   const iframeRef = useRef<HTMLIFrameElement>(null);
   const [renderError, setRenderError] = useState(false);
+  const [isReplying, setIsReplying] = useState(false);
 
   const { refs, sizes, onResize } = usePanelLayout();
 
@@ -281,6 +283,12 @@ export default function Dashboard() {
     };
   }, [selectedEmail]);
 
+  const handleReplyComplete = () => {
+    setIsReplying(false);
+    // Optionally refresh the emails list
+    fetchEmails(undefined);
+  };
+
   if (!userInfo || loading) {
     return (
       <div className="min-h-screen bg-background">
@@ -329,37 +337,37 @@ export default function Dashboard() {
   return (
     <div className="min-h-screen bg-background flex flex-col h-screen overflow-hidden">
       {/* Header */}
-      <div className="h-16 border-b border-border flex items-center px-4 bg-card flex-none">
+      <div className="h-16 border-b border-border/50 flex items-center px-4 bg-gradient-to-r from-orange-500/10 to-amber-500/10 backdrop-blur-xl flex-none">
         <div className="flex items-center space-x-4 w-64">
           <div className="flex items-center space-x-2">
-            <Avatar className="h-8 w-8">
+            <Avatar className="h-8 w-8 ring-2 ring-orange-500/20">
               <AvatarImage src={userInfo?.picture} alt={userInfo?.name} />
-              <AvatarFallback>{userInfo?.name?.[0]}</AvatarFallback>
+              <AvatarFallback className="bg-gradient-to-br from-orange-500 to-amber-600">{userInfo?.name?.[0]}</AvatarFallback>
             </Avatar>
-            <div className="font-medium text-sm truncate text-foreground">
+            <div className="font-medium text-sm truncate">
               {userInfo?.name}
-              <div className="text-xs text-muted-foreground truncate">{userInfo?.email}</div>
+              <div className="text-xs text-orange-600/80 truncate">{userInfo?.email}</div>
             </div>
           </div>
         </div>
         <div className="flex-1 px-4">
           <div className="relative w-full max-w-xl mx-auto">
-            <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+            <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-orange-500/50" />
             <Input
               type="text"
               placeholder="Search in emails..."
               value={searchQuery}
               onChange={handleSearch}
-              className="pl-10 pr-4 py-2 h-10 rounded-full bg-secondary border-none w-full"
+              className="pl-10 pr-4 py-2 h-10 rounded-full bg-white/5 border-orange-500/20 hover:border-orange-500/30 focus:border-orange-500/50 w-full transition-colors"
             />
           </div>
         </div>
         <div className="flex items-center space-x-2">
-              <Button 
+          <Button 
             variant="ghost"
             size="icon"
-            className="text-muted-foreground hover:text-foreground"
-                onClick={handleLogout}
+            className="text-orange-500/80 hover:text-orange-500 hover:bg-orange-500/10"
+            onClick={handleLogout}
           >
             <LogOut className="h-5 w-5" />
           </Button>
@@ -377,36 +385,36 @@ export default function Dashboard() {
           defaultSize={sizes.sidebarSize} 
           minSize={15} 
           maxSize={25} 
-          className="border-r border-border bg-card flex flex-col overflow-hidden"
+          className="border-r border-border/50 bg-gradient-to-b from-orange-500/5 to-amber-500/5 flex flex-col overflow-hidden"
         >
           <div className="p-4">
-            <Button className="rounded-full px-6 py-2 h-12 w-full justify-start font-medium shadow-sm mb-6" onClick={() => setComposing(true)}>
+            <Button className="rounded-full px-6 py-2 h-12 w-full justify-start font-medium shadow-sm mb-6 bg-gradient-to-r from-orange-500 to-amber-600 hover:from-orange-600 hover:to-amber-700 text-white" onClick={() => setComposing(true)}>
               <Plus className="mr-2 h-5 w-5" />
               Compose
             </Button>
             <div className="space-y-1">
-              <Button variant="ghost" className="w-full justify-start font-medium">
+              <Button variant="ghost" className="w-full justify-start font-medium text-orange-700 dark:text-orange-300 bg-orange-500/10">
                 <Inbox className="mr-2 h-5 w-5" />
                 Inbox
                 {emails.length > 0 && (
-                  <span className="ml-auto bg-primary text-primary-foreground text-xs rounded-full px-2 py-0.5 font-semibold">
+                  <span className="ml-auto bg-orange-500 text-white text-xs rounded-full px-2 py-0.5 font-semibold">
                     {emails.length}
                   </span>
                 )}
               </Button>
-              <Button variant="ghost" className="w-full justify-start font-medium text-muted-foreground">
+              <Button variant="ghost" className="w-full justify-start font-medium text-muted-foreground hover:text-orange-600 hover:bg-orange-500/10">
                 <Star className="mr-2 h-5 w-5" />
                 Starred
               </Button>
-              <Button variant="ghost" className="w-full justify-start font-medium text-muted-foreground">
+              <Button variant="ghost" className="w-full justify-start font-medium text-muted-foreground hover:text-orange-600 hover:bg-orange-500/10">
                 <Send className="mr-2 h-5 w-5" />
                 Sent
               </Button>
-              <Button variant="ghost" className="w-full justify-start font-medium text-muted-foreground">
+              <Button variant="ghost" className="w-full justify-start font-medium text-muted-foreground hover:text-orange-600 hover:bg-orange-500/10">
                 <FileText className="mr-2 h-5 w-5" />
                 Drafts
               </Button>
-              <Button variant="ghost" className="w-full justify-start font-medium text-muted-foreground">
+              <Button variant="ghost" className="w-full justify-start font-medium text-muted-foreground hover:text-orange-600 hover:bg-orange-500/10">
                 <Trash className="mr-2 h-5 w-5" />
                 Trash
               </Button>
@@ -426,23 +434,23 @@ export default function Dashboard() {
           ref={refs.emailListRef}
           defaultSize={sizes.emailListSize} 
           minSize={20} 
-          className="border-r border-border flex flex-col overflow-hidden"
+          className="border-r border-border/50 flex flex-col overflow-hidden bg-gradient-to-b from-white/50 to-white/30 dark:from-background/50 dark:to-background/30"
         >
-          <div className="flex-none p-2 border-b border-border flex items-center">
-            <Button variant="ghost" size="icon" className="text-muted-foreground">
+          <div className="flex-none p-2 border-b border-border/50 flex items-center bg-white/50 dark:bg-background/50">
+            <Button variant="ghost" size="icon" className="text-orange-500/80 hover:text-orange-500 hover:bg-orange-500/10">
               <Archive className="h-5 w-5" />
             </Button>
-            <Button variant="ghost" size="icon" className="text-muted-foreground">
+            <Button variant="ghost" size="icon" className="text-orange-500/80 hover:text-orange-500 hover:bg-orange-500/10">
               <Flag className="h-5 w-5" />
             </Button>
-            <Button variant="ghost" size="icon" className="text-muted-foreground">
+            <Button variant="ghost" size="icon" className="text-orange-500/80 hover:text-orange-500 hover:bg-orange-500/10">
               <Tag className="h-5 w-5" />
             </Button>
             <div className="flex-1" />
-            <Button variant="ghost" size="icon" disabled={!nextPageToken} className="text-muted-foreground">
+            <Button variant="ghost" size="icon" disabled={!nextPageToken} className="text-orange-500/80 hover:text-orange-500 hover:bg-orange-500/10">
               <ChevronLeft className="h-5 w-5" />
             </Button>
-            <Button variant="ghost" size="icon" disabled={!nextPageToken} className="text-muted-foreground" onClick={() => fetchEmails(nextPageToken)}>
+            <Button variant="ghost" size="icon" disabled={!nextPageToken} className="text-orange-500/80 hover:text-orange-500 hover:bg-orange-500/10" onClick={() => fetchEmails(nextPageToken)}>
               <ChevronRight className="h-5 w-5" />
             </Button>
           </div>
@@ -454,12 +462,12 @@ export default function Dashboard() {
                 key={email.id}
                 ref={index === emails.length - 1 ? lastEmailElementRef : undefined}
                 onClick={() => setSelectedEmail(email)}
-                className={`flex items-center px-4 py-2 cursor-pointer border-b border-border hover:bg-secondary/50 ${
-                  selectedEmail?.id === email.id ? 'bg-secondary' : ''
+                className={`flex items-center px-4 py-2 cursor-pointer border-b border-border/50 hover:bg-orange-500/5 ${
+                  selectedEmail?.id === email.id ? 'bg-orange-500/10' : ''
                 }`}
               >
-                <div className="mr-3 flex space-x-2 items-center text-muted-foreground">
-                  <Button variant="ghost" size="icon" className="h-6 w-6">
+                <div className="mr-3 flex space-x-2 items-center">
+                  <Button variant="ghost" size="icon" className="h-6 w-6 text-orange-500/80 hover:text-orange-500 hover:bg-orange-500/10">
                     <Star className="h-4 w-4" />
                   </Button>
                 </div>
@@ -505,7 +513,7 @@ export default function Dashboard() {
           ref={refs.emailContentRef}
           defaultSize={sizes.emailContentSize} 
           minSize={30}
-          className="flex flex-col overflow-hidden bg-background"
+          className="flex flex-col overflow-hidden bg-gradient-to-br from-white/50 to-orange-50/30 dark:from-background/50 dark:to-orange-900/5"
         >
           {selectedEmail ? (
             <div className="flex-1 overflow-y-auto email-content-container">
@@ -607,12 +615,28 @@ export default function Dashboard() {
                     </div>
                   )}
                 </div>
-                <div className="mt-8 pt-4 border-t border-border">
-                  <div className="flex space-x-2">
-                    <Button variant="outline" className="text-foreground">
+                <div className="mt-8 pt-4 border-t border-border/50">
+                  {isReplying && selectedEmail && (
+                    <ReplyComposer
+                      recipientEmail={selectedEmail.from}
+                      originalSubject={selectedEmail.subject}
+                      originalContent={selectedEmail.body.replace(/<[^>]*>/g, '')}
+                      onClose={() => setIsReplying(false)}
+                      onSend={handleReplyComplete}
+                    />
+                  )}
+                  <div className="flex space-x-2 mt-4">
+                    <Button 
+                      variant="outline" 
+                      className="text-orange-600 border-orange-200 hover:bg-orange-50 dark:text-orange-400 dark:border-orange-500/20 dark:hover:bg-orange-500/10"
+                      onClick={() => setIsReplying(true)}
+                    >
                       Reply
                     </Button>
-                    <Button variant="outline" className="text-foreground">
+                    <Button 
+                      variant="outline" 
+                      className="text-orange-600 border-orange-200 hover:bg-orange-50 dark:text-orange-400 dark:border-orange-500/20 dark:hover:bg-orange-500/10"
+                    >
                       Forward
                     </Button>
                   </div>
