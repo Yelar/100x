@@ -78,7 +78,7 @@ export async function POST(request: Request) {
       // Check if error is due to token expiration
       if (error?.response?.status === 401) {
         // Try to refresh the token
-        const refreshResponse = await fetch('http://localhost:3000/api/auth/refresh', {
+        const refreshResponse = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/auth/refresh`, {
           method: 'POST',
         });
 
