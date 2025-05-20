@@ -29,6 +29,7 @@
     "class-variance-authority": "^0.7.1",
     "clsx": "^2.1.1",
     "dompurify": "^3.2.5",
+    "framer-motion": "^12.12.1",
     "google-auth-library": "^9.15.1",
     "googleapis": "^148.0.0",
     "groq-sdk": "^0.21.0",
