@@ -7,10 +7,11 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Card, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
 import { ScrollArea } from "@/components/ui/scroll-area";
-import { Send, Bot, Mail, Info, Search, Loader2, CheckCircle2, Activity } from 'lucide-react';
+import { Send, Bot, Mail, Info, Search, Loader2, CheckCircle2, Activity, Mic } from 'lucide-react';
 import { Badge } from "@/components/ui/badge";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { EmailPreviewDialog } from '@/components/email-preview-dialog';
+import { EmailComposeDialog, EmailComposeDialogHandle } from '@/components/email-compose-dialog';
 
 interface ParsedAIResponse {
   thoughts?: string[];
@@ -57,6 +58,11 @@ export function ChatWith100x() {
   const [isProcessing, setIsProcessing] = useState(false);
   const [currentThoughts, setCurrentThoughts] = useState<string[]>([]);
   const [currentThoughtIndex, setCurrentThoughtIndex] = useState(0);
+  const [isRecording, setIsRecording] = useState(false);
+  const [isTranscribing, setIsTranscribing] = useState(false);
+  const mediaRecorderRef = useRef<MediaRecorder | null>(null);
+  const audioChunksRef = useRef<Blob[]>([]);
+  const composeDialogRef = useRef<EmailComposeDialogHandle>(null);
   
   // Function to safely try to parse JSON from a string that might contain text before/after the JSON
   const extractJsonFromString = (str: string): Record<string, unknown> | null => {
@@ -344,6 +350,57 @@ export function ChatWith100x() {
     handleSubmit(e);
   };
   
+  // Start recording audio
+  const startRecording = async () => {
+    setIsRecording(true);
+    setIsTranscribing(false);
+    audioChunksRef.current = [];
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      const mediaRecorder = new window.MediaRecorder(stream);
+      mediaRecorderRef.current = mediaRecorder;
+      mediaRecorder.ondataavailable = (event) => {
+        if (event.data.size > 0) {
+          audioChunksRef.current.push(event.data);
+        }
+      };
+      mediaRecorder.onstop = handleAudioStop;
+      mediaRecorder.start();
+    } catch {
+      setIsRecording(false);
+      alert('Could not access microphone.');
+    }
+  };
+
+  // Stop recording audio
+  const stopRecording = () => {
+    setIsRecording(false);
+    mediaRecorderRef.current?.stop();
+  };
+
+  // Handle audio stop and send to API
+  const handleAudioStop = async () => {
+    setIsTranscribing(true);
+    const audioBlob = new Blob(audioChunksRef.current, { type: 'audio/webm' });
+    const formData = new FormData();
+    formData.append('audio', audioBlob, 'recording.webm');
+    try {
+      const response = await fetch('/api/audio', {
+        method: 'POST',
+        body: formData,
+      });
+      if (!response.ok) throw new Error('Transcription failed');
+      const data = await response.json();
+      if (data.text) {
+        handleInputChange({ target: { value: input ? input + ' ' + data.text : data.text } } as React.ChangeEvent<HTMLInputElement>);
+      }
+    } catch {
+      alert('Failed to transcribe audio.');
+    } finally {
+      setIsTranscribing(false);
+    }
+  };
+  
   // Render a single message
   const renderMessage = (message: Message) => {
     // For assistant messages, try to parse structured format
@@ -402,6 +459,28 @@ export function ChatWith100x() {
       </div>
     );
   };
+
+  // Watch for triggerRecipientDialog flag in assistant messages
+  useEffect(() => {
+    if (!messages.length) return;
+    const lastMsg = messages[messages.length - 1];
+    if (lastMsg.role === 'assistant') {
+      try {
+        const json = extractJsonFromString(lastMsg.content);
+        if (
+          json &&
+          typeof json === 'object' &&
+          'triggerRecipientDialog' in json &&
+          json.triggerRecipientDialog === true &&
+          typeof json.subject === 'string' &&
+          typeof json.content === 'string' &&
+          composeDialogRef.current
+        ) {
+          composeDialogRef.current.openDialog(json.subject, json.content);
+        }
+      } catch {}
+    }
+  }, [messages]);
 
   return (
     <>
@@ -506,13 +585,27 @@ export function ChatWith100x() {
         <CardFooter className="p-4 pt-2 border-t">
           <form onSubmit={handleCustomSubmit} className="flex w-full gap-2">
             <Input
-              placeholder={isProcessing ? "Searching through your emails..." : "Type your message..."}
+              placeholder={isProcessing ? "Searching through your emails..." : isTranscribing ? "Transcribing..." : "Type your message..."}
               value={input}
               onChange={handleInputChange}
-              disabled={isLoading || isProcessing}
+              disabled={isLoading || isProcessing || isTranscribing}
               className="flex-1"
             />
-            <Button type="submit" size="icon" disabled={isLoading || isProcessing || !input.trim()}>
+            <Button
+              type="button"
+              size="icon"
+              variant={isRecording ? "secondary" : "outline"}
+              onClick={isRecording ? stopRecording : startRecording}
+              disabled={isLoading || isProcessing || isTranscribing}
+              aria-label={isRecording ? "Stop recording" : "Start recording"}
+            >
+              {isTranscribing ? (
+                <Loader2 className="h-4 w-4 animate-spin" />
+              ) : (
+                <Mic className={`h-4 w-4 ${isRecording ? 'text-red-500 animate-pulse' : ''}`} />
+              )}
+            </Button>
+            <Button type="submit" size="icon" disabled={isLoading || isProcessing || !input.trim() || isTranscribing}>
               {isProcessing ? (
                 <Loader2 className="h-4 w-4 animate-spin" />
               ) : (
@@ -529,6 +622,7 @@ export function ChatWith100x() {
         onOpenChange={setPreviewDialogOpen}
         emailId={previewEmail}
       />
+      <EmailComposeDialog ref={composeDialogRef} />
     </>
   );
 } 

@@ -31,11 +31,30 @@ export interface EmailSearchTool extends Tool {
   };
 }
 
+export interface ComposeEmailTool extends Tool {
+  type: 'function';
+  name: 'compose_email';
+  description: 'Draft an email (subject and content) based on the user\'s message. The recipient will be entered manually.';
+  input: {
+    subject: string;
+    content: string;
+  };
+  output: {
+    subject: string;
+    content: string;
+  };
+}
+
 export const tools: Tool[] = [
   {
     type: 'function',
     name: 'search_emails',
     description: 'Search and analyze emails to answer the user query',
+  },
+  {
+    type: 'function',
+    name: 'compose_email',
+    description: 'Draft an email (subject and content) based on the user\'s message. The recipient will be entered manually.',
   }
 ];
 

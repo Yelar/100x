@@ -1,7 +1,7 @@
 import { groq } from '@ai-sdk/groq';
 import { streamText } from 'ai';
 import { cookies } from 'next/headers';
-import { tools, ToolResult as ImportedToolResult } from '@/lib/tools';
+// import { tools, ToolResult as ImportedToolResult } from '@/lib/tools';
 
 export const maxDuration = 60; // Increased to allow for email content fetching
 
@@ -506,6 +506,19 @@ export async function POST(req: Request) {
       role: 'system',
       content: `You are an AI assistant for an email client that provides EXTREMELY CONCISE answers.
 
+TOOLS AVAILABLE:
+1. search_emails: Search and analyze emails to answer the user query.
+2. compose_email: Draft an email (subject and content) based on the user's message. The recipient will be entered manually by the user in the UI dialog. Use this tool when the user wants to send a new email or requests to compose an email.
+
+IMPORTANT: When the user wants to compose an email, format your response as:
+{
+  "thoughts": ["Understood email request", "Drafting email content"],
+  "answer": "I'll help you compose that email.",
+  "triggerRecipientDialog": true,
+  "subject": "Your generated subject line",
+  "content": "Your generated email content"
+}
+
 Here are the relevant emails found for the query: "${userMessage}"
 
 ${formattedEmails.map((email, index) => `
@@ -527,14 +540,16 @@ When responding:
 4. Answer in 30 words or less when possible
 5. Include [Email:ID] references after facts from specific emails
 6. Only include information explicitly found in the emails
-7. Do not add unnecessary commentary or explanations`
+7. Do not add unnecessary commentary or explanations
+8. When user wants to compose an email, use the compose_email tool format shown above`
     };
     
     // Make sure the model is prompted to output JSON
     const systemFormatter = {
       role: 'system',
-      content: `IMPORTANT: Format your ENTIRE response as a JSON object with the following structure:
+      content: `IMPORTANT: Format your ENTIRE response as a JSON object with one of these structures:
 
+For regular responses:
 {
   "thoughts": [
     "Generated search keywords to find relevant emails",
@@ -546,9 +561,20 @@ When responding:
   "answer": "Your DIRECT and COMPLETE answer to the question in EXTREMELY CONCISE format. Include both the answer itself AND references to emails [Email:ID123]."
 }
 
+For email composition requests:
+{
+  "thoughts": ["Understood email request", "Drafting email content"],
+  "answer": "I'll help you compose that email.",
+  "triggerRecipientDialog": true,
+  "subject": "Your generated subject line",
+  "content": "Your generated email content"
+}
+
 The email summaries contain just the core facts extracted from each email. Your answer should be equally brief and direct.
 
-Keep answers under 30 words if possible. Omit articles and unnecessary words. Use telegraphic style. ALWAYS directly answer the question asked, then include relevant email references.`
+Keep answers under 30 words if possible. Omit articles and unnecessary words. Use telegraphic style. ALWAYS directly answer the question asked, then include relevant email references.
+
+When the user wants to compose an email, use the email composition format to trigger the compose dialog.`
     };
     
     // Add the system message to the conversation
