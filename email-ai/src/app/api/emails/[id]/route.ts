@@ -3,7 +3,7 @@ import { getEmailContent } from '@/lib/google';
 
 export async function GET(
   request: NextRequest,
-  context: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   const accessToken = request.cookies.get('access_token')?.value;
   
@@ -15,9 +15,9 @@ export async function GET(
   }
 
   try {
-    const emailId = context.params.id;
+    const { id } = await params;
     // Use the existing function to fetch a single email by ID
-    const email = await getEmailContent(accessToken, emailId);
+    const email = await getEmailContent(accessToken, id);
     return NextResponse.json({ email });
   } catch (error: unknown) {
     console.error('Error fetching email by ID:', error);
