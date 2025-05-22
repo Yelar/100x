@@ -4,7 +4,16 @@ import { google } from 'googleapis';
 import { OAuth2Client } from 'google-auth-library';
 
 const CLIENT_SECRETS_FILE = process.env.GOOGLE_CLIENT_SECRETS || '{}';
-let clientSecrets: any;
+
+interface ClientSecrets {
+  web?: {
+    client_id?: string;
+    client_secret?: string;
+    redirect_uris?: string[];
+  };
+}
+
+let clientSecrets: ClientSecrets;
 try {
   clientSecrets = JSON.parse(CLIENT_SECRETS_FILE);
 } catch (e) {
@@ -74,9 +83,11 @@ export async function POST(request: Request) {
         success: true,
         messageId: response.data.id,
       });
-    } catch (error: any) {
+    } catch (error: unknown) {
       // Check if error is due to token expiration
-      if (error?.response?.status === 401) {
+      if (error && typeof error === 'object' && 'response' in error && 
+          error.response && typeof error.response === 'object' && 
+          'status' in error.response && error.response.status === 401) {
         // Try to refresh the token
         const refreshResponse = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/auth/refresh`, {
           method: 'POST',

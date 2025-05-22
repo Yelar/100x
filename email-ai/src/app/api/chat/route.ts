@@ -553,7 +553,8 @@ For regular responses:
 {
   "thoughts": [
     "Generated search keywords to find relevant emails",
-    "Retrieved email metadata matching those keywords",
+    "Retrieved email metadata matching those 
+  keywords",
     "Identified the most relevant emails",
     "Generated ultra-concise summaries of email content",
     "Analyzed email summaries to answer the question"

@@ -1,10 +1,18 @@
 import { NextResponse } from 'next/server';
 import { cookies } from 'next/headers';
-import { google } from 'googleapis';
 import { OAuth2Client } from 'google-auth-library';
 
 const CLIENT_SECRETS_FILE = process.env.GOOGLE_CLIENT_SECRETS || '{}';
-let clientSecrets: any;
+
+interface ClientSecrets {
+  web?: {
+    client_id?: string;
+    client_secret?: string;
+    redirect_uris?: string[];
+  };
+}
+
+let clientSecrets: ClientSecrets;
 try {
   clientSecrets = JSON.parse(CLIENT_SECRETS_FILE);
 } catch (e) {

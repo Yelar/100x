@@ -36,9 +36,11 @@ export async function POST(request: Request) {
         requestedCount: emailIds.length,
         fetchedCount: emailContents.length 
       });
-    } catch (error: any) {
+    } catch (error: unknown) {
       // Check if error is due to token expiration
-      if (error?.response?.status === 401) {
+      if (error && typeof error === 'object' && 'response' in error && 
+          error.response && typeof error.response === 'object' && 
+          'status' in error.response && error.response.status === 401) {
         // Try to refresh the token
         const refreshResponse = await fetch(`${request.url.split('/api/')[0]}/api/auth/refresh`, {
           method: 'POST',
