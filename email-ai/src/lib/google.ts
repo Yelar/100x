@@ -1,7 +1,6 @@
 import { google } from 'googleapis';
 import { OAuth2Client } from 'google-auth-library';
 import { gmail_v1 } from 'googleapis';
-import { Schema$MessagePart } from 'googleapis/build/src/apis/gmail/v1';
 
 const CLIENT_SECRETS_FILE = process.env.GOOGLE_CLIENT_SECRETS || '{}';
 const SCOPES = [
@@ -12,7 +11,15 @@ const SCOPES = [
   'openid'
 ];
 
-let clientSecrets: any;
+interface ClientSecrets {
+  web?: {
+    client_id?: string;
+    client_secret?: string;
+    redirect_uris?: string[];
+  };
+}
+
+let clientSecrets: ClientSecrets;
 try {
   clientSecrets = JSON.parse(CLIENT_SECRETS_FILE);
 } catch (e) {
@@ -50,14 +57,6 @@ interface GetEmailsOptions {
   pageToken?: string;
   query?: string;
   maxResults?: number;
-}
-
-interface EmailPart {
-  mimeType?: string;
-  body?: {
-    data?: string;
-  };
-  parts?: EmailPart[];
 }
 
 export const getGmailMessages = async (accessToken: string, options: GetEmailsOptions = {}) => {
