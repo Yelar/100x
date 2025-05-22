@@ -5,7 +5,7 @@ import { Email } from '@/types/email';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogClose } from "@/components/ui/dialog";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
-import { X, Flag, Archive, MoreVertical } from "lucide-react";
+import { Flag, Archive, MoreVertical } from "lucide-react";
 import api from '@/lib/axios';
 import { createEmailDocument, sanitizeHtml } from '@/lib/sanitize-html';
 
@@ -76,7 +76,7 @@ export function EmailPreviewDialog({ isOpen, onOpenChange, emailId }: EmailPrevi
     try {
       const date = new Date(dateStr);
       return date.toLocaleString();
-    } catch (e) {
+    } catch {
       return dateStr;
     }
   };

@@ -323,8 +323,9 @@ export function ChatWith100x() {
   
   useEffect(() => {
     // Clean up all timeouts when component unmounts
+    const timeouts = timeoutRefs.current;
     return () => {
-      timeoutRefs.current.forEach(timeout => clearTimeout(timeout));
+      timeouts.forEach(timeout => clearTimeout(timeout));
     };
   }, []);
   
