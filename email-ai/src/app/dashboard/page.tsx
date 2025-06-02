@@ -17,6 +17,8 @@ import { ResizablePanelGroup, ResizablePanel } from "@/components/ui/resizable";
 import { ResizableHandleWithReset } from "@/components/ui/resizable-handle-with-reset";
 import { usePanelLayout } from "@/hooks/use-panel-layout";
 import { ReplyComposer } from '@/components/reply-composer';
+import { EmailSummaryDialog } from '@/components/email-summary-dialog';
+import { toast } from 'sonner';
 
 interface UserInfo {
   email: string;
@@ -36,6 +38,18 @@ interface Email {
 interface EmailsResponse {
   messages: Email[];
   nextPageToken?: string;
+}
+
+interface EmailSummary {
+  individual_summaries: Array<{
+    id: string;
+    summary: string;
+    type: string;
+  }>;
+  overall_summary: string;
+  immediate_actions: string[];
+  important_updates: string[];
+  categories: Record<string, string[]>;
 }
 
 export default function Dashboard() {
@@ -66,6 +80,9 @@ export default function Dashboard() {
   const iframeRef = useRef<HTMLIFrameElement>(null);
   const [renderError, setRenderError] = useState(false);
   const [isReplying, setIsReplying] = useState(false);
+  const [isSummarizing, setIsSummarizing] = useState(false);
+  const [summary, setSummary] = useState<EmailSummary | null>(null);
+  const [isSummaryDialogOpen, setIsSummaryDialogOpen] = useState(false);
 
   const { refs, sizes, onResize } = usePanelLayout();
 
@@ -287,6 +304,44 @@ export default function Dashboard() {
     setIsReplying(false);
     // Optionally refresh the emails list
     fetchEmails(undefined);
+  };
+
+  const handleSummarize = async () => {
+    if (!emails.length) return;
+    
+    setIsSummarizing(true);
+    try {
+      const response = await fetch('/api/emails/summarize', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          emailIds: emails.slice(0, 20).map(email => email.id)
+        })
+      });
+
+      if (!response.ok) {
+        throw new Error('Failed to summarize emails');
+      }
+
+      const data = await response.json();
+      setSummary(data);
+      setIsSummaryDialogOpen(true);
+    } catch (error) {
+      console.error('Error summarizing emails:', error);
+      toast.error('Failed to summarize emails');
+    } finally {
+      setIsSummarizing(false);
+    }
+  };
+
+  const handleEmailClick = (emailId: string) => {
+    const email = emails.find(e => e.id === emailId);
+    if (email) {
+      setSelectedEmail(email);
+      setIsSummaryDialogOpen(false);
+    }
   };
 
   if (loading && !searchLoading && emails.length === 0) {
@@ -519,6 +574,19 @@ export default function Dashboard() {
             </Button>
             <Button variant="ghost" size="icon" className="text-orange-500/80 hover:text-orange-500 hover:bg-orange-500/10">
               <Tag className="h-5 w-5" />
+            </Button>
+            <Button 
+              variant="ghost" 
+              size="icon" 
+              className="text-orange-500/80 hover:text-orange-500 hover:bg-orange-500/10"
+              onClick={handleSummarize}
+              disabled={isSummarizing || emails.length === 0}
+            >
+              {isSummarizing ? (
+                <span className="animate-spin">⟳</span>
+              ) : (
+                <Sparkles className="h-5 w-5" />
+              )}
             </Button>
             <div className="flex-1" />
             <Button variant="ghost" size="icon" disabled={!nextPageToken} className="text-orange-500/80 hover:text-orange-500 hover:bg-orange-500/10">
@@ -830,6 +898,13 @@ export default function Dashboard() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      <EmailSummaryDialog
+        isOpen={isSummaryDialogOpen}
+        onOpenChange={setIsSummaryDialogOpen}
+        summary={summary}
+        onEmailClick={handleEmailClick}
+      />
     </div>
   );
 } 
