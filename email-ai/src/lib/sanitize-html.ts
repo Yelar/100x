@@ -19,22 +19,48 @@ export function sanitizeHtml(html: string): string {
       'ol', 'p', 'pre', 'span', 'strong', 'table', 'tbody', 'td', 
       'th', 'thead', 'tr', 'ul', 'font', 'center', 'u', 's', 'sub', 'sup',
       'section', 'article', 'aside', 'details', 'figure', 'figcaption',
-      'main', 'nav', 'header', 'footer', 'style'
+      'main', 'nav', 'header', 'footer', 'style', 'mark', 'small', 'big',
+      'cite', 'q', 'samp', 'var', 'time', 'data', 'abbr', 'address',
+      'bdi', 'bdo', 'del', 'ins', 'kbd', 'meter', 'progress', 'ruby',
+      'rt', 'rp', 'wbr'
     ],
     ALLOWED_ATTR: [
       'href', 'src', 'alt', 'title', 'style', 'width', 'height', 'class',
       'border', 'cellpadding', 'cellspacing', 'align', 'valign', 'color',
       'bgcolor', 'background', 'dir', 'lang', 'target', 'id', 'name',
       'data-*', 'cid', 'srcset', 'loading', 'role', 'aria-*', 'face',
-      'size', 'type', 'start', 'value'
+      'size', 'type', 'start', 'value', 'datetime', 'cite', 'datetime',
+      'download', 'hreflang', 'media', 'ping', 'referrerpolicy', 'rel',
+      'rev', 'shape', 'coords', 'usemap', 'ismap', 'accept', 'accept-charset',
+      'action', 'enctype', 'method', 'novalidate', 'form', 'formaction',
+      'formenctype', 'formmethod', 'formnovalidate', 'formtarget', 'max',
+      'min', 'step', 'pattern', 'placeholder', 'required', 'autocomplete',
+      'autofocus', 'checked', 'disabled', 'multiple', 'readonly', 'selected',
+      'spellcheck', 'translate', 'contenteditable', 'contextmenu', 'draggable',
+      'dropzone', 'hidden', 'itemid', 'itemprop', 'itemref', 'itemscope',
+      'itemtype', 'accesskey'
     ],
-    FORBID_TAGS: ['script', 'iframe', 'object', 'embed', 'form'],
-    ADD_ATTR: ['target', 'loading'], 
+    FORBID_TAGS: ['script', 'iframe', 'object', 'embed', 'form', 'input', 'textarea', 'select', 'button'],
+    ADD_ATTR: ['target', 'loading', 'rel', 'type', 'href', 'title', 'alt', 'class', 'id', 'name', 'value', 'style', 'src', 'width', 'height', 'align', 'valign', 'border', 'cellpadding', 'cellspacing', 'bgcolor', 'color', 'background', 'dir', 'lang', 'face', 'size', 'start', 'type', 'cite', 'datetime', 'download', 'hreflang', 'media', 'ping', 'referrerpolicy', 'rev', 'shape', 'coords', 'usemap', 'ismap', 'accept', 'accept-charset', 'action', 'enctype', 'method', 'novalidate', 'form', 'formaction', 'formenctype', 'formmethod', 'formnovalidate', 'formtarget', 'max', 'min', 'step', 'pattern', 'placeholder', 'required', 'autocomplete', 'autofocus', 'checked', 'disabled', 'multiple', 'readonly', 'selected', 'spellcheck', 'translate', 'contenteditable', 'contextmenu', 'draggable', 'dropzone', 'hidden', 'itemid', 'itemprop', 'itemref', 'itemscope', 'itemtype', 'spellcheck', 'tabindex', 'translate', 'accesskey', 'class', 'contenteditable', 'contextmenu', 'dir', 'draggable', 'dropzone', 'hidden', 'id', 'lang', 'spellcheck', 'style', 'tabindex', 'title', 'translate'],
     WHOLE_DOCUMENT: false,
     SANITIZE_DOM: true,
     ALLOW_DATA_ATTR: true,
     KEEP_CONTENT: true,
-    USE_PROFILES: { html: true }
+    USE_PROFILES: { html: true },
+    ADD_URI_SAFE_ATTR: ['href', 'src', 'cite', 'action', 'longdesc', 'poster', 'background', 'data-src'],
+    FORBID_ATTR: ['onerror', 'onload', 'onclick', 'onmouseover', 'onmouseout', 'onmousedown', 'onmouseup', 'onmousemove', 'onkeydown', 'onkeyup', 'onkeypress', 'onfocus', 'onblur', 'onchange', 'onsubmit', 'onreset', 'onselect', 'onabort', 'ondblclick', 'onkeydown', 'onkeypress', 'onkeyup', 'onmousedown', 'onmousemove', 'onmouseout', 'onmouseover', 'onmouseup', 'onreset', 'onselect', 'onsubmit', 'onunload'],
+    ALLOW_ARIA_ATTR: true,
+    ALLOW_UNKNOWN_PROTOCOLS: false,
+    SAFE_FOR_TEMPLATES: true,
+    SANITIZE_NAMED_PROPS: true,
+    RETURN_DOM: false,
+    RETURN_DOM_FRAGMENT: false,
+    RETURN_DOM_IMPORT: false,
+    RETURN_TRUSTED_TYPE: false,
+    FORCE_BODY: false,
+    IN_PLACE: false,
+    ALLOWED_URI_REGEXP: /^(?:(?:(?:f|ht)tps?|mailto|tel|callto|cid|xmpp|xxx):|[^a-z]|[a-z+.\-]+(?:[^a-z+.\-:]|$))/i,
+    ADD_TAGS: ['link']
   };
   
   return DOMPurify.sanitize(html, purifyConfig);
