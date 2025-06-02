@@ -125,7 +125,7 @@ ${JSON.stringify(emails.map(email => ({
       const summary = JSON.parse(content);
       return NextResponse.json(summary);
     } catch (error) {
-      console.error('Invalid JSON response:', content);
+      console.error('Invalid JSON response:', content, error);
       throw new Error('Invalid response format from AI');
     }
   } catch (error) {
