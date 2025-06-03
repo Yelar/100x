@@ -56,11 +56,25 @@ export async function POST(request: Request) {
 
     const gmail = google.gmail({ version: 'v1', auth: oauth2Client });
 
+    // Encode subject line for non-ASCII characters
+    const encodeSubject = (subject: string) => {
+      // Check if subject contains non-ASCII characters
+      if (/[^\x00-\x7F]/.test(subject)) {
+        // Encode subject using MIME encoding
+        const encoded = Buffer.from(subject).toString('base64');
+        return `=?UTF-8?B?${encoded}?=`;
+      }
+      return subject;
+    };
+
     // Construct the email message
     const emailLines = [
       `From: ${userEmail}`,
       `To: ${to}`,
-      `Subject: ${subject}`,
+      `Subject: ${encodeSubject(subject)}`,
+      'MIME-Version: 1.0',
+      'Content-Type: text/html; charset=UTF-8',
+      'Content-Transfer-Encoding: base64',
       '',
       content
     ];

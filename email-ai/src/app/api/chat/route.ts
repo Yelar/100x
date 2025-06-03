@@ -482,7 +482,6 @@ export async function POST(req: Request) {
 
   try {
     const { messages } = await req.json();
-    
     // Get the user's latest message
     const userMessage = messages[messages.length - 1]?.content || '';
     
@@ -541,7 +540,8 @@ When responding:
 5. Include [Email:ID] references after facts from specific emails
 6. Only include information explicitly found in the emails
 7. Do not add unnecessary commentary or explanations
-8. When user wants to compose an email, use the compose_email tool format shown above`
+8. When user wants to compose an email, use the compose_email tool format shown above
+9. MOST IMPORTANTLY, GENERATE CYRILLIC SYMBOLS WHEN ANSWERING ON RUSSIAN CORRECTLY. NO Symbols like Ã ÂŸÃ Â¾Ã, `
     };
     
     // Make sure the model is prompted to output JSON

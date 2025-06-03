@@ -93,10 +93,30 @@ export const getGmailMessages = async (accessToken: string, options: GetEmailsOp
       // Helper function to decode base64 content
       const decodeBase64 = (data: string) => {
         try {
-          return Buffer.from(data, 'base64').toString();
+          // Decode base64 and handle UTF-8 encoding
+          return Buffer.from(data, 'base64').toString('utf-8');
         } catch (e) {
           console.error('Error decoding base64:', e);
           return '';
+        }
+      };
+
+      // Helper function to decode email subject
+      const decodeSubject = (subject: string) => {
+        try {
+          // Handle encoded subjects (e.g., =?UTF-8?B?...?=)
+          if (subject.startsWith('=?') && subject.includes('?B?')) {
+            const match = subject.match(/=\?([^?]+)\?B\?([^?]+)\?=/);
+            if (match) {
+              const charset = match[1].toLowerCase() as BufferEncoding;
+              const encoded = match[2];
+              return Buffer.from(encoded, 'base64').toString(charset);
+            }
+          }
+          return subject;
+        } catch (e) {
+          console.error('Error decoding subject:', e);
+          return subject;
         }
       };
 
@@ -165,7 +185,7 @@ export const getGmailMessages = async (accessToken: string, options: GetEmailsOp
       return {
         id: msg.data.id,
         from: headers.find(h => h.name === 'From')?.value || 'Unknown',
-        subject: headers.find(h => h.name === 'Subject')?.value || 'No Subject',
+        subject: decodeSubject(headers.find(h => h.name === 'Subject')?.value || 'No Subject'),
         date: headers.find(h => h.name === 'Date')?.value || 'Unknown',
         snippet: msg.data.snippet || '',
         body: body

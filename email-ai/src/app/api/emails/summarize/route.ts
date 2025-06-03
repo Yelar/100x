@@ -36,6 +36,12 @@ function stripHtml(html: string): string {
   return paragraphs.join('\n\n').trim();
 }
 
+// Function to truncate text if it's too long
+function truncateText(text: string, maxLength: number = 4000): string {
+  if (text.length <= maxLength) return text;
+  return text.substring(0, maxLength) + '...';
+}
+
 export async function POST(req: Request) {
   try {
     const { emailIds } = await req.json();
@@ -44,6 +50,9 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: 'Invalid email IDs' }, { status: 400 });
     }
 
+    // Limit to first 10 emails
+    const limitedEmailIds = emailIds.slice(0, 10);
+
     const accessToken = await getAccessToken();
     if (!accessToken) {
       return NextResponse.json({ error: 'Not authenticated' }, { status: 401 });
@@ -51,7 +60,7 @@ export async function POST(req: Request) {
 
     // Get detailed content for each email
     const emails = await Promise.all(
-      emailIds.map(async (id) => {
+      limitedEmailIds.map(async (id) => {
         const response = await fetch(`${process.env.NEXT_PUBLIC_BASE_URL || ''}/api/emails/content`, {
           method: 'POST',
           headers: {
@@ -66,16 +75,21 @@ export async function POST(req: Request) {
         }
 
         const data = await response.json();
-        return data.emailContents[0];
+        const email = data.emailContents[0];
+        
+        // Clean and truncate the email body
+        return {
+          ...email,
+          body: truncateText(stripHtml(email.body))
+        };
       })
     );
 
-    // Call Groq to summarize each email and create an overall summary
-    const completion = await groq.chat.completions.create({
-      messages: [
-        {
-          role: "system",
-          content: `You are an email analysis assistant. Your task is to analyze emails and return a JSON object.
+    // Prepare the messages for Groq
+    const messages: { role: "system" | "user"; content: string }[] = [
+      {
+        role: "system",
+        content: `You are an email analysis assistant. Your task is to analyze emails and return a JSON object.
 IMPORTANT: You must return ONLY a valid JSON object with no additional text or explanation.
 
 The JSON object must have this exact structure:
@@ -96,21 +110,33 @@ The JSON object must have this exact structure:
 }
 
 Do not include any text before or after the JSON object.`
-        },
-        {
-          role: "user",
-          content: `Analyze these emails and return a JSON object with the specified structure:
+      },
+      {
+        role: "user",
+        content: `Analyze these emails and return a JSON object with the specified structure:
 
 ${JSON.stringify(emails.map(email => ({
-            id: email.id,
-            subject: email.subject,
-            from: email.from,
-            date: email.date,
-            body: stripHtml(email.body)
-          })))}`
-        }
-      ],
-      model: "compound-beta-mini",
+          id: email.id,
+          subject: email.subject,
+          from: email.from,
+          date: email.date,
+          body: email.body
+        })))}`
+      }
+    ];
+
+    // Check total message size
+    const totalSize = JSON.stringify(messages).length;
+    if (totalSize > 100000) { // 100KB limit
+      return NextResponse.json(
+        { error: 'Email content too large to process' },
+        { status: 413 }
+      );
+    }
+
+    const completion = await groq.chat.completions.create({
+      messages,
+      model: "llama-3.1-8b-instant",
       temperature: 0.7,
       max_tokens: 2000,
       response_format: { type: "json_object" }
