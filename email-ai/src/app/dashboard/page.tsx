@@ -156,7 +156,8 @@ export default function Dashboard() {
 
         const storedUserInfo = localStorage.getItem('user_info');
         if (!storedUserInfo) {
-          router.push('/login');
+          console.log('No user info found, logging out');
+          handleLogout();
           return;
         }
         setUserInfo(JSON.parse(storedUserInfo));

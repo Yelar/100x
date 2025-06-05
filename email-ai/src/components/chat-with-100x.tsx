@@ -523,13 +523,48 @@ export function ChatWith100x() {
             {messages.length === 0 ? (
               <div className="text-center text-muted-foreground py-6">
                 <Bot className="h-12 w-12 mx-auto mb-2 opacity-50" />
-                <p>Ask me anything about your emails or how to use the app!</p>
-                {contextLoaded && (
-                  <div className="mt-4 text-xs flex items-center justify-center gap-1 text-primary">
-                    <Info className="h-3 w-3" />
-                    <span>Ask me a question and I&apos;ll search your emails for relevant information</span>
+                <h2 className="text-xl font-semibold text-foreground mb-1">Ask anything about your emails</h2>
+                <p className="text-sm text-muted-foreground mb-6">Ask to do or show anything using natural language</p>
+                <div className="mt-2 flex flex-col items-center gap-2">
+                  <div className="flex gap-2 flex-wrap justify-center">
+                    {[
+                      'Show unpaid invoices',
+                      'Show recent work emails',
+                      'Find all work meetings',
+                      'What projects do I have coming up?',
+                      'Show emails from Stripe',
+                      'When is my next interview?',
+                    ].map((example, idx) => (
+                      <button
+                        key={idx}
+                        onClick={() => handleInputChange({ target: { value: example } } as React.ChangeEvent<HTMLInputElement>)}
+                        className="rounded-full bg-muted px-4 py-2 text-sm font-medium text-foreground hover:bg-accent transition-colors whitespace-nowrap border border-border/40 shadow-sm focus:outline-none focus:ring-2 focus:ring-orange-500 focus:ring-offset-2"
+                        style={{ minWidth: 'fit-content' }}
+                      >
+                        {example}
+                      </button>
+                    ))}
                   </div>
-                )}
+                  <div className="flex gap-2 flex-wrap justify-center ml-6">
+                    {[
+                      'When is my interview',
+                      'Summarize my recent emails',
+                      'Find emails about project deadlines',
+                      'Help me draft a reply',
+                      'Find emails from my recruiter',
+                      'Key points from last meeting'
+                    ].map((example, idx) => (
+                      <button
+                        key={idx}
+                        onClick={() => handleInputChange({ target: { value: example } } as React.ChangeEvent<HTMLInputElement>)}
+                        className="rounded-full bg-muted px-4 py-2 text-sm font-medium text-foreground hover:bg-accent transition-colors whitespace-nowrap border border-border/40 shadow-sm focus:outline-none focus:ring-2 focus:ring-orange-500 focus:ring-offset-2"
+                        style={{ minWidth: 'fit-content' }}
+                      >
+                        {example}
+                      </button>
+                    ))}
+                  </div>
+                </div>
               </div>
             ) : (
               messages.map(message => (
