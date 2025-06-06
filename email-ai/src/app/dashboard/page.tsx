@@ -58,6 +58,7 @@ export default function Dashboard() {
   const [emails, setEmails] = useState<Email[]>([]);
   const [loading, setLoading] = useState(true);
   const [searchLoading, setSearchLoading] = useState(false);
+  const [loadingMore, setLoadingMore] = useState(false);
   const [selectedEmail, setSelectedEmail] = useState<Email | null>(null);
   const [searchQuery, setSearchQuery] = useState('');
   const [nextPageToken, setNextPageToken] = useState<string | undefined>();
@@ -88,6 +89,12 @@ export default function Dashboard() {
 
   const fetchEmails = useCallback(async (pageToken?: string, query?: string) => {
     try {
+      if (pageToken) {
+        setLoadingMore(true);
+      } else {
+        setLoading(true);
+      }
+      
       const params = new URLSearchParams();
       if (pageToken) params.append('pageToken', pageToken);
       if (query) params.append('q', query);
@@ -109,6 +116,7 @@ export default function Dashboard() {
     } finally {
       setLoading(false);
       setSearchLoading(false);
+      setLoadingMore(false);
     }
   }, [setEmails, setNextPageToken, setHasMore, setLoading, setSearchLoading]);
 
@@ -567,15 +575,20 @@ export default function Dashboard() {
               </Button>
               <Button 
                 variant="ghost" 
-                size="icon" 
-                className="text-orange-500/80 hover:text-orange-500 hover:bg-orange-500/10"
+                className="text-orange-500/80 hover:text-orange-500 hover:bg-orange-500/10 flex items-center gap-1.5"
                 onClick={handleSummarize}
                 disabled={isSummarizing || emails.length === 0}
               >
                 {isSummarizing ? (
-                  <span className="animate-spin">⟳</span>
+                  <>
+                    <span className="animate-spin">⟳</span>
+                    <span>Summarizing...</span>
+                  </>
                 ) : (
-                  <Sparkles className="h-5 w-5" />
+                  <>
+                    <Sparkles className="h-5 w-5" />
+                    <span>Summarize</span>
+                  </>
                 )}
               </Button>
               <div className="flex-1" />
@@ -617,14 +630,21 @@ export default function Dashboard() {
                   </div>
                 </div>
               ))}
-              {(loading || searchLoading) && (
+              {(loading || searchLoading) && !loadingMore && (
                 <div className="p-4 space-y-4">
                   {[...Array(6)].map((_, i) => (
                     <Skeleton key={i} className="h-14 w-full" />
                   ))}
                 </div>
               )}
-              {!loading && !searchLoading && emails.length === 0 && (
+              {loadingMore && (
+                <div className="p-4 space-y-4 animate-in fade-in slide-in-from-bottom-2">
+                  {[...Array(3)].map((_, i) => (
+                    <Skeleton key={i} className="h-14 w-full" />
+                  ))}
+                </div>
+              )}
+              {!loading && !searchLoading && !loadingMore && emails.length === 0 && (
                 <div className="p-8 text-center text-muted-foreground">
                   <Mail className="h-12 w-12 mx-auto mb-4 opacity-30" />
                   <p>{searchQuery ? 'No emails found matching your search' : 'No emails found'}</p>

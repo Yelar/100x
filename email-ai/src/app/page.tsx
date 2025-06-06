@@ -9,7 +9,6 @@ import Link from "next/link";
 import { useEffect, useState, useRef } from "react";
 import { MagneticButton, TiltCard, RevealText, MorphingBackground, FloatingElement, GlitchText, ScrollProgress } from "@/components/ui/animations";
 import { DemoChatWith100x } from "@/components/demo-chat-with-100x";
-import { ChatWith100x } from "@/components/chat-with-100x";
 
 // Mock data for components
 const mockEmail = {
@@ -66,7 +65,6 @@ const ScrollLock = ({ children }: { children: React.ReactNode }) => {
 
 export default function Home() {
   const [mounted, setMounted] = useState(false);
-  const [isChatOpen, setIsChatOpen] = useState(false);
   const featuresRef = useRef<HTMLElement>(null);
   const resourcesRef = useRef<HTMLElement>(null);
 
@@ -259,25 +257,12 @@ export default function Home() {
         <footer className="w-full py-8 bg-background/80 backdrop-blur-lg text-center text-muted-foreground border-t">
           <div className="flex items-center justify-center gap-4">
             <Mail className="w-4 h-4 text-orange-500" />
-            <span className="font-medium">100x Email &copy; 2024</span>
+            <span className="font-medium">100x Email &copy; 2025</span>
             <Link href="/privacy" className="text-sm hover:text-orange-500 transition-colors">
               Privacy Policy
             </Link>
           </div>
         </footer>
-
-        {/* Floating Chat Toggle Button */}
-        <div className="fixed bottom-4 right-4 z-50">
-          <Button
-            className="rounded-full w-12 h-12 p-0 bg-gradient-to-r from-orange-500 to-orange-600 hover:from-orange-600 hover:to-orange-700 shadow-lg hover:shadow-xl transition-all duration-300"
-            onClick={() => setIsChatOpen(!isChatOpen)}
-          >
-            <Bot className="h-6 w-6 text-white" />
-          </Button>
-        </div>
-
-        {/* Floating Chat Window */}
-        <ChatWith100x isOpen={isChatOpen} onToggle={() => setIsChatOpen(!isChatOpen)} />
       </div>
     </ScrollLock>
   );
