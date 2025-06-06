@@ -37,7 +37,7 @@ function stripHtml(html: string): string {
 }
 
 // Function to truncate text if it's too long
-function truncateText(text: string, maxLength: number = 4000): string {
+function truncateText(text: string, maxLength: number = 300): string {
   if (text.length <= maxLength) return text;
   return text.substring(0, maxLength) + '...';
 }
@@ -51,7 +51,7 @@ export async function POST(req: Request) {
     }
 
     // Limit to first 10 emails
-    const limitedEmailIds = emailIds.slice(0, 10);
+    const limitedEmailIds = emailIds.slice(0, 20);
 
     const accessToken = await getAccessToken();
     if (!accessToken) {
