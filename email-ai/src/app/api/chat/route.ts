@@ -52,7 +52,7 @@ async function generateSearchKeywords(userMessage: string): Promise<string[]> {
         'Authorization': `Bearer ${apiKey}`
       },
       body: JSON.stringify({
-        model: 'compound-beta-mini',
+        model: 'gemma2-9b-it',
         messages: prompt,
         temperature: 0.2,
         max_tokens: 100
@@ -183,7 +183,7 @@ async function identifyRelevantEmails(emails: EmailContext[], userMessage: strin
         'Authorization': `Bearer ${apiKey}`
       },
       body: JSON.stringify({
-        model: 'compound-beta-mini',
+        model: 'gemma2-9b-it',
         messages: prompt,
         temperature: 0.2, // Lower temperature for more focused responses
         max_tokens: 8192
@@ -360,7 +360,7 @@ async function summarizeEmailContent(emails: EmailContent[]): Promise<EmailConte
           'Authorization': `Bearer ${apiKey}`
         },
         body: JSON.stringify({
-          model: 'compound-beta-mini',
+          model: 'gemma2-9b-it',
           messages: prompt,
           temperature: 0.2,
           max_tokens: 300
@@ -594,7 +594,7 @@ When the user wants to compose an email, use the email composition format to tri
     ${email.key_points}
     `).join('\n'));
     const result = streamText({
-      model: groq('compound-beta-mini'),
+      model: groq('gemma2-9b-it'),
       messages: augmentedMessages
     });
 

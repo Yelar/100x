@@ -30,7 +30,6 @@ export async function POST(request: Request) {
     try {
       // Fetch the content of the specified emails
       const emailContents = await getBatchEmailContent(accessTokenCookie, limitedIds);
-
       return NextResponse.json({ 
         emailContents,
         requestedCount: emailIds.length,

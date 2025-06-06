@@ -21,7 +21,7 @@ async function generateEmailContent(prompt: string, userName: string) {
         content: prompt,
       },
     ],
-    model: 'compound-beta-mini',
+    model: 'gemma2-9b-it',
     temperature: 0.7,
     max_tokens: 1000,
   });
@@ -44,7 +44,7 @@ async function generateSubjectLine(prompt: string, userName: string) {
         content: `Generate a subject line for an email about: ${prompt}`,
       },
     ],
-    model: 'compound-beta-mini',
+    model: 'gemma2-9b-it',
     temperature: 0.7,
     max_tokens: 100,
   });
