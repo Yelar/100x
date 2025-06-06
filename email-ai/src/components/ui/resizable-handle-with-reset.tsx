@@ -30,9 +30,13 @@ export function ResizableHandleWithReset({
   }, [leftPanelRef, rightPanelRef, defaultLeftSize, defaultRightSize])
   
   return (
-    <div onDoubleClick={handleDoubleClick} className="group relative">
-      <ResizableHandle withHandle={withHandle} />
-      <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 text-xs bg-background px-1 py-0.5 rounded border pointer-events-none opacity-0 group-hover:opacity-80 transition-opacity whitespace-nowrap">
+    <div onDoubleClick={handleDoubleClick} className="group relative h-full">
+      <div className="absolute inset-0 w-px bg-border/50 group-hover:bg-border/80 transition-colors" />
+      <ResizableHandle 
+        withHandle={withHandle} 
+        className="absolute inset-0 !h-full cursor-col-resize" 
+      />
+      <div className="absolute top-2 left-1/2 -translate-x-1/2 text-xs bg-background px-1 py-0.5 rounded border pointer-events-none opacity-0 group-hover:opacity-80 transition-opacity whitespace-nowrap">
         Double-click to reset
       </div>
     </div>

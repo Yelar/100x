@@ -521,16 +521,17 @@ export function ChatWith100x({ isOpen: propIsOpen, onToggle: propOnToggle }: Cha
               <Button
                 variant="ghost"
                 size="icon"
-                className="h-8 w-8 p-0 hover:bg-destructive/10 hover:text-destructive"
+                className="h-8 w-8 p-0 hover:bg-destructive/10 hover:text-destructive transition-colors"
                 onClick={onToggle}
+                aria-label="Close chat"
               >
-                <X className="h-4 w-4" />
+                <X className="h-5 w-5" />
               </Button>
             </div>
           </CardHeader>
           
-          <div className="h-[500px]">
-            <ScrollArea className="flex-1 p-4 h-[calc(500px-8rem)]">
+          <div className="h-[500px] flex flex-col">
+            <ScrollArea className="flex-1 p-4">
               <div className="space-y-4 mb-4">
                 {/* Error message display */}
                 {errorMessage && (
@@ -638,8 +639,8 @@ export function ChatWith100x({ isOpen: propIsOpen, onToggle: propOnToggle }: Cha
               </div>
             </ScrollArea>
             
-            <CardFooter className="p-4 pt-2 border-t">
-              <form onSubmit={handleCustomSubmit} className="flex w-full gap-2">
+            <CardFooter className="p-3 border-t mt-auto">
+              <form onSubmit={handleCustomSubmit} className="flex w-full gap-2 items-center">
                 <Input
                   placeholder={isProcessing ? "Searching through your emails..." : isTranscribing ? "Transcribing..." : "Type your message..."}
                   value={input}
@@ -654,6 +655,7 @@ export function ChatWith100x({ isOpen: propIsOpen, onToggle: propOnToggle }: Cha
                   onClick={isRecording ? stopRecording : startRecording}
                   disabled={isLoading || isProcessing || isTranscribing}
                   aria-label={isRecording ? "Stop recording" : "Start recording"}
+                  className="h-10 w-10"
                 >
                   {isTranscribing ? (
                     <Loader2 className="h-4 w-4 animate-spin" />
@@ -661,7 +663,12 @@ export function ChatWith100x({ isOpen: propIsOpen, onToggle: propOnToggle }: Cha
                     <Mic className={`h-4 w-4 ${isRecording ? 'text-red-500 animate-pulse' : ''}`} />
                   )}
                 </Button>
-                <Button type="submit" size="icon" disabled={isLoading || isProcessing || !input.trim() || isTranscribing}>
+                <Button 
+                  type="submit" 
+                  size="icon" 
+                  disabled={isLoading || isProcessing || !input.trim() || isTranscribing}
+                  className="h-10 w-10"
+                >
                   {isProcessing ? (
                     <Loader2 className="h-4 w-4 animate-spin" />
                   ) : (

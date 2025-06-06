@@ -123,15 +123,22 @@
 
 /* Resizable panel styles */
 [data-panel-group-direction="horizontal"] > [data-panel-resize-handle] {
+  width: 2px;
+  cursor: col-resize;
+  background-color: hsl(var(--border));
   transition: background-color 150ms ease;
 }
 
 [data-panel-group-direction="horizontal"] > [data-panel-resize-handle]:hover,
-[data-panel-group-direction="horizontal"] > [data-panel-resize-handle]:focus-visible {
+[data-panel-group-direction="horizontal"] > [data-panel-resize-handle]:focus-visible,
+[data-panel-group-direction="horizontal"] > [data-panel-resize-handle]:active {
   background-color: hsl(var(--primary) / 0.5);
+  width: 2px;
 }
 
 [data-panel-group-direction="horizontal"] > [data-panel-resize-handle] > div {
+  position: absolute;
+  top: 2px;
   opacity: 0;
   transition: opacity 150ms ease;
 }
