@@ -25,92 +25,92 @@ export default function PrivacyPolicy() {
         </Link>
         <div className="mt-20">
           <h1 className="text-4xl font-bold mb-4 bg-gradient-to-r from-orange-500 to-orange-600 text-transparent bg-clip-text">Privacy Policy</h1>
-          <p className="text-muted-foreground mb-12">Effective Date: October 10, 2023</p>
+          <p className="text-muted-foreground mb-12">Last Updated: June 6, 2025</p>
 
           <div className="space-y-12">
             <section className="space-y-4">
               <p className="text-lg leading-relaxed">
-                Welcome to ShipFast, an email assistant powered by AI. We are committed to protecting your privacy and ensuring that your personal information is handled in a safe and responsible manner. This Privacy Policy outlines how we collect, use, and protect your information.
+                At 100x Email, accessible from https://100x.email, your privacy is important to us. This Privacy Policy outlines how we handle your data when you use our email assistance service. By using 100x Email, you agree to the terms of this Privacy Policy. If you do not agree with these practices, please refrain from using our service.
               </p>
             </section>
 
             <section className="space-y-4">
-              <h2 className="text-2xl font-semibold text-orange-500">1. Information We Collect</h2>
+              <h2 className="text-2xl font-semibold text-orange-500">1. Information We Process</h2>
+              <div className="space-y-6">
+                <div>
+                  <h3 className="text-xl font-medium mb-2">1.1 Email Data</h3>
+                  <ul className="space-y-3 list-none">
+                    <li className="flex items-start gap-3">
+                      <div className="w-1.5 h-1.5 rounded-full bg-orange-500 mt-2.5" />
+                      <div>Your email content is processed only by our trusted Language Learning Model (LLM) providers to generate responses and suggestions.</div>
+                    </li>
+                    <li className="flex items-start gap-3">
+                      <div className="w-1.5 h-1.5 rounded-full bg-orange-500 mt-2.5" />
+                      <div><strong>Important</strong>: We do not store any of your email data. All processing is done in real-time.</div>
+                    </li>
+                  </ul>
+                </div>
+
+                <div>
+                  <h3 className="text-xl font-medium mb-2">1.2 Email Permissions</h3>
+                  <ul className="space-y-3 list-none">
+                    <li className="flex items-start gap-3">
+                      <div className="w-1.5 h-1.5 rounded-full bg-orange-500 mt-2.5" />
+                      <div>We request email sending permissions solely for the purpose of sending emails through our application.</div>
+                    </li>
+                    <li className="flex items-start gap-3">
+                      <div className="w-1.5 h-1.5 rounded-full bg-orange-500 mt-2.5" />
+                      <div>These permissions are never used for any other purpose.</div>
+                    </li>
+                  </ul>
+                </div>
+              </div>
+            </section>
+
+            <section className="space-y-4">
+              <h2 className="text-2xl font-semibold text-orange-500">2. Data Security</h2>
               <ul className="space-y-3 list-none">
                 <li className="flex items-start gap-3">
                   <div className="w-1.5 h-1.5 rounded-full bg-orange-500 mt-2.5" />
-                  <div>
-                    <strong className="text-foreground">User Data</strong>: We collect emails and access tokens necessary for the operation of our email assistant services.
-                  </div>
+                  <div>All data processing is done through secure, encrypted connections.</div>
                 </li>
                 <li className="flex items-start gap-3">
                   <div className="w-1.5 h-1.5 rounded-full bg-orange-500 mt-2.5" />
-                  <div>
-                    <strong className="text-foreground">Non-Personal Data</strong>: We use web cookies to enhance user experience and analyze website traffic.
-                  </div>
+                  <div>We implement industry-standard security measures to protect your data during transmission.</div>
                 </li>
               </ul>
             </section>
 
             <section className="space-y-4">
-              <h2 className="text-2xl font-semibold text-orange-500">2. How We Use Your Information</h2>
-              <ul className="space-y-3 list-none">
-                <li className="flex items-start gap-3">
-                  <div className="w-1.5 h-1.5 rounded-full bg-orange-500 mt-2.5" />
-                  <div>To provide and improve our services.</div>
-                </li>
-                <li className="flex items-start gap-3">
-                  <div className="w-1.5 h-1.5 rounded-full bg-orange-500 mt-2.5" />
-                  <div>To communicate with you about updates or changes to our services.</div>
-                </li>
-              </ul>
-            </section>
-
-            <section className="space-y-4">
-              <h2 className="text-2xl font-semibold text-orange-500">3. Sharing Your Information</h2>
+              <h2 className="text-2xl font-semibold text-orange-500">3. Third-Party Services</h2>
               <p className="text-lg leading-relaxed">
-                We do not share your personal information with third parties, except as required by law or to protect our rights.
+                We only share your email data with our LLM providers for the sole purpose of processing and generating email responses. No other third parties have access to your data.
               </p>
             </section>
 
             <section className="space-y-4">
-              <h2 className="text-2xl font-semibold text-orange-500">4. Security of Your Information</h2>
+              <h2 className="text-2xl font-semibold text-orange-500">4. Data Retention</h2>
               <p className="text-lg leading-relaxed">
-                We implement appropriate technical and organizational measures to protect your information from unauthorized access, use, or disclosure.
+                We maintain a strict no-storage policy. Your email data is processed in real-time and is not retained on our servers or by our service.
               </p>
             </section>
 
             <section className="space-y-4">
-              <h2 className="text-2xl font-semibold text-orange-500">5. Governing Law</h2>
+              <h2 className="text-2xl font-semibold text-orange-500">5. Changes to This Privacy Policy</h2>
               <p className="text-lg leading-relaxed">
-                This Privacy Policy is governed by the laws of Kazakhstan.
+                We may update this Privacy Policy to reflect changes in our practices or for operational, legal, or regulatory reasons. We will notify you of any material changes via email.
               </p>
             </section>
 
             <section className="space-y-4">
-              <h2 className="text-2xl font-semibold text-orange-500">6. Changes to This Privacy Policy</h2>
+              <h2 className="text-2xl font-semibold text-orange-500">6. Contact Us</h2>
               <p className="text-lg leading-relaxed">
-                We may update this Privacy Policy from time to time. We will notify you of any changes via email.
-              </p>
-            </section>
-
-            <section className="space-y-4">
-              <h2 className="text-2xl font-semibold text-orange-500">7. Contact Us</h2>
-              <p className="text-lg leading-relaxed">
-                If you have any questions or concerns about this Privacy Policy, please contact us at{' '}
+                If you have any questions about this Privacy Policy, please contact us at{' '}
                 <a href="mailto:elarysertaj@gmail.com" className="text-orange-500 hover:text-orange-600 font-medium">
                   elarysertaj@gmail.com
-                </a>.
-              </p>
-              <p className="text-lg leading-relaxed">
-                For more information, please visit our full privacy policy at{' '}
-                <a href="https://100x.email/privacy" className="text-orange-500 hover:text-orange-600 font-medium">
-                  https://100x.email/privacy
-                </a>.
+                </a>
               </p>
             </section>
-
-            <p className="text-lg font-medium mt-12">Thank you for choosing ShipFast.</p>
           </div>
         </div>
       </main>
