@@ -1,7 +1,6 @@
 'use client';
 
 import { Button } from "@/components/ui/button";
-import { ChatWith100x } from "@/components/chat-with-100x";
 import { EmailPreviewDialog } from "@/components/email-preview-dialog";
 import { Badge } from "@/components/ui/badge";
 import { Mail, Bot, Activity } from "lucide-react";
@@ -9,6 +8,7 @@ import Image from "next/image";
 import Link from "next/link";
 import { useEffect, useState, useRef } from "react";
 import { MagneticButton, TiltCard, RevealText, MorphingBackground, FloatingElement, GlitchText, ScrollProgress } from "@/components/ui/animations";
+import { DemoChatWith100x } from "@/components/demo-chat-with-100x";
 
 // Mock data for components
 const mockEmail = {
@@ -220,7 +220,7 @@ export default function Home() {
                 Chat with your email,<br />get things done faster
               </h2>
               <div className="w-full max-w-sm shadow-xl hover:shadow-2xl transition-shadow duration-300 group-hover:scale-[1.02] transition-transform">
-                <ChatWith100x />
+                <DemoChatWith100x />
               </div>
             </FloatingElement>
           </section>
