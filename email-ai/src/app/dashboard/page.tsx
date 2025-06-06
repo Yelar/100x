@@ -15,7 +15,7 @@ import { sanitizeHtml, createEmailDocument } from '@/lib/sanitize-html';
 import { ChatWith100x } from '@/components/chat-with-100x';
 import { ResizablePanelGroup, ResizablePanel } from "@/components/ui/resizable";
 import { ResizableHandleWithReset } from "@/components/ui/resizable-handle-with-reset";
-import { usePanelLayout } from "@/hooks/use-panel-layout";
+import { useEmailPanelLayout } from "@/hooks/use-email-panel-layout";
 import { ReplyComposer } from '@/components/reply-composer';
 import { EmailSummaryDialog } from '@/components/email-summary-dialog';
 import { toast } from 'sonner';
@@ -84,7 +84,7 @@ export default function Dashboard() {
   const [summary, setSummary] = useState<EmailSummary | null>(null);
   const [isSummaryDialogOpen, setIsSummaryDialogOpen] = useState(false);
 
-  const { refs, sizes, onResize } = usePanelLayout();
+  const { refs, sizes, onResize } = useEmailPanelLayout();
 
   const fetchEmails = useCallback(async (pageToken?: string, query?: string) => {
     try {
@@ -504,19 +504,9 @@ export default function Dashboard() {
         </div>
       </div>
 
-      <ResizablePanelGroup 
-        direction="horizontal" 
-        className="flex-1 overflow-hidden"
-        onLayout={onResize}
-      >
-        {/* Left sidebar */}
-        <ResizablePanel 
-          ref={refs.sidebarRef}
-          defaultSize={sizes.sidebarSize} 
-          minSize={15} 
-          maxSize={25} 
-          className="border-r border-border/50 bg-gradient-to-b from-orange-500/5 to-amber-500/5 flex flex-col overflow-hidden"
-        >
+      <div className="flex flex-1 overflow-hidden">
+        {/* Left sidebar (fixed width) */}
+        <div className="w-64 border-r border-border/50 bg-gradient-to-b from-orange-500/5 to-amber-500/5 flex flex-col overflow-hidden">
           <div className="p-4">
             <Button className="rounded-full px-6 py-2 h-12 w-full justify-start font-medium shadow-sm mb-6 bg-gradient-to-r from-orange-500 to-amber-600 hover:from-orange-600 hover:to-amber-700 text-white" onClick={() => setComposing(true)}>
               <Plus className="mr-2 h-5 w-5" />
@@ -550,269 +540,255 @@ export default function Dashboard() {
               </Button>
             </div>
           </div>
-        </ResizablePanel>
+        </div>
         
-        <ResizableHandleWithReset 
-          leftPanelRef={refs.sidebarRef}
-          rightPanelRef={refs.emailListRef}
-          defaultLeftSize={15}
-          defaultRightSize={25}
-        />
-        
-        {/* Email list */}
-        <ResizablePanel 
-          ref={refs.emailListRef}
-          defaultSize={sizes.emailListSize} 
-          minSize={20} 
-          className="border-r border-border/50 flex flex-col overflow-hidden bg-gradient-to-b from-white/50 to-white/30 dark:from-background/50 dark:to-background/30"
+        <ResizablePanelGroup 
+          direction="horizontal" 
+          className="flex-1"
+          onLayout={onResize}
         >
-          <div className="flex-none p-2 border-b border-border/50 flex items-center bg-white/50 dark:bg-background/50">
-            <Button variant="ghost" size="icon" className="text-orange-500/80 hover:text-orange-500 hover:bg-orange-500/10">
-              <Archive className="h-5 w-5" />
-            </Button>
-            <Button variant="ghost" size="icon" className="text-orange-500/80 hover:text-orange-500 hover:bg-orange-500/10">
-              <Flag className="h-5 w-5" />
-            </Button>
-            <Button variant="ghost" size="icon" className="text-orange-500/80 hover:text-orange-500 hover:bg-orange-500/10">
-              <Tag className="h-5 w-5" />
-            </Button>
-            <Button 
-              variant="ghost" 
-              size="icon" 
-              className="text-orange-500/80 hover:text-orange-500 hover:bg-orange-500/10"
-              onClick={handleSummarize}
-              disabled={isSummarizing || emails.length === 0}
-            >
-              {isSummarizing ? (
-                <span className="animate-spin">⟳</span>
-              ) : (
-                <Sparkles className="h-5 w-5" />
-              )}
-            </Button>
-            <div className="flex-1" />
-            <Button variant="ghost" size="icon" disabled={!nextPageToken} className="text-orange-500/80 hover:text-orange-500 hover:bg-orange-500/10">
-              <ChevronLeft className="h-5 w-5" />
-            </Button>
-            <Button variant="ghost" size="icon" disabled={!nextPageToken} className="text-orange-500/80 hover:text-orange-500 hover:bg-orange-500/10" onClick={() => fetchEmails(nextPageToken)}>
-              <ChevronRight className="h-5 w-5" />
-            </Button>
-          </div>
-
-          {/* Scrollable email list */}
-          <div className="flex-1 overflow-y-auto">
-            {emails.map((email, index) => (
-              <div
-                key={email.id}
-                ref={index === emails.length - 1 ? lastEmailElementRef : undefined}
-                onClick={() => setSelectedEmail(email)}
-                className={`flex items-center px-4 py-2 cursor-pointer border-b border-border/50 hover:bg-orange-500/5 ${
-                  selectedEmail?.id === email.id ? 'bg-orange-500/10' : ''
-                }`}
+          {/* Email list */}
+          <ResizablePanel 
+            ref={refs.emailListRef}
+            defaultSize={sizes.emailListSize} 
+            minSize={20}
+            maxSize={40}
+            className="border-r border-border/50 flex flex-col overflow-hidden bg-gradient-to-b from-white/50 to-white/30 dark:from-background/50 dark:to-background/30"
+          >
+            <div className="flex-none p-2 border-b border-border/50 flex items-center bg-white/50 dark:bg-background/50">
+              <Button variant="ghost" size="icon" className="text-orange-500/80 hover:text-orange-500 hover:bg-orange-500/10">
+                <Archive className="h-5 w-5" />
+              </Button>
+              <Button variant="ghost" size="icon" className="text-orange-500/80 hover:text-orange-500 hover:bg-orange-500/10">
+                <Flag className="h-5 w-5" />
+              </Button>
+              <Button variant="ghost" size="icon" className="text-orange-500/80 hover:text-orange-500 hover:bg-orange-500/10">
+                <Tag className="h-5 w-5" />
+              </Button>
+              <Button 
+                variant="ghost" 
+                size="icon" 
+                className="text-orange-500/80 hover:text-orange-500 hover:bg-orange-500/10"
+                onClick={handleSummarize}
+                disabled={isSummarizing || emails.length === 0}
               >
-                <div className="mr-3 flex space-x-2 items-center">
-                  <Button variant="ghost" size="icon" className="h-6 w-6 text-orange-500/80 hover:text-orange-500 hover:bg-orange-500/10">
-                    <Star className="h-4 w-4" />
-                  </Button>
-                </div>
-                <div className="flex-1 min-w-0">
-                  <div className="flex justify-between items-baseline">
-                    <div className="font-medium text-sm truncate max-w-[180px] text-foreground">
-                      {email.from.split('<')[0] || email.from}
-                    </div>
-                    <div className="text-xs text-muted-foreground whitespace-nowrap ml-2">
-                      {formatEmailDate(email.date)}
-                    </div>
-                  </div>
-                  <div className="text-sm font-medium truncate text-foreground">{email.subject}</div>
-                  <div className="text-xs text-muted-foreground truncate">{email.snippet}</div>
-                </div>
-              </div>
-            ))}
-            {(loading || searchLoading) && (
-              <div className="p-4 space-y-4">
-                {[...Array(6)].map((_, i) => (
-                  <Skeleton key={i} className="h-14 w-full" />
-                ))}
-              </div>
-            )}
-            {!loading && !searchLoading && emails.length === 0 && (
-              <div className="p-8 text-center text-muted-foreground">
-                <Mail className="h-12 w-12 mx-auto mb-4 opacity-30" />
-                <p>{searchQuery ? 'No emails found matching your search' : 'No emails found'}</p>
-              </div>
-            )}
-          </div>
-        </ResizablePanel>
-        
-        <ResizableHandleWithReset 
-          leftPanelRef={refs.emailListRef}
-          rightPanelRef={refs.emailContentRef}
-          defaultLeftSize={25}
-          defaultRightSize={40}
-        />
+                {isSummarizing ? (
+                  <span className="animate-spin">⟳</span>
+                ) : (
+                  <Sparkles className="h-5 w-5" />
+                )}
+              </Button>
+              <div className="flex-1" />
+              <Button variant="ghost" size="icon" disabled={!nextPageToken} className="text-orange-500/80 hover:text-orange-500 hover:bg-orange-500/10">
+                <ChevronLeft className="h-5 w-5" />
+              </Button>
+              <Button variant="ghost" size="icon" disabled={!nextPageToken} className="text-orange-500/80 hover:text-orange-500 hover:bg-orange-500/10" onClick={() => fetchEmails(nextPageToken)}>
+                <ChevronRight className="h-5 w-5" />
+              </Button>
+            </div>
 
-        {/* Email content */}
-        <ResizablePanel 
-          ref={refs.emailContentRef}
-          defaultSize={sizes.emailContentSize} 
-          minSize={30}
-          className="flex flex-col overflow-hidden bg-gradient-to-br from-white/50 to-orange-50/30 dark:from-background/50 dark:to-orange-900/5"
-        >
-          {selectedEmail ? (
-            <div className="flex-1 overflow-y-auto email-content-container">
-              <div className="p-4 md:p-6 max-w-5xl mx-auto">
-                <div className="pb-4 mb-4 border-b border-border">
-                  <div className="flex items-center justify-between mb-3">
-                    <h1 className="text-xl font-bold text-foreground">{selectedEmail.subject}</h1>
-                    <div className="flex space-x-2">
-                      <Button variant="ghost" size="icon" className="text-muted-foreground">
-                        <Archive className="h-5 w-5" />
-                      </Button>
-                      <Button variant="ghost" size="icon" className="text-muted-foreground">
-                        <Flag className="h-5 w-5" />
-                      </Button>
-                      <Button variant="ghost" size="icon" className="text-muted-foreground">
-                        <MoreVertical className="h-5 w-5" />
-                      </Button>
-                    </div>
+            {/* Scrollable email list */}
+            <div className="flex-1 overflow-y-auto">
+              {emails.map((email, index) => (
+                <div
+                  key={email.id}
+                  ref={index === emails.length - 1 ? lastEmailElementRef : undefined}
+                  onClick={() => setSelectedEmail(email)}
+                  className={`flex items-center px-4 py-2 cursor-pointer border-b border-border/50 hover:bg-orange-500/5 ${
+                    selectedEmail?.id === email.id ? 'bg-orange-500/10' : ''
+                  }`}
+                >
+                  <div className="mr-3 flex space-x-2 items-center">
+                    <Button variant="ghost" size="icon" className="h-6 w-6 text-orange-500/80 hover:text-orange-500 hover:bg-orange-500/10">
+                      <Star className="h-4 w-4" />
+                    </Button>
                   </div>
-                  <div className="flex items-center mb-3">
-                    <Avatar className="h-10 w-10 mr-3">
-                      <AvatarFallback className="bg-primary/10 text-primary">
-                        {selectedEmail.from.charAt(0).toUpperCase()}
-                      </AvatarFallback>
-                    </Avatar>
-                    <div>
-                      <div className="flex items-center">
-                        <span className="font-medium text-foreground">
-                          {selectedEmail.from.split('<')[0] || selectedEmail.from}
-                        </span>
-                        <span className="text-xs text-muted-foreground ml-2">
-                          {`<${selectedEmail.from.match(/<(.+)>/)
-                            ? selectedEmail.from.match(/<(.+)>/)?.[1]
-                            : selectedEmail.from}>`}
-                        </span>
+                  <div className="flex-1 min-w-0">
+                    <div className="flex justify-between items-baseline">
+                      <div className="font-medium text-sm truncate max-w-[180px] text-foreground">
+                        {email.from.split('<')[0] || email.from}
                       </div>
-                      <div className="text-xs text-muted-foreground">
-                        to me • {new Date(selectedEmail.date).toLocaleString()}
+                      <div className="text-xs text-muted-foreground whitespace-nowrap ml-2">
+                        {formatEmailDate(email.date)}
                       </div>
                     </div>
-                    <div className="ml-auto">
-                      <Button variant="ghost" size="icon" className="text-muted-foreground">
-                        <ChevronLeft className="h-5 w-5" />
-                      </Button>
-                      <Button variant="ghost" size="icon" className="text-muted-foreground">
-                        <ChevronRight className="h-5 w-5" />
-                      </Button>
-                    </div>
+                    <div className="text-sm font-medium truncate text-foreground">{email.subject}</div>
+                    <div className="text-xs text-muted-foreground truncate">{email.snippet}</div>
                   </div>
                 </div>
-                <div className="prose prose-sm dark:prose-invert max-w-none">
-                  {renderError ? (
-                    <div className="p-4 border border-muted rounded-md">
-                      <div className="flex items-center mb-4">
-                        <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 text-amber-500 mr-2" viewBox="0 0 20 20" fill="currentColor">
-                          <path fillRule="evenodd" d="M8.257 3.099c.765-1.36 2.722-1.36 3.486 0l5.58 9.92c.75 1.334-.213 2.98-1.742 2.98H4.42c-1.53 0-2.493-1.646-1.743-2.98l5.58-9.92zM11 13a1 1 0 11-2 0 1 1 0 012 0zm-1-8a1 1 0 00-1 1v3a1 1 0 002 0V6a1 1 0 00-1-1z" clipRule="evenodd" />
-                        </svg>
-                        <span className="font-medium text-foreground">This email contains complex formatting that couldn&apos;t be displayed properly.</span>
+              ))}
+              {(loading || searchLoading) && (
+                <div className="p-4 space-y-4">
+                  {[...Array(6)].map((_, i) => (
+                    <Skeleton key={i} className="h-14 w-full" />
+                  ))}
+                </div>
+              )}
+              {!loading && !searchLoading && emails.length === 0 && (
+                <div className="p-8 text-center text-muted-foreground">
+                  <Mail className="h-12 w-12 mx-auto mb-4 opacity-30" />
+                  <p>{searchQuery ? 'No emails found matching your search' : 'No emails found'}</p>
+                </div>
+              )}
+            </div>
+          </ResizablePanel>
+          
+          <ResizableHandleWithReset 
+            withHandle
+            leftPanelRef={refs.emailListRef}
+            rightPanelRef={refs.emailContentRef}
+            defaultLeftSize={35}
+            defaultRightSize={65}
+          />
+
+          {/* Email content */}
+          <ResizablePanel 
+            ref={refs.emailContentRef}
+            defaultSize={sizes.emailContentSize} 
+            minSize={40}
+            className="flex flex-col overflow-hidden bg-gradient-to-br from-white/50 to-orange-50/30 dark:from-background/50 dark:to-orange-900/5"
+          >
+            {selectedEmail ? (
+              <div className="flex-1 overflow-y-auto email-content-container">
+                <div className="p-4 md:p-6 max-w-5xl mx-auto">
+                  <div className="pb-4 mb-4 border-b border-border">
+                    <div className="flex items-center justify-between mb-3">
+                      <h1 className="text-xl font-bold text-foreground">{selectedEmail.subject}</h1>
+                      <div className="flex space-x-2">
+                        <Button variant="ghost" size="icon" className="text-muted-foreground">
+                          <Archive className="h-5 w-5" />
+                        </Button>
+                        <Button variant="ghost" size="icon" className="text-muted-foreground">
+                          <Flag className="h-5 w-5" />
+                        </Button>
+                        <Button variant="ghost" size="icon" className="text-muted-foreground">
+                          <MoreVertical className="h-5 w-5" />
+                        </Button>
                       </div>
-                      
-                      {/* Simple text view */}
-                      <div className="mb-4 p-4 bg-card rounded-md">
-                        <h3 className="text-lg font-medium mb-2 text-foreground">Plain Text Version:</h3>
-                        <div className="whitespace-pre-wrap text-sm text-foreground">
-                          {selectedEmail.body
-                            .replace(/<style[\s\S]*?<\/style>/gi, '') // Remove style tags
-                            .replace(/<script[\s\S]*?<\/script>/gi, '') // Remove script tags
-                            .replace(/<[^>]*>/g, '') // Remove HTML tags
-                            .replace(/&nbsp;/g, ' ') // Replace non-breaking spaces
-                            .replace(/\s+/g, ' ') // Collapse whitespace
-                            .trim()}
-                        </div>
-                      </div>
-                      
-                      {/* Toggle for HTML source */}
-                      <details className="mt-4">
-                        <summary className="cursor-pointer text-sm font-medium text-muted-foreground hover:text-foreground">
-                          View HTML source
-                        </summary>
-                        <div className="mt-2 bg-muted/30 p-4 rounded overflow-auto max-h-[300px]">
-                          <pre className="text-xs whitespace-pre-wrap text-foreground">{selectedEmail.body}</pre>
-                        </div>
-                      </details>
                     </div>
-                  ) : (
-                    <div className="relative w-full">
-                      <iframe 
-                        ref={iframeRef}
-                        srcDoc={createEmailDocument(sanitizeHtml(selectedEmail.body))}
-                        className="w-full border-none"
-                        style={{ 
-                          height: `${iframeHeight}px`,
-                          minHeight: "300px",
-                        }}
-                        sandbox="allow-same-origin allow-popups allow-scripts"
-                        title="Email content"
-                        onError={() => setRenderError(true)}
+                    <div className="flex items-center mb-3">
+                      <Avatar className="h-10 w-10 mr-3">
+                        <AvatarFallback className="bg-primary/10 text-primary">
+                          {selectedEmail.from.charAt(0).toUpperCase()}
+                        </AvatarFallback>
+                      </Avatar>
+                      <div>
+                        <div className="flex items-center">
+                          <span className="font-medium text-foreground">
+                            {selectedEmail.from.split('<')[0] || selectedEmail.from}
+                          </span>
+                          <span className="text-xs text-muted-foreground ml-2">
+                            {`<${selectedEmail.from.match(/<(.+)>/)
+                              ? selectedEmail.from.match(/<(.+)>/)?.[1]
+                              : selectedEmail.from}>`}
+                          </span>
+                        </div>
+                        <div className="text-xs text-muted-foreground">
+                          to me • {new Date(selectedEmail.date).toLocaleString()}
+                        </div>
+                      </div>
+                      <div className="ml-auto">
+                        <Button variant="ghost" size="icon" className="text-muted-foreground">
+                          <ChevronLeft className="h-5 w-5" />
+                        </Button>
+                        <Button variant="ghost" size="icon" className="text-muted-foreground">
+                          <ChevronRight className="h-5 w-5" />
+                        </Button>
+                      </div>
+                    </div>
+                  </div>
+                  <div className="prose prose-sm dark:prose-invert max-w-none">
+                    {renderError ? (
+                      <div className="p-4 border border-muted rounded-md">
+                        <div className="flex items-center mb-4">
+                          <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 text-amber-500 mr-2" viewBox="0 0 20 20" fill="currentColor">
+                            <path fillRule="evenodd" d="M8.257 3.099c.765-1.36 2.722-1.36 3.486 0l5.58 9.92c.75 1.334-.213 2.98-1.742 2.98H4.42c-1.53 0-2.493-1.646-1.743-2.98l5.58-9.92zM11 13a1 1 0 11-2 0 1 1 0 012 0zm-1-8a1 1 0 00-1 1v3a1 1 0 002 0V6a1 1 0 00-1-1z" clipRule="evenodd" />
+                          </svg>
+                          <span className="font-medium text-foreground">This email contains complex formatting that couldn&apos;t be displayed properly.</span>
+                        </div>
+                        
+                        {/* Simple text view */}
+                        <div className="mb-4 p-4 bg-card rounded-md">
+                          <h3 className="text-lg font-medium mb-2 text-foreground">Plain Text Version:</h3>
+                          <div className="whitespace-pre-wrap text-sm text-foreground">
+                            {selectedEmail.body
+                              .replace(/<style[\s\S]*?<\/style>/gi, '') // Remove style tags
+                              .replace(/<script[\s\S]*?<\/script>/gi, '') // Remove script tags
+                              .replace(/<[^>]*>/g, '') // Remove HTML tags
+                              .replace(/&nbsp;/g, ' ') // Replace non-breaking spaces
+                              .replace(/\s+/g, ' ') // Collapse whitespace
+                              .trim()}
+                          </div>
+                        </div>
+                        
+                        {/* Toggle for HTML source */}
+                        <details className="mt-4">
+                          <summary className="cursor-pointer text-sm font-medium text-muted-foreground hover:text-foreground">
+                            View HTML source
+                          </summary>
+                          <div className="mt-2 bg-muted/30 p-4 rounded overflow-auto max-h-[300px]">
+                            <pre className="text-xs whitespace-pre-wrap text-foreground">{selectedEmail.body}</pre>
+                          </div>
+                        </details>
+                      </div>
+                    ) : (
+                      <div className="relative w-full">
+                        <iframe 
+                          ref={iframeRef}
+                          srcDoc={createEmailDocument(sanitizeHtml(selectedEmail.body))}
+                          className="w-full border-none"
+                          style={{ 
+                            height: `${iframeHeight}px`,
+                            minHeight: "300px",
+                          }}
+                          sandbox="allow-same-origin allow-popups allow-scripts"
+                          title="Email content"
+                          onError={() => setRenderError(true)}
+                        />
+                      </div>
+                    )}
+                  </div>
+                  <div className="mt-8 pt-4 border-t border-border/50">
+                    {isReplying && selectedEmail && (
+                      <ReplyComposer
+                        recipientEmail={selectedEmail.from}
+                        originalSubject={selectedEmail.subject}
+                        originalContent={selectedEmail.body.replace(/<[^>]*>/g, '')}
+                        onClose={() => setIsReplying(false)}
+                        onSend={handleReplyComplete}
                       />
+                    )}
+                    <div className="flex space-x-2 mt-4">
+                      <Button 
+                        variant="outline" 
+                        className="text-orange-600 border-orange-200 hover:bg-orange-50 dark:text-orange-400 dark:border-orange-500/20 dark:hover:bg-orange-500/10"
+                        onClick={() => setIsReplying(true)}
+                      >
+                        Reply
+                      </Button>
+                      <Button 
+                        variant="outline" 
+                        className="text-orange-600 border-orange-200 hover:bg-orange-50 dark:text-orange-400 dark:border-orange-500/20 dark:hover:bg-orange-500/10"
+                      >
+                        Forward
+                      </Button>
                     </div>
-                  )}
-                </div>
-                <div className="mt-8 pt-4 border-t border-border/50">
-                  {isReplying && selectedEmail && (
-                    <ReplyComposer
-                      recipientEmail={selectedEmail.from}
-                      originalSubject={selectedEmail.subject}
-                      originalContent={selectedEmail.body.replace(/<[^>]*>/g, '')}
-                      onClose={() => setIsReplying(false)}
-                      onSend={handleReplyComplete}
-                    />
-                  )}
-                  <div className="flex space-x-2 mt-4">
-                    <Button 
-                      variant="outline" 
-                      className="text-orange-600 border-orange-200 hover:bg-orange-50 dark:text-orange-400 dark:border-orange-500/20 dark:hover:bg-orange-500/10"
-                      onClick={() => setIsReplying(true)}
-                    >
-                      Reply
-                    </Button>
-                    <Button 
-                      variant="outline" 
-                      className="text-orange-600 border-orange-200 hover:bg-orange-50 dark:text-orange-400 dark:border-orange-500/20 dark:hover:bg-orange-500/10"
-                    >
-                      Forward
-                    </Button>
                   </div>
                 </div>
               </div>
-            </div>
-          ) : (
-            <div className="flex items-center justify-center h-full text-muted-foreground">
-              <div className="text-center">
-                <Mail className="h-16 w-16 mx-auto mb-4 opacity-20" />
-                <p className="text-lg">Select an email to read</p>
+            ) : (
+              <div className="flex items-center justify-center h-full text-muted-foreground">
+                <div className="text-center">
+                  <Mail className="h-16 w-16 mx-auto mb-4 opacity-20" />
+                  <p className="text-lg">Select an email to read</p>
+                </div>
               </div>
-            </div>
-          )}
-        </ResizablePanel>
-        
-        <ResizableHandleWithReset 
-          leftPanelRef={refs.emailContentRef}
-          rightPanelRef={refs.chatRef}
-          defaultLeftSize={40}
-          defaultRightSize={20}
-        />
-        
-        {/* Chat with 100x */}
-        <ResizablePanel 
-          ref={refs.chatRef}
-          defaultSize={sizes.chatSize} 
-          minSize={15} 
-          className="border-l border-border bg-card flex flex-col overflow-hidden"
-        >
-          <ChatWith100x />
-        </ResizablePanel>
-      </ResizablePanelGroup>
+            )}
+          </ResizablePanel>
+        </ResizablePanelGroup>
+      </div>
+
+      <ChatWith100x />
 
       {/* Email compose dialog */}
       <Dialog open={composing} onOpenChange={setComposing}>

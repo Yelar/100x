@@ -42,16 +42,16 @@ export default function Login() {
   };
 
   return (
-    <div className="min-h-screen flex flex-col bg-background text-foreground font-[family-name:var(--font-geist-sans)] relative">
+    <div className="min-h-screen w-full flex flex-col bg-background text-foreground font-[family-name:var(--font-geist-sans)] relative overflow-hidden">
       {/* Gradient Background */}
-      <div className="absolute inset-0 -z-10 bg-background">
+      <div className="fixed inset-0 -z-10 bg-background">
         <div className="absolute inset-0 bg-gradient-to-tr from-orange-100/20 via-transparent to-yellow-100/20 animate-gradient" />
-        <div className="absolute top-0 left-0 w-[500px] h-[500px] bg-orange-200/30 rounded-full blur-3xl -translate-x-1/2 -translate-y-1/2" />
-        <div className="absolute bottom-0 right-0 w-[500px] h-[500px] bg-yellow-200/30 rounded-full blur-3xl translate-x-1/2 translate-y-1/2" />
+        <div className="absolute top-1/4 left-1/4 w-[500px] h-[500px] bg-orange-200/30 rounded-full blur-3xl -translate-x-1/2 -translate-y-1/2" />
+        <div className="absolute bottom-1/4 right-1/4 w-[500px] h-[500px] bg-yellow-200/30 rounded-full blur-3xl translate-x-1/2 translate-y-1/2" />
       </div>
 
       {/* Header */}
-      <header className="flex items-center justify-between px-6 py-4 bg-background/80 backdrop-blur-lg border-b">
+      <header className="w-full flex items-center justify-between px-6 py-4 bg-background/80 backdrop-blur-lg border-b">
         <div className="flex items-center gap-3">
           <div className="w-8 h-8 rounded-xl bg-gradient-to-tr from-orange-500 to-orange-600 flex items-center justify-center shadow-lg shadow-orange-500/20 animate-subtle-bounce">
             <Mail className="w-5 h-5 text-white" />
@@ -109,7 +109,7 @@ export default function Login() {
         }
         .animate-gradient {
           animation: gradient 15s ease infinite;
-          background-size: 400% 400%;
+          background-size: 200% 200%;
         }
         .animate-subtle-bounce {
           animation: subtle-bounce 2s ease-in-out infinite;

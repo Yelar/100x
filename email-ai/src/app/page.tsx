@@ -9,6 +9,7 @@ import Link from "next/link";
 import { useEffect, useState, useRef } from "react";
 import { MagneticButton, TiltCard, RevealText, MorphingBackground, FloatingElement, GlitchText, ScrollProgress } from "@/components/ui/animations";
 import { DemoChatWith100x } from "@/components/demo-chat-with-100x";
+import { ChatWith100x } from "@/components/chat-with-100x";
 
 // Mock data for components
 const mockEmail = {
@@ -65,6 +66,7 @@ const ScrollLock = ({ children }: { children: React.ReactNode }) => {
 
 export default function Home() {
   const [mounted, setMounted] = useState(false);
+  const [isChatOpen, setIsChatOpen] = useState(false);
   const featuresRef = useRef<HTMLElement>(null);
   const resourcesRef = useRef<HTMLElement>(null);
 
@@ -263,6 +265,19 @@ export default function Home() {
             </Link>
           </div>
         </footer>
+
+        {/* Floating Chat Toggle Button */}
+        <div className="fixed bottom-4 right-4 z-50">
+          <Button
+            className="rounded-full w-12 h-12 p-0 bg-gradient-to-r from-orange-500 to-orange-600 hover:from-orange-600 hover:to-orange-700 shadow-lg hover:shadow-xl transition-all duration-300"
+            onClick={() => setIsChatOpen(!isChatOpen)}
+          >
+            <Bot className="h-6 w-6 text-white" />
+          </Button>
+        </div>
+
+        {/* Floating Chat Window */}
+        <ChatWith100x isOpen={isChatOpen} onToggle={() => setIsChatOpen(!isChatOpen)} />
       </div>
     </ScrollLock>
   );

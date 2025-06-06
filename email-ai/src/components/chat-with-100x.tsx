@@ -7,7 +7,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Card, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
 import { ScrollArea } from "@/components/ui/scroll-area";
-import { Send, Bot, Mail, Info, Search, Loader2, CheckCircle2, Activity, Mic } from 'lucide-react';
+import { Send, Bot, Mail, Info, Search, Loader2, CheckCircle2, Activity, Mic, X } from 'lucide-react';
 import { Badge } from "@/components/ui/badge";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { EmailPreviewDialog } from '@/components/email-preview-dialog';
@@ -18,7 +18,15 @@ interface ParsedAIResponse {
   answer: string;
 }
 
-export function ChatWith100x() {
+interface ChatWith100xProps {
+  isOpen?: boolean;
+  onToggle?: () => void;
+}
+
+export function ChatWith100x({ isOpen: propIsOpen, onToggle: propOnToggle }: ChatWith100xProps) {
+  const [isOpenInternal, setIsOpenInternal] = useState(false);
+  const isOpen = propIsOpen ?? isOpenInternal;
+  const onToggle = propOnToggle ?? (() => setIsOpenInternal(!isOpenInternal));
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [previewEmail, setPreviewEmail] = useState<string | null>(null);
   const [previewDialogOpen, setPreviewDialogOpen] = useState(false);
@@ -484,173 +492,195 @@ export function ChatWith100x() {
   }, [messages]);
 
   return (
-    <>
-      <Card className="flex flex-col h-full border-none shadow-none">
-        <CardHeader className="px-4 py-3 border-b">
-          <div className="flex justify-between items-center">
-            <CardTitle className="text-md flex items-center">
-              <Bot className="mr-2 h-5 w-5 text-primary" />
-              Chat with 100x
-            </CardTitle>
-            {contextLoaded && (
-              <TooltipProvider>
-                <Tooltip>
-                  <TooltipTrigger asChild>
-                    <Badge variant="secondary" className="text-xs flex items-center gap-1">
-                      <Search className="h-3 w-3" />
-                      Smart Email Search
-                    </Badge>
-                  </TooltipTrigger>
-                  <TooltipContent>
-                    <p>Intelligent email search based on your questions</p>
-                  </TooltipContent>
-                </Tooltip>
-              </TooltipProvider>
-            )}
-          </div>
-        </CardHeader>
-        
-        <ScrollArea className="flex-1 p-4">
-          <div className="space-y-4 mb-4">
-            {/* Error message display */}
-            {errorMessage && (
-              <div className="bg-destructive/10 text-destructive rounded-lg p-3 text-sm flex items-center gap-2">
-                <Info className="h-4 w-4" />
-                <span>{errorMessage}</span>
-              </div>
-            )}
+    <div className="fixed bottom-4 right-4 z-50">
+      {isOpen ? (
+        <Card className="w-[400px] flex flex-col shadow-2xl border-orange-200/50 bg-background/95 backdrop-blur-lg animate-in slide-in-from-bottom-2">
+          <CardHeader 
+            className="px-4 py-3 border-b hover:bg-accent/50 transition-colors flex items-center justify-between"
+          >
+            <div className="flex items-center gap-2">
+              <Bot className="h-5 w-5 text-primary" />
+              <CardTitle className="text-md">Chat with 100x</CardTitle>
+            </div>
+            <div className="flex items-center gap-2">
+              {contextLoaded && (
+                <TooltipProvider>
+                  <Tooltip>
+                    <TooltipTrigger asChild>
+                      <Badge variant="secondary" className="text-xs flex items-center gap-1">
+                        <Search className="h-3 w-3" />
+                        Smart Email Search
+                      </Badge>
+                    </TooltipTrigger>
+                    <TooltipContent>
+                      <p>Intelligent email search based on your questions</p>
+                    </TooltipContent>
+                  </Tooltip>
+                </TooltipProvider>
+              )}
+              <Button
+                variant="ghost"
+                size="icon"
+                className="h-8 w-8 p-0 hover:bg-destructive/10 hover:text-destructive"
+                onClick={onToggle}
+              >
+                <X className="h-4 w-4" />
+              </Button>
+            </div>
+          </CardHeader>
           
-            {messages.length === 0 ? (
-              <div className="text-center text-muted-foreground py-6">
-                <Bot className="h-12 w-12 mx-auto mb-2 opacity-50" />
-                <h2 className="text-xl font-semibold text-foreground mb-1">Ask anything about your emails</h2>
-                <p className="text-sm text-muted-foreground mb-6">Ask to do or show anything using natural language</p>
-                <div className="mt-2 flex flex-col items-center gap-2">
-                  <div className="flex gap-2 flex-wrap justify-center">
-                    {[
-                      'Show unpaid invoices',
-                      'Show recent work emails',
-                      'Find all work meetings',
-                      'What projects do I have coming up?',
-                      'Show emails from Stripe',
-                      'When is my next interview?',
-                    ].map((example, idx) => (
-                      <button
-                        key={idx}
-                        onClick={() => handleInputChange({ target: { value: example } } as React.ChangeEvent<HTMLInputElement>)}
-                        className="rounded-full bg-muted px-4 py-2 text-sm font-medium text-foreground hover:bg-accent transition-colors whitespace-nowrap border border-border/40 shadow-sm focus:outline-none focus:ring-2 focus:ring-orange-500 focus:ring-offset-2"
-                        style={{ minWidth: 'fit-content' }}
-                      >
-                        {example}
-                      </button>
-                    ))}
+          <div className="h-[500px]">
+            <ScrollArea className="flex-1 p-4 h-[calc(500px-8rem)]">
+              <div className="space-y-4 mb-4">
+                {/* Error message display */}
+                {errorMessage && (
+                  <div className="bg-destructive/10 text-destructive rounded-lg p-3 text-sm flex items-center gap-2">
+                    <Info className="h-4 w-4" />
+                    <span>{errorMessage}</span>
                   </div>
-                  <div className="flex gap-2 flex-wrap justify-center ml-6">
-                    {[
-                      'When is my interview',
-                      'Summarize my recent emails',
-                      'Find emails about project deadlines',
-                      'Help me draft a reply',
-                      'Find emails from my recruiter',
-                      'Key points from last meeting'
-                    ].map((example, idx) => (
-                      <button
-                        key={idx}
-                        onClick={() => handleInputChange({ target: { value: example } } as React.ChangeEvent<HTMLInputElement>)}
-                        className="rounded-full bg-muted px-4 py-2 text-sm font-medium text-foreground hover:bg-accent transition-colors whitespace-nowrap border border-border/40 shadow-sm focus:outline-none focus:ring-2 focus:ring-orange-500 focus:ring-offset-2"
-                        style={{ minWidth: 'fit-content' }}
-                      >
-                        {example}
-                      </button>
-                    ))}
-                  </div>
-                </div>
-              </div>
-            ) : (
-              messages.map(message => (
-                <div 
-                  key={message.id} 
-                  className={`flex ${message.role === 'user' ? 'justify-end' : 'justify-start'}`}
-                >
-                  {renderMessage(message)}
-                </div>
-              ))
-            )}
-            
-            {/* Thinking state display */}
-            {isProcessing && (
-              <div className="flex justify-start">
-                <div className="flex flex-col gap-2 max-w-[80%] animate-slideIn">
-                  <div className="bg-muted/50 rounded-lg p-3 space-y-2">
-                    <div className="text-xs text-muted-foreground flex items-center gap-1">
-                      <Activity className="h-3 w-3" />
-                      <span>Thinking...</span>
+                )}
+              
+                {messages.length === 0 ? (
+                  <div className="text-center text-muted-foreground py-6">
+                    <Bot className="h-12 w-12 mx-auto mb-2 opacity-50" />
+                    <h2 className="text-xl font-semibold text-foreground mb-1">Ask anything about your emails</h2>
+                    <p className="text-sm text-muted-foreground mb-6">Ask to do or show anything using natural language</p>
+                    <div className="mt-2 flex flex-col items-center gap-2">
+                      <div className="flex gap-2 flex-wrap justify-center">
+                        {[
+                          'Show unpaid invoices',
+                          'Show recent work emails',
+                          'Find all work meetings',
+                          'What projects do I have coming up?',
+                          'Show emails from Stripe',
+                          'When is my next interview?',
+                        ].map((example, idx) => (
+                          <button
+                            key={idx}
+                            onClick={() => handleInputChange({ target: { value: example } } as React.ChangeEvent<HTMLInputElement>)}
+                            className="rounded-full bg-muted px-4 py-2 text-sm font-medium text-foreground hover:bg-accent transition-colors whitespace-nowrap border border-border/40 shadow-sm focus:outline-none focus:ring-2 focus:ring-orange-500 focus:ring-offset-2"
+                            style={{ minWidth: 'fit-content' }}
+                          >
+                            {example}
+                          </button>
+                        ))}
+                      </div>
+                      <div className="flex gap-2 flex-wrap justify-center ml-6">
+                        {[
+                          'When is my interview',
+                          'Summarize my recent emails',
+                          'Find emails about project deadlines',
+                          'Help me draft a reply',
+                          'Find emails from my recruiter',
+                          'Key points from last meeting'
+                        ].map((example, idx) => (
+                          <button
+                            key={idx}
+                            onClick={() => handleInputChange({ target: { value: example } } as React.ChangeEvent<HTMLInputElement>)}
+                            className="rounded-full bg-muted px-4 py-2 text-sm font-medium text-foreground hover:bg-accent transition-colors whitespace-nowrap border border-border/40 shadow-sm focus:outline-none focus:ring-2 focus:ring-orange-500 focus:ring-offset-2"
+                            style={{ minWidth: 'fit-content' }}
+                          >
+                            {example}
+                          </button>
+                        ))}
+                      </div>
                     </div>
-                    <ul className="pl-5 space-y-1.5">
-                      {currentThoughts.map((thought, index) => (
-                        <li 
-                          key={index} 
-                          className={`text-xs flex items-start gap-2 transition-all duration-500 ease-in-out ${
-                            index <= currentThoughtIndex 
-                              ? 'opacity-100 translate-y-0' 
-                              : 'opacity-50 translate-y-1'
-                          }`}
-                        >
-                          <div className="relative">
-                            {index <= currentThoughtIndex ? (
-                              <CheckCircle2 className="h-3 w-3 mt-0.5 text-primary/70 animate-scaleIn" />
-                            ) : (
-                              <div className="h-3 w-3 mt-0.5 rounded-full border border-muted-foreground/30 animate-pulse" />
-                            )}
-                          </div>
-                          <span className={index <= currentThoughtIndex ? 'text-muted-foreground' : 'text-muted-foreground/50'}>
-                            {thought}
-                          </span>
-                        </li>
-                      ))}
-                    </ul>
                   </div>
-                </div>
+                ) : (
+                  messages.map(message => (
+                    <div 
+                      key={message.id} 
+                      className={`flex ${message.role === 'user' ? 'justify-end' : 'justify-start'}`}
+                    >
+                      {renderMessage(message)}
+                    </div>
+                  ))
+                )}
+                
+                {/* Thinking state display */}
+                {isProcessing && (
+                  <div className="flex justify-start">
+                    <div className="flex flex-col gap-2 max-w-[80%] animate-slideIn">
+                      <div className="bg-muted/50 rounded-lg p-3 space-y-2">
+                        <div className="text-xs text-muted-foreground flex items-center gap-1">
+                          <Activity className="h-3 w-3" />
+                          <span>Thinking...</span>
+                        </div>
+                        <ul className="pl-5 space-y-1.5">
+                          {currentThoughts.map((thought, index) => (
+                            <li 
+                              key={index} 
+                              className={`text-xs flex items-start gap-2 transition-all duration-500 ease-in-out ${
+                                index <= currentThoughtIndex 
+                                  ? 'opacity-100 translate-y-0' 
+                                  : 'opacity-50 translate-y-1'
+                              }`}
+                            >
+                              <div className="relative">
+                                {index <= currentThoughtIndex ? (
+                                  <CheckCircle2 className="h-3 w-3 mt-0.5 text-primary/70 animate-scaleIn" />
+                                ) : (
+                                  <div className="h-3 w-3 mt-0.5 rounded-full border border-muted-foreground/30 animate-pulse" />
+                                )}
+                              </div>
+                              <span className={index <= currentThoughtIndex ? 'text-muted-foreground' : 'text-muted-foreground/50'}>
+                                {thought}
+                              </span>
+                            </li>
+                          ))}
+                        </ul>
+                      </div>
+                    </div>
+                  </div>
+                )}
+                
+                <div ref={messagesEndRef} />
               </div>
-            )}
+            </ScrollArea>
             
-            <div ref={messagesEndRef} />
+            <CardFooter className="p-4 pt-2 border-t">
+              <form onSubmit={handleCustomSubmit} className="flex w-full gap-2">
+                <Input
+                  placeholder={isProcessing ? "Searching through your emails..." : isTranscribing ? "Transcribing..." : "Type your message..."}
+                  value={input}
+                  onChange={handleInputChange}
+                  disabled={isLoading || isProcessing || isTranscribing}
+                  className="flex-1"
+                />
+                <Button
+                  type="button"
+                  size="icon"
+                  variant={isRecording ? "secondary" : "outline"}
+                  onClick={isRecording ? stopRecording : startRecording}
+                  disabled={isLoading || isProcessing || isTranscribing}
+                  aria-label={isRecording ? "Stop recording" : "Start recording"}
+                >
+                  {isTranscribing ? (
+                    <Loader2 className="h-4 w-4 animate-spin" />
+                  ) : (
+                    <Mic className={`h-4 w-4 ${isRecording ? 'text-red-500 animate-pulse' : ''}`} />
+                  )}
+                </Button>
+                <Button type="submit" size="icon" disabled={isLoading || isProcessing || !input.trim() || isTranscribing}>
+                  {isProcessing ? (
+                    <Loader2 className="h-4 w-4 animate-spin" />
+                  ) : (
+                    <Send className="h-4 w-4" />
+                  )}
+                </Button>
+              </form>
+            </CardFooter>
           </div>
-        </ScrollArea>
-        
-        <CardFooter className="p-4 pt-2 border-t">
-          <form onSubmit={handleCustomSubmit} className="flex w-full gap-2">
-            <Input
-              placeholder={isProcessing ? "Searching through your emails..." : isTranscribing ? "Transcribing..." : "Type your message..."}
-              value={input}
-              onChange={handleInputChange}
-              disabled={isLoading || isProcessing || isTranscribing}
-              className="flex-1"
-            />
-            <Button
-              type="button"
-              size="icon"
-              variant={isRecording ? "secondary" : "outline"}
-              onClick={isRecording ? stopRecording : startRecording}
-              disabled={isLoading || isProcessing || isTranscribing}
-              aria-label={isRecording ? "Stop recording" : "Start recording"}
-            >
-              {isTranscribing ? (
-                <Loader2 className="h-4 w-4 animate-spin" />
-              ) : (
-                <Mic className={`h-4 w-4 ${isRecording ? 'text-red-500 animate-pulse' : ''}`} />
-              )}
-            </Button>
-            <Button type="submit" size="icon" disabled={isLoading || isProcessing || !input.trim() || isTranscribing}>
-              {isProcessing ? (
-                <Loader2 className="h-4 w-4 animate-spin" />
-              ) : (
-                <Send className="h-4 w-4" />
-              )}
-            </Button>
-          </form>
-        </CardFooter>
-      </Card>
+        </Card>
+      ) : (
+        <Button
+          className="flex items-center gap-2 bg-gradient-to-r from-orange-500 to-orange-600 hover:from-orange-600 hover:to-orange-700 shadow-lg hover:shadow-xl transition-all duration-300 text-white px-4"
+          onClick={onToggle}
+        >
+          <Bot className="h-5 w-5" />
+          <span>Chat with 100x</span>
+        </Button>
+      )}
       
       {/* Email preview dialog */}
       <EmailPreviewDialog 
@@ -659,6 +689,6 @@ export function ChatWith100x() {
         emailId={previewEmail}
       />
       <EmailComposeDialog ref={composeDialogRef} />
-    </>
+    </div>
   );
 } 
