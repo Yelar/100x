@@ -84,8 +84,25 @@ export default function Dashboard() {
   const [isSummarizing, setIsSummarizing] = useState(false);
   const [summary, setSummary] = useState<EmailSummary | null>(null);
   const [isSummaryDialogOpen, setIsSummaryDialogOpen] = useState(false);
+  const [currentFolder, setCurrentFolder] = useState<'inbox' | 'sent'>('inbox');
 
   const { refs, sizes, onResize } = useEmailPanelLayout();
+
+  // Update URL when folder changes
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    params.set('folder', currentFolder);
+    router.replace(`?${params.toString()}`, { scroll: false });
+  }, [currentFolder, router]);
+
+  // Initialize folder from URL on mount
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const folder = params.get('folder');
+    if (folder === 'sent' || folder === 'inbox') {
+      setCurrentFolder(folder);
+    }
+  }, []);
 
   const fetchEmails = useCallback(async (pageToken?: string, query?: string) => {
     try {
@@ -98,12 +115,19 @@ export default function Dashboard() {
       const params = new URLSearchParams();
       if (pageToken) params.append('pageToken', pageToken);
       if (query) params.append('q', query);
+      params.append('folder', currentFolder);
 
       const response = await api.get<EmailsResponse>(`/api/emails?${params.toString()}`);
       const { messages, nextPageToken } = response.data;
       
       if (pageToken) {
-        setEmails(prev => [...prev, ...messages]);
+        // Filter out any duplicate emails before appending
+        setEmails(prev => {
+          const uniqueMessages = messages.filter(
+            newEmail => !prev.some(existingEmail => existingEmail.id === newEmail.id)
+          );
+          return [...prev, ...uniqueMessages];
+        });
       } else {
         setEmails(messages || []);
       }
@@ -118,7 +142,7 @@ export default function Dashboard() {
       setSearchLoading(false);
       setLoadingMore(false);
     }
-  }, [setEmails, setNextPageToken, setHasMore, setLoading, setSearchLoading]);
+  }, [currentFolder]);
 
   const lastEmailElementRef = useCallback((node: HTMLElement | null) => {
     if (loading || searchLoading) return;
@@ -521,20 +545,31 @@ export default function Dashboard() {
               Compose
             </Button>
             <div className="space-y-1">
-              <Button variant="ghost" className="w-full justify-start font-medium text-orange-700 dark:text-orange-300 bg-orange-500/10">
+              <Button 
+                variant="ghost" 
+                className={`w-full justify-start font-medium ${currentFolder === 'inbox' ? 'text-orange-700 dark:text-orange-300 bg-orange-500/10' : 'text-muted-foreground hover:text-orange-600 hover:bg-orange-500/10'}`}
+                onClick={() => {
+                  setCurrentFolder('inbox');
+                  setSelectedEmail(null); // Clear selected email when switching folders
+                  fetchEmails(undefined, searchQuery);
+                }}
+              >
                 <Inbox className="mr-2 h-5 w-5" />
                 Inbox
-                {emails.length > 0 && (
-                  <span className="ml-auto bg-orange-500 text-white text-xs rounded-full px-2 py-0.5 font-semibold">
-                    {emails.length}
-                  </span>
-                )}
               </Button>
               <Button variant="ghost" className="w-full justify-start font-medium text-muted-foreground hover:text-orange-600 hover:bg-orange-500/10">
                 <Star className="mr-2 h-5 w-5" />
                 Starred
               </Button>
-              <Button variant="ghost" className="w-full justify-start font-medium text-muted-foreground hover:text-orange-600 hover:bg-orange-500/10">
+              <Button 
+                variant="ghost" 
+                className={`w-full justify-start font-medium ${currentFolder === 'sent' ? 'text-orange-700 dark:text-orange-300 bg-orange-500/10' : 'text-muted-foreground hover:text-orange-600 hover:bg-orange-500/10'}`}
+                onClick={() => {
+                  setCurrentFolder('sent');
+                  setSelectedEmail(null); // Clear selected email when switching folders
+                  fetchEmails(undefined, searchQuery);
+                }}
+              >
                 <Send className="mr-2 h-5 w-5" />
                 Sent
               </Button>
@@ -604,7 +639,7 @@ export default function Dashboard() {
             <div className="flex-1 overflow-y-auto">
               {emails.map((email, index) => (
                 <div
-                  key={email.id}
+                  key={`${currentFolder}-${email.id}`}
                   ref={index === emails.length - 1 ? lastEmailElementRef : undefined}
                   onClick={() => setSelectedEmail(email)}
                   className={`flex items-center px-4 py-2 cursor-pointer border-b border-border/50 hover:bg-orange-500/5 ${

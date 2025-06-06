@@ -57,10 +57,11 @@ interface GetEmailsOptions {
   pageToken?: string;
   query?: string;
   maxResults?: number;
+  folder?: string;
 }
 
 export const getGmailMessages = async (accessToken: string, options: GetEmailsOptions = {}) => {
-  const { pageToken, query, maxResults = 20 } = options;
+  const { pageToken, query, maxResults = 20, folder } = options;
   
   oauth2Client.setCredentials({ access_token: accessToken });
   const gmail = google.gmail({ version: 'v1', auth: oauth2Client });
@@ -71,7 +72,7 @@ export const getGmailMessages = async (accessToken: string, options: GetEmailsOp
     maxResults,
     pageToken,
     q: query, // Gmail search query
-    labelIds: query ? undefined : ['INBOX'] // Only filter by INBOX if not searching
+    labelIds: folder === 'sent' ? ['SENT'] : ['INBOX'] // Use SENT label for sent folder
   });
 
   const messages = response.data.messages || [];

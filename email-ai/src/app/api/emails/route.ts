@@ -15,6 +15,7 @@ export async function GET(request: Request) {
     const pageToken = url.searchParams.get('pageToken');
     const query = url.searchParams.get('q');
     const maxResults = url.searchParams.get('maxResults');
+    const folder = url.searchParams.get('folder');
 
     const cookiesList = await cookies();
     const accessTokenCookie = cookiesList.get('access_token')?.value;
@@ -30,7 +31,8 @@ export async function GET(request: Request) {
       const { messages, nextPageToken } = await getGmailMessages(accessTokenCookie, {
         pageToken: pageToken || undefined,
         query: query || undefined,
-        maxResults: maxResults ? parseInt(maxResults) : undefined
+        maxResults: maxResults ? parseInt(maxResults) : undefined,
+        folder: folder || undefined
       });
       return NextResponse.json({ messages, nextPageToken });
     } catch (error: unknown) {
@@ -64,7 +66,8 @@ export async function GET(request: Request) {
         const { messages, nextPageToken } = await getGmailMessages(newAccessToken, {
           pageToken: pageToken || undefined,
           query: query || undefined,
-          maxResults: maxResults ? parseInt(maxResults) : undefined
+          maxResults: maxResults ? parseInt(maxResults) : undefined,
+          folder: folder || undefined
         });
         return NextResponse.json({ messages, nextPageToken });
       }
