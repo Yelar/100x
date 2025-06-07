@@ -71,7 +71,7 @@ const FLAG_COLORS: Record<string, string> = {
   other: 'bg-gray-400',
 };
 
-// Helper to get/set flags in localStorage (latest 20 only)
+// Helper to get/set flags in localStorage (latest 40 only)
 function getFlaggedEmailsLS() {
   try {
     const raw = localStorage.getItem('flagged_emails');
@@ -81,10 +81,10 @@ function getFlaggedEmailsLS() {
   }
 }
 function setFlaggedEmailsLS(flags: Record<string, { flag: string, subject: string, snippet: string, sender: string, flaggedAt: number }>) {
-  // Only keep latest 20
+  // Only keep the latest 40 (delete the oldest if more than 40)
   const sorted = Object.entries(flags)
-    .sort((a, b) => b[1].flaggedAt - a[1].flaggedAt)
-    .slice(0, 20);
+    .sort((a, b) => b[1].flaggedAt - a[1].flaggedAt) // newest first
+    .slice(0, 40); // keep only the newest 40
   const obj = Object.fromEntries(sorted);
   localStorage.setItem('flagged_emails', JSON.stringify(obj));
 }
@@ -448,13 +448,13 @@ export default function Dashboard() {
     }
   }, []);
 
-  // Fetch flags after emails are loaded (optimized: only flag first 5 unflagged emails per load, update UI as results come in)
+  // Fetch flags after emails are loaded (optimized: flag up to 20 unflagged emails per load, update UI as results come in)
   useEffect(() => {
     if (!emails.length) return;
     const flaggedLS = getFlaggedEmailsLS();
     setFlaggedEmails(flaggedLS); // Show emails instantly with whatever flags are present
-    // Find up to 5 unflagged emails
-    const toFlag = emails.filter(e => !flaggedLS[e.id]).slice(0, 5).map(e => ({ id: e.id, subject: e.subject, snippet: e.snippet, sender: e.from }));
+    // Find up to 20 unflagged emails
+    const toFlag = emails.filter(e => !flaggedLS[e.id]).slice(0, 20).map(e => ({ id: e.id, subject: e.subject, snippet: e.snippet, sender: e.from }));
     if (toFlag.length === 0) return;
     // Make request for only the batch
     fetch('/api/emails/flagged', {
