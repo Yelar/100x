@@ -53,5 +53,28 @@ export async function generateSubjectLine(prompt: string) {
   } catch (error) {
     console.error('Error generating subject line with Groq:', error);
     throw error;
+  }}
+
+export async function flagEmailWithGroq({ subject, snippet, sender }: { subject: string, snippet: string, sender: string }) {
+  try {
+    const completion = await groq.chat.completions.create({
+      messages: [
+        {
+          role: 'system',
+          content: `You are an AI email assistant. Given an email's subject, snippet, and sender, return ONLY one of these categories as a single word: promotional, work, to_reply, other. Do not include any explanations, preambles, or extra text.`,
+        },
+        {
+          role: 'user',
+          content: `Subject: ${subject}\nSnippet: ${snippet}\nSender: ${sender}`,
+        },
+      ],
+      model: 'gemma2-9b-it',
+      temperature: 0.2,
+      max_tokens: 10,
+    });
+    return completion.choices[0]?.message?.content?.trim().toLowerCase() || 'other';
+  } catch (error) {
+    console.error('Error flagging email with Groq:', error);
+    return 'other';
   }
 } 

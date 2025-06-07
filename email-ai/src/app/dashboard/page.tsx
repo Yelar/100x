@@ -57,6 +57,38 @@ const EmailSummaryDialog = lazy(() => import('@/components/email-summary-dialog'
 // In-memory cache for emails per folder/query (non-reactive, not persisted)
 const emailCache: Record<string, { emails: Email[]; nextPageToken?: string }> = {};
 
+// Add flag colors and labels
+const FLAG_LABELS: Record<string, string> = {
+  promotional: 'Promotional',
+  work: 'Work',
+  to_reply: 'To Reply',
+  other: 'Other',
+};
+const FLAG_COLORS: Record<string, string> = {
+  promotional: 'bg-pink-500',
+  work: 'bg-blue-500',
+  to_reply: 'bg-amber-500',
+  other: 'bg-gray-400',
+};
+
+// Helper to get/set flags in localStorage (latest 20 only)
+function getFlaggedEmailsLS() {
+  try {
+    const raw = localStorage.getItem('flagged_emails');
+    return raw ? JSON.parse(raw) : {};
+  } catch {
+    return {};
+  }
+}
+function setFlaggedEmailsLS(flags: Record<string, { flag: string, subject: string, snippet: string, sender: string, flaggedAt: number }>) {
+  // Only keep latest 20
+  const sorted = Object.entries(flags)
+    .sort((a, b) => b[1].flaggedAt - a[1].flaggedAt)
+    .slice(0, 20);
+  const obj = Object.fromEntries(sorted);
+  localStorage.setItem('flagged_emails', JSON.stringify(obj));
+}
+
 export default function Dashboard() {
   const router = useRouter();
   const [userInfo, setUserInfo] = useState<UserInfo | null>(null);
@@ -90,6 +122,8 @@ export default function Dashboard() {
   const [summary, setSummary] = useState<EmailSummary | null>(null);
   const [isSummaryDialogOpen, setIsSummaryDialogOpen] = useState(false);
   const [currentFolder, setCurrentFolder] = useState<'inbox' | 'sent'>('inbox');
+  const [flaggedEmails, setFlaggedEmails] = useState<Record<string, { flag: string, subject: string, snippet: string, sender: string, flaggedAt: number }>>({});
+  const [selectedFlag, setSelectedFlag] = useState<string | null>(null);
 
   const { refs, sizes, onResize } = useEmailPanelLayout();
 
@@ -414,6 +448,41 @@ export default function Dashboard() {
     }
   }, []);
 
+  // Fetch flags after emails are loaded (optimized: only flag first 5 unflagged emails per load, update UI as results come in)
+  useEffect(() => {
+    if (!emails.length) return;
+    const flaggedLS = getFlaggedEmailsLS();
+    setFlaggedEmails(flaggedLS); // Show emails instantly with whatever flags are present
+    // Find up to 5 unflagged emails
+    const toFlag = emails.filter(e => !flaggedLS[e.id]).slice(0, 5).map(e => ({ id: e.id, subject: e.subject, snippet: e.snippet, sender: e.from }));
+    if (toFlag.length === 0) return;
+    // Make request for only the batch
+    fetch('/api/emails/flagged', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ emails: toFlag }),
+    })
+      .then(res => res.json())
+      .then(data => {
+        if (data.flagged) {
+          const now = Date.now();
+          const newFlags = { ...getFlaggedEmailsLS() };
+          for (const f of data.flagged) {
+            newFlags[f.id] = {
+              flag: f.flag,
+              subject: f.subject,
+              snippet: f.snippet,
+              sender: f.sender,
+              flaggedAt: now,
+            };
+          }
+          setFlaggedEmails(newFlags);
+          setFlaggedEmailsLS(newFlags);
+        }
+      })
+      .catch(() => setFlaggedEmails(getFlaggedEmailsLS()));
+  }, [emails]);
+
   if (loading && !searchLoading && emails.length === 0) {
     return (
       <div className="min-h-screen bg-background flex flex-col h-screen overflow-hidden">
@@ -571,6 +640,7 @@ export default function Dashboard() {
                 onClick={() => {
                   setCurrentFolder('inbox');
                   setSelectedEmail(null); // Clear selected email when switching folders
+                  setSelectedFlag(null); // Clear flag filter when switching to inbox
                   fetchEmails(undefined, searchQuery);
                 }}
               >
@@ -601,6 +671,23 @@ export default function Dashboard() {
                 <Trash className="mr-2 h-5 w-5" />
                 Trash
               </Button>
+              <div className="space-y-1">
+                {Object.entries(FLAG_LABELS).map(([flag, label]) => (
+                  <Button
+                    key={flag}
+                    variant="ghost"
+                    className={`w-full justify-start font-medium flex items-center gap-2 ${selectedFlag === flag ? 'text-orange-700 dark:text-orange-300 bg-orange-500/10' : 'text-muted-foreground hover:text-orange-600 hover:bg-orange-500/10'}`}
+                    onClick={() => {
+                      setSelectedFlag(flag === selectedFlag ? null : flag);
+                      setSelectedEmail(null);
+                    }}
+                  >
+                    <span className={`inline-block w-3 h-3 rounded-full ${FLAG_COLORS[flag]}`}></span>
+                    {label}
+                    <span className="ml-auto text-xs text-muted-foreground">{Object.values(flaggedEmails).filter(f => f.flag === flag).length}</span>
+                  </Button>
+                ))}
+              </div>
             </div>
           </div>
         </div>
@@ -657,34 +744,55 @@ export default function Dashboard() {
 
             {/* Scrollable email list */}
             <div className="flex-1 overflow-y-auto">
-              {emails.map((email, index) => (
-                <div
-                  key={`${currentFolder}-${email.id}`}
-                  ref={index === emails.length - 1 ? lastEmailElementRef : undefined}
-                  onClick={() => setSelectedEmail(email)}
-                  className={`flex items-center px-4 py-2 cursor-pointer border-b border-border/50 hover:bg-orange-500/5 ${
-                    selectedEmail?.id === email.id ? 'bg-orange-500/10' : ''
-                  }`}
-                >
-                  <div className="mr-3 flex space-x-2 items-center">
-                    <Button variant="ghost" size="icon" className="h-6 w-6 text-orange-500/80 hover:text-orange-500 hover:bg-orange-500/10">
-                      <Star className="h-4 w-4" />
-                    </Button>
-                  </div>
-                  <div className="flex-1 min-w-0">
-                    <div className="flex justify-between items-baseline">
-                      <div className="font-medium text-sm truncate max-w-[180px] text-foreground">
-                        {email.from.split('<')[0] || email.from}
+              {emails
+                .filter(email => {
+                  if (!selectedFlag) return true;
+                  const flag = flaggedEmails[email.id]?.flag;
+                  return flag === selectedFlag;
+                })
+                .map((email, index) => (
+                  <div
+                    key={`${currentFolder}-${email.id}`}
+                    ref={index === emails.length - 1 ? lastEmailElementRef : undefined}
+                    onClick={() => setSelectedEmail(email)}
+                    className={`relative flex items-center px-4 py-3 cursor-pointer border-b border-border/50 hover:bg-orange-500/5 ${selectedEmail?.id === email.id ? 'bg-orange-500/10' : ''}`}
+                    style={{ minHeight: '64px' }}
+                  >
+                    {/* Avatar */}
+                    <div className="flex-shrink-0 mr-4">
+                      <Avatar className="h-9 w-9">
+                        <AvatarImage src={undefined} alt={email.from} />
+                        <AvatarFallback className="bg-muted text-foreground font-bold">
+                          {email.from.trim()[0]?.toUpperCase()}
+                        </AvatarFallback>
+                      </Avatar>
+                    </div>
+                    {/* Main content */}
+                    <div className="flex-1 min-w-0">
+                      <div className="flex justify-between items-baseline">
+                        <span className="font-bold text-sm truncate max-w-[180px] text-foreground">
+                          {email.from.split('<')[0] || email.from}
+                        </span>
+                        <span className="text-xs text-muted-foreground whitespace-nowrap ml-2">
+                          {formatEmailDate(email.date)}
+                        </span>
                       </div>
-                      <div className="text-xs text-muted-foreground whitespace-nowrap ml-2">
-                        {formatEmailDate(email.date)}
+                      <div className="text-xs text-muted-foreground truncate mt-0.5">
+                        {email.snippet}
                       </div>
                     </div>
-                    <div className="text-sm font-medium truncate text-foreground">{email.subject}</div>
-                    <div className="text-xs text-muted-foreground truncate">{email.snippet}</div>
+                    {/* Flag badge in right-bottom corner */}
+                    {flaggedEmails[email.id]?.flag && (
+                      <span
+                        className={`absolute right-4 bottom-2 inline-flex items-center px-2 py-0.5 rounded-full text-xs font-semibold ${FLAG_COLORS[flaggedEmails[email.id].flag]} text-white shadow`}
+                        title={FLAG_LABELS[flaggedEmails[email.id].flag]}
+                        style={{ minWidth: '2.5rem', justifyContent: 'center', textTransform: 'lowercase', pointerEvents: 'none' }}
+                      >
+                        {flaggedEmails[email.id].flag}
+                      </span>
+                    )}
                   </div>
-                </div>
-              ))}
+                ))}
               {(loading || searchLoading) && !loadingMore && (
                 <div className="p-4 space-y-4">
                   {[...Array(6)].map((_, i) => (
@@ -964,5 +1072,6 @@ export default function Dashboard() {
         />
       </Suspense>
     </div>
-  );
+ )
+ ;
 }
