@@ -1,7 +1,7 @@
 'use client';
 
 import * as React from 'react';
-import { useEffect, useState, useRef, useCallback } from 'react';
+import { useEffect, useState, useRef, useCallback, Suspense, lazy } from 'react';
 import { useRouter } from 'next/navigation';
 import { Button } from "@/components/ui/button";
 import { Avatar, AvatarImage, AvatarFallback } from "@/components/ui/avatar";
@@ -12,12 +12,9 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "
 import api from '@/lib/axios';
 import debounce from 'lodash/debounce';
 import { sanitizeHtml, createEmailDocument } from '@/lib/sanitize-html';
-import { ChatWith100x } from '@/components/chat-with-100x';
 import { ResizablePanelGroup, ResizablePanel } from "@/components/ui/resizable";
 import { ResizableHandleWithReset } from "@/components/ui/resizable-handle-with-reset";
 import { useEmailPanelLayout } from "@/hooks/use-email-panel-layout";
-import { ReplyComposer } from '@/components/reply-composer';
-import { EmailSummaryDialog } from '@/components/email-summary-dialog';
 import { toast } from 'sonner';
 
 interface UserInfo {
@@ -52,6 +49,14 @@ interface EmailSummary {
   categories: Record<string, string[]>;
 }
 
+// Lazy load heavy components
+const ChatWith100x = lazy(() => import('@/components/chat-with-100x').then(m => ({ default: m.ChatWith100x })));
+const ReplyComposer = lazy(() => import('@/components/reply-composer').then(m => ({ default: m.ReplyComposer })));
+const EmailSummaryDialog = lazy(() => import('@/components/email-summary-dialog').then(m => ({ default: m.EmailSummaryDialog })));
+
+// In-memory cache for emails per folder/query (non-reactive, not persisted)
+const emailCache: Record<string, { emails: Email[]; nextPageToken?: string }> = {};
+
 export default function Dashboard() {
   const router = useRouter();
   const [userInfo, setUserInfo] = useState<UserInfo | null>(null);
@@ -75,7 +80,7 @@ export default function Dashboard() {
   const debouncedSearchRef = useRef(
     debounce((query: string, callback: (query: string) => void) => {
       callback(query);
-    }, 500)
+    }, 800)
   ).current;
   const [iframeHeight, setIframeHeight] = useState(500);
   const iframeRef = useRef<HTMLIFrameElement>(null);
@@ -105,38 +110,54 @@ export default function Dashboard() {
   }, []);
 
   const fetchEmails = useCallback(async (pageToken?: string, query?: string) => {
+    const cacheKey = `${currentFolder}:${query || ''}`;
+    if (!pageToken && emailCache[cacheKey]) {
+      setEmails(emailCache[cacheKey].emails);
+      setNextPageToken(emailCache[cacheKey].nextPageToken);
+      setHasMore(!!emailCache[cacheKey].nextPageToken);
+      setLoading(false);
+      setSearchLoading(false);
+      setLoadingMore(false);
+      return;
+    }
     try {
       if (pageToken) {
         setLoadingMore(true);
       } else {
         setLoading(true);
       }
-      
       const params = new URLSearchParams();
       if (pageToken) params.append('pageToken', pageToken);
       if (query) params.append('q', query);
       params.append('folder', currentFolder);
-
       const response = await api.get<EmailsResponse>(`/api/emails?${params.toString()}`);
       const { messages, nextPageToken } = response.data;
-      
       if (pageToken) {
-        // Filter out any duplicate emails before appending
         setEmails(prev => {
           const uniqueMessages = messages.filter(
             newEmail => !prev.some(existingEmail => existingEmail.id === newEmail.id)
           );
-          return [...prev, ...uniqueMessages];
+          const updated = [...prev, ...uniqueMessages];
+          emailCache[cacheKey] = { emails: updated, nextPageToken };
+          return updated;
         });
       } else {
         setEmails(messages || []);
+        emailCache[cacheKey] = { emails: messages || [], nextPageToken };
       }
-      
       setNextPageToken(nextPageToken);
       setHasMore(!!nextPageToken);
+      // Prefetch next page in background
+      if (nextPageToken) {
+        api.get<EmailsResponse>(`/api/emails?${params.toString()}&pageToken=${nextPageToken}`)
+          .then(res => {
+            const { messages: nextMessages, nextPageToken: nextToken } = res.data;
+            emailCache[`${cacheKey}:page:${nextPageToken}`] = { emails: nextMessages, nextPageToken: nextToken };
+          });
+      }
     } catch (error) {
       console.error('Error fetching emails:', error);
-      setEmails([]); // Set empty array on error
+      setEmails([]);
     } finally {
       setLoading(false);
       setSearchLoading(false);
@@ -156,13 +177,13 @@ export default function Dashboard() {
   }, [loading, searchLoading, hasMore, nextPageToken, fetchEmails]);
 
   const search = useCallback((query: string) => {
-    if (query.trim()) {
-      setSearchLoading(true);
-      fetchEmails(undefined, query);
-    } else {
+    if (query.trim().length < 2) {
       setSearchLoading(true);
       fetchEmails(undefined);
+      return;
     }
+    setSearchLoading(true);
+    fetchEmails(undefined, query);
   }, [fetchEmails, setSearchLoading]);
 
   // Cleanup on unmount
@@ -204,10 +225,10 @@ export default function Dashboard() {
     fetchData();
   }, [router, fetchEmails, setUserInfo, setLoading]);
 
-  const handleSearch = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleSearch = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
     setSearchQuery(e.target.value);
     debouncedSearchRef(e.target.value, search);
-  };
+  }, [search, debouncedSearchRef]);
 
   const handleLogout = () => {
     localStorage.removeItem('access_token');
@@ -377,6 +398,22 @@ export default function Dashboard() {
     }
   };
 
+  const formatEmailDate = useCallback((dateStr: string) => {
+    const date = new Date(dateStr);
+    const today = new Date();
+    const yesterday = new Date(today);
+    yesterday.setDate(yesterday.getDate() - 1);
+    if (date.toDateString() === today.toDateString()) {
+      return date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+    } else if (date.toDateString() === yesterday.toDateString()) {
+      return 'Yesterday';
+    } else if (date.getFullYear() === today.getFullYear()) {
+      return date.toLocaleDateString([], { month: 'short', day: 'numeric' });
+    } else {
+      return date.toLocaleDateString([], { year: 'numeric', month: 'short', day: 'numeric' });
+    }
+  }, []);
+
   if (loading && !searchLoading && emails.length === 0) {
     return (
       <div className="min-h-screen bg-background flex flex-col h-screen overflow-hidden">
@@ -478,23 +515,6 @@ export default function Dashboard() {
       </div>
     );
   }
-
-  const formatEmailDate = (dateStr: string) => {
-    const date = new Date(dateStr);
-    const today = new Date();
-    const yesterday = new Date(today);
-    yesterday.setDate(yesterday.getDate() - 1);
-    
-    if (date.toDateString() === today.toDateString()) {
-      return date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
-    } else if (date.toDateString() === yesterday.toDateString()) {
-      return 'Yesterday';
-    } else if (date.getFullYear() === today.getFullYear()) {
-      return date.toLocaleDateString([], { month: 'short', day: 'numeric' });
-    } else {
-      return date.toLocaleDateString([], { year: 'numeric', month: 'short', day: 'numeric' });
-    }
-  };
 
   return (
     <div className="min-h-screen bg-background flex flex-col h-screen overflow-hidden">
@@ -804,15 +824,17 @@ export default function Dashboard() {
                     )}
                   </div>
                   <div className="mt-8 pt-4 border-t border-border/50">
-                    {isReplying && selectedEmail && (
-                      <ReplyComposer
-                        recipientEmail={selectedEmail.from}
-                        originalSubject={selectedEmail.subject}
-                        originalContent={selectedEmail.body.replace(/<[^>]*>/g, '')}
-                        onClose={() => setIsReplying(false)}
-                        onSend={handleReplyComplete}
-                      />
-                    )}
+                    <Suspense fallback={<></>}>
+                      {isReplying && selectedEmail && (
+                        <ReplyComposer
+                          recipientEmail={selectedEmail.from}
+                          originalSubject={selectedEmail.subject}
+                          originalContent={selectedEmail.body.replace(/<[^>]*>/g, '')}
+                          onClose={() => setIsReplying(false)}
+                          onSend={handleReplyComplete}
+                        />
+                      )}
+                    </Suspense>
                     <div className="flex space-x-2 mt-4">
                       <Button 
                         variant="outline" 
@@ -843,7 +865,9 @@ export default function Dashboard() {
         </ResizablePanelGroup>
       </div>
 
-      <ChatWith100x />
+      <Suspense fallback={<></>}>
+        <ChatWith100x />
+      </Suspense>
 
       {/* Email compose dialog */}
       <Dialog open={composing} onOpenChange={setComposing}>
@@ -931,12 +955,14 @@ export default function Dashboard() {
         </DialogContent>
       </Dialog>
 
-      <EmailSummaryDialog
-        isOpen={isSummaryDialogOpen}
-        onOpenChange={setIsSummaryDialogOpen}
-        summary={summary}
-        onEmailClick={handleEmailClick}
-      />
+      <Suspense fallback={<></>}>
+        <EmailSummaryDialog
+          isOpen={isSummaryDialogOpen}
+          onOpenChange={setIsSummaryDialogOpen}
+          summary={summary}
+          onEmailClick={handleEmailClick}
+        />
+      </Suspense>
     </div>
   );
-} 
+}
