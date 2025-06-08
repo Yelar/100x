@@ -96,7 +96,7 @@ export function EmailSummaryDialog({
                         );
                         return (
                           <Button
-                            key={emailId}
+                            key={`${category}-${emailId}`}
                             variant="outline"
                             size="sm"
                             className="flex items-center gap-2"

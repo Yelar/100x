@@ -491,6 +491,31 @@ export function ChatWith100x({ isOpen: propIsOpen, onToggle: propOnToggle }: Cha
     }
   }, [messages]);
 
+  // At the end of your messages list, add the thinking indicator
+  const renderThinkingIndicator = () => {
+    if (!isLoading && !isProcessing) return null;
+    
+    return (
+      <div className="flex items-start gap-3 p-4 animate-in slide-in-from-bottom-2">
+        <div className="flex-shrink-0 w-8 h-8 rounded-full bg-gradient-to-br from-orange-500 to-orange-600 flex items-center justify-center">
+          <Bot className="w-4 h-4 text-white" />
+        </div>
+        <div className="flex-1 space-y-2">
+          <div className="bg-muted/50 rounded-xl p-3 max-w-xs">
+            <div className="flex items-center gap-2 text-muted-foreground">
+              <span className="text-sm font-medium">100x is thinking</span>
+              <div className="flex gap-1">
+                <div className="w-1 h-1 bg-orange-500 rounded-full animate-bounce" style={{ animationDelay: '0ms' }}></div>
+                <div className="w-1 h-1 bg-orange-500 rounded-full animate-bounce" style={{ animationDelay: '150ms' }}></div>
+                <div className="w-1 h-1 bg-orange-500 rounded-full animate-bounce" style={{ animationDelay: '300ms' }}></div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    );
+  };
+
   return (
     <div className="fixed bottom-4 right-4 z-50">
       {isOpen ? (
@@ -634,6 +659,8 @@ export function ChatWith100x({ isOpen: propIsOpen, onToggle: propOnToggle }: Cha
                     </div>
                   </div>
                 )}
+                
+                {renderThinkingIndicator()}
                 
                 <div ref={messagesEndRef} />
               </div>

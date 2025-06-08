@@ -72,7 +72,7 @@ export const getGmailMessages = async (accessToken: string, options: GetEmailsOp
     maxResults,
     pageToken,
     q: query, // Gmail search query
-    labelIds: folder === 'sent' ? ['SENT'] : ['INBOX'] // Use SENT label for sent folder
+    labelIds: folder === 'sent' ? ['SENT'] : folder === 'spam' ? ['SPAM'] : ['INBOX'] // Use appropriate label for each folder
   });
 
   const messages = response.data.messages || [];
@@ -185,6 +185,7 @@ export const getGmailMessages = async (accessToken: string, options: GetEmailsOp
 
       return {
         id: msg.data.id,
+        threadId: msg.data.threadId,
         from: headers.find(h => h.name === 'From')?.value || 'Unknown',
         subject: decodeSubject(headers.find(h => h.name === 'Subject')?.value || 'No Subject'),
         date: headers.find(h => h.name === 'Date')?.value || 'Unknown',
@@ -252,4 +253,134 @@ export const getBatchEmailContent = async (accessToken: string, messageIds: stri
   );
   
   return emails;
+};
+
+/**
+ * Fetch a complete email thread with all messages
+ */
+export const getEmailThread = async (accessToken: string, threadId: string) => {
+  oauth2Client.setCredentials({ access_token: accessToken });
+  const gmail = google.gmail({ version: 'v1', auth: oauth2Client });
+
+  const thread = await gmail.users.threads.get({
+    userId: 'me',
+    id: threadId,
+    format: 'full'
+  });
+
+  const messages = thread.data.messages || [];
+  
+  // Helper function to decode base64 content
+  const decodeBase64 = (data: string) => {
+    try {
+      return Buffer.from(data, 'base64').toString('utf-8');
+    } catch (e) {
+      console.error('Error decoding base64:', e);
+      return '';
+    }
+  };
+
+  // Helper function to decode email subject
+  const decodeSubject = (subject: string) => {
+    try {
+      if (subject.startsWith('=?') && subject.includes('?B?')) {
+        const match = subject.match(/=\?([^?]+)\?B\?([^?]+)\?=/);
+        if (match) {
+          const charset = match[1].toLowerCase() as BufferEncoding;
+          const encoded = match[2];
+          return Buffer.from(encoded, 'base64').toString(charset);
+        }
+      }
+      return subject;
+    } catch (e) {
+      console.error('Error decoding subject:', e);
+      return subject;
+    }
+  };
+
+  // Helper function to process email parts recursively
+  const processParts = (parts: gmail_v1.Schema$MessagePart[]): { body: string; contentType: string } => {
+    let result = { body: '', contentType: '' };
+    
+    for (const part of parts) {
+      if (part.parts) {
+        const nestedResult = processParts(part.parts);
+        if (nestedResult.body) {
+          result = nestedResult;
+          break;
+        }
+      }
+      
+      if (part.body?.data) {
+        const content = decodeBase64(part.body.data);
+        const mimeType = part.mimeType || '';
+        
+        if (mimeType === 'text/html' && !result.body) {
+          result = { body: content, contentType: 'text/html' };
+        } else if (mimeType === 'text/plain' && !result.body) {
+          result = { body: content, contentType: 'text/plain' };
+        }
+      }
+    }
+    
+    return result;
+  };
+
+  const detailedMessages = await Promise.all(
+    messages.map(async (message) => {
+      const headers = message.payload?.headers || [];
+      const parts = message.payload?.parts || [];
+      
+      let body = '';
+      let contentType = '';
+
+      // Process the email parts
+      if (parts.length > 0) {
+        const result = processParts(parts);
+        body = result.body;
+        contentType = result.contentType;
+      } else if (message.payload?.body?.data) {
+        body = decodeBase64(message.payload.body.data);
+        contentType = message.payload.mimeType || 'text/plain';
+      }
+
+      if (!body) {
+        body = message.snippet || '';
+        contentType = 'text/plain';
+      }
+
+      // Convert plain text to HTML if needed
+      if (contentType === 'text/plain') {
+        body = body
+          .split('\n')
+          .map(line => {
+            if (!line.trim()) return '<br>';
+            const urlRegex = /(https?:\/\/[^\s]+)/g;
+            return `<p>${line.replace(urlRegex, '<a href="$1" target="_blank">$1</a>')}</p>`;
+          })
+          .join('');
+      }
+
+      return {
+        id: message.id,
+        threadId: message.threadId,
+        from: headers.find(h => h.name === 'From')?.value || 'Unknown',
+        to: headers.find(h => h.name === 'To')?.value || 'Unknown',
+        subject: decodeSubject(headers.find(h => h.name === 'Subject')?.value || 'No Subject'),
+        date: headers.find(h => h.name === 'Date')?.value || 'Unknown',
+        snippet: message.snippet || '',
+        body: body,
+        internalDate: message.internalDate || '0'
+      };
+    })
+  );
+
+  // Sort messages by internal date (chronological order)
+  detailedMessages.sort((a, b) => parseInt(a.internalDate) - parseInt(b.internalDate));
+
+  return {
+    threadId: thread.data.id,
+    messages: detailedMessages,
+    historyId: thread.data.historyId
+  };
 }; 

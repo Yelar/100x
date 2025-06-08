@@ -7,6 +7,7 @@ interface ReplyComposerProps {
   recipientEmail: string;
   originalSubject: string;
   originalContent: string;
+  originalMessageId: string;
   onClose: () => void;
   onSend: () => void;
 }
@@ -15,6 +16,7 @@ export function ReplyComposer({
   recipientEmail, 
   originalSubject, 
   originalContent,
+  originalMessageId,
   onClose, 
   onSend 
 }: ReplyComposerProps) {
@@ -56,10 +58,11 @@ export function ReplyComposer({
 
     try {
       setSending(true);
-      await api.post('/api/emails/send', {
+      await api.post('/api/emails/reply', {
         to: recipientEmail,
         subject: `Re: ${originalSubject}`,
         content: content,
+        originalMessageId: originalMessageId,
       });
       onSend();
     } catch (error) {
@@ -75,7 +78,7 @@ export function ReplyComposer({
         <div className="p-4 space-y-4">
           <div className="flex items-center justify-between">
             <div className="text-sm text-muted-foreground">
-              Reply to <span className="font-medium text-foreground">{recipientEmail}</span>
+              Reply in thread to <span className="font-medium text-foreground">{recipientEmail}</span>
             </div>
             <div className="flex items-center space-x-2">
               <Button

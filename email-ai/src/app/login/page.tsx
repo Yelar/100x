@@ -56,18 +56,18 @@ export default function Login() {
           <div className="w-8 h-8 rounded-xl bg-gradient-to-tr from-orange-500 to-orange-600 flex items-center justify-center shadow-lg shadow-orange-500/20 animate-subtle-bounce">
             <Mail className="w-5 h-5 text-white" />
           </div>
-          <span className="font-semibold text-lg bg-gradient-to-r from-orange-500 to-orange-600 text-transparent bg-clip-text">100x Email</span>
+          <span className="font-semibold text-lg bg-gradient-to-r from-orange-500 to-orange-600 text-transparent bg-clip-text animate-in fade-in slide-in-from-left duration-700 delay-200">100x Email</span>
         </div>
       </header>
 
       {/* Main Content */}
       <main className="flex-1 flex items-center justify-center p-4">
-        <Card className="w-full max-w-md space-y-8 p-8 shadow-xl border-orange-200/50 backdrop-blur-sm bg-background/50">
+        <Card className="w-full max-w-md space-y-8 p-8 shadow-xl border-orange-200/50 backdrop-blur-sm bg-background/50 animate-in fade-in slide-in-from-bottom duration-700 delay-300">
           <div className="space-y-2 text-center">
-            <h1 className="text-3xl font-bold tracking-tight">
+            <h1 className="text-3xl font-bold tracking-tight animate-in fade-in slide-in-from-bottom duration-700 delay-500">
               Welcome back
             </h1>
-            <p className="text-muted-foreground">
+            <p className="text-muted-foreground animate-in fade-in slide-in-from-bottom duration-700 delay-700">
               Sign in to your account to continue
             </p>
           </div>
@@ -75,7 +75,7 @@ export default function Login() {
           <Button
             onClick={handleGoogleLogin}
             size="lg"
-            className="w-full bg-gradient-to-r from-orange-500 to-orange-600 hover:from-orange-600 hover:to-orange-700 shadow-lg shadow-orange-500/20 hover:shadow-xl hover:shadow-orange-500/30 transition-all duration-300"
+            className="w-full bg-gradient-to-r from-orange-500 to-orange-600 hover:from-orange-600 hover:to-orange-700 shadow-lg shadow-orange-500/20 hover:shadow-xl hover:shadow-orange-500/30 transition-all duration-300 animate-in fade-in slide-in-from-bottom duration-700 delay-900 hover:scale-105"
           >
             <svg className="h-5 w-5 mr-2" viewBox="0 0 24 24">
               <path
@@ -89,7 +89,7 @@ export default function Login() {
       </main>
 
       {/* Footer */}
-      <footer className="w-full py-6 bg-background/80 backdrop-blur-lg text-center text-muted-foreground border-t">
+      <footer className="w-full py-6 bg-background/80 backdrop-blur-lg text-center text-muted-foreground border-t animate-in fade-in slide-in-from-bottom duration-700 delay-1100">
         <div className="flex items-center justify-center gap-2">
           <Mail className="w-4 h-4 text-orange-500" />
           <span className="font-medium">100x Email &copy; 2024</span>

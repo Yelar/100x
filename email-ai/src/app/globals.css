@@ -147,3 +147,85 @@
 [data-panel-group-direction="horizontal"] > [data-panel-resize-handle]:focus-visible > div {
   opacity: 1;
 }
+
+/* Email content dark theme styles */
+.email-content-wrapper {
+  line-height: 1.6;
+  font-size: 14px;
+}
+
+.email-content-wrapper * {
+  color: hsl(var(--card-foreground)) !important;
+  background-color: transparent !important;
+}
+
+.email-content-wrapper a {
+  color: hsl(var(--primary)) !important;
+  text-decoration: underline !important;
+}
+
+.email-content-wrapper table {
+  border-collapse: collapse !important;
+  width: 100% !important;
+  margin: 16px 0 !important;
+}
+
+.email-content-wrapper td, 
+.email-content-wrapper th {
+  padding: 8px !important;
+  border: 1px solid hsl(var(--border)) !important;
+}
+
+.email-content-wrapper img {
+  max-width: 100% !important;
+  height: auto !important;
+  border-radius: 4px !important;
+  margin: 8px 0 !important;
+}
+
+.email-content-wrapper blockquote {
+  border-left: 4px solid hsl(var(--primary)) !important;
+  padding-left: 16px !important;
+  margin: 16px 0 !important;
+  font-style: italic !important;
+  opacity: 0.8 !important;
+}
+
+.email-content-wrapper pre {
+  background: hsl(var(--muted)) !important;
+  padding: 12px !important;
+  border-radius: 6px !important;
+  overflow-x: auto !important;
+  font-family: ui-monospace, 'Cascadia Code', 'Source Code Pro', Menlo, consolas, 'DejaVu Sans Mono', monospace !important;
+}
+
+.email-content-wrapper code {
+  background: hsl(var(--muted)) !important;
+  padding: 2px 4px !important;
+  border-radius: 3px !important;
+  font-family: ui-monospace, 'Cascadia Code', 'Source Code Pro', Menlo, consolas, 'DejaVu Sans Mono', monospace !important;
+}
+
+.email-content-wrapper h1,
+.email-content-wrapper h2,
+.email-content-wrapper h3,
+.email-content-wrapper h4,
+.email-content-wrapper h5,
+.email-content-wrapper h6 {
+  color: hsl(var(--card-foreground)) !important;
+  margin: 16px 0 8px 0 !important;
+}
+
+.email-content-wrapper p {
+  margin: 8px 0 !important;
+}
+
+.email-content-wrapper ul,
+.email-content-wrapper ol {
+  margin: 8px 0 !important;
+  padding-left: 20px !important;
+}
+
+.email-content-wrapper li {
+  margin: 4px 0 !important;
+}

@@ -7,11 +7,10 @@ import { Button } from "@/components/ui/button";
 import { Avatar, AvatarImage, AvatarFallback } from "@/components/ui/avatar";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Input } from "@/components/ui/input";
-import { Search, Mail, LogOut, Inbox, FileText, Send, Trash, Plus, ChevronLeft, ChevronRight, MoreVertical, Star, Tag, Flag, Archive, Sparkles } from "lucide-react";
+import { Search, Mail, LogOut, Inbox, FileText, Send, Trash, Plus, ChevronLeft, ChevronRight, MoreVertical, Star, Tag, Flag, Archive, Sparkles, Shield } from "lucide-react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import api from '@/lib/axios';
 import debounce from 'lodash/debounce';
-import { sanitizeHtml, createEmailDocument } from '@/lib/sanitize-html';
 import { ResizablePanelGroup, ResizablePanel } from "@/components/ui/resizable";
 import { ResizableHandleWithReset } from "@/components/ui/resizable-handle-with-reset";
 import { useEmailPanelLayout } from "@/hooks/use-email-panel-layout";
@@ -25,11 +24,19 @@ interface UserInfo {
 
 interface Email {
   id: string;
+  threadId?: string;
   from: string;
   subject: string;
   date: string;
   snippet: string;
   body: string;
+  internalDate?: string;
+}
+
+interface EmailThread {
+  threadId: string;
+  messages: Email[];
+  historyId?: string;
 }
 
 interface EmailsResponse {
@@ -114,18 +121,22 @@ export default function Dashboard() {
       callback(query);
     }, 800)
   ).current;
-  const [iframeHeight, setIframeHeight] = useState(500);
-  const iframeRef = useRef<HTMLIFrameElement>(null);
-  const [renderError, setRenderError] = useState(false);
   const [isReplying, setIsReplying] = useState(false);
   const [isSummarizing, setIsSummarizing] = useState(false);
   const [summary, setSummary] = useState<EmailSummary | null>(null);
   const [isSummaryDialogOpen, setIsSummaryDialogOpen] = useState(false);
-  const [currentFolder, setCurrentFolder] = useState<'inbox' | 'sent'>('inbox');
+  const [currentFolder, setCurrentFolder] = useState<'inbox' | 'sent' | 'spam'>('inbox');
   const [flaggedEmails, setFlaggedEmails] = useState<Record<string, { flag: string, subject: string, snippet: string, sender: string, flaggedAt: number }>>({});
   const [selectedFlag, setSelectedFlag] = useState<string | null>(null);
+  const [threadData, setThreadData] = useState<Record<string, EmailThread>>({});
 
   const { refs, sizes, onResize } = useEmailPanelLayout();
+
+  // Initialize flagged emails from localStorage on mount
+  useEffect(() => {
+    const flaggedLS = getFlaggedEmailsLS();
+    setFlaggedEmails(flaggedLS);
+  }, []);
 
   // Update URL when folder changes
   useEffect(() => {
@@ -138,8 +149,21 @@ export default function Dashboard() {
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
     const folder = params.get('folder');
-    if (folder === 'sent' || folder === 'inbox') {
+    if (folder === 'sent' || folder === 'inbox' || folder === 'spam') {
       setCurrentFolder(folder);
+    }
+  }, []);
+
+  // Handle thread expansion/collapse
+  const handleToggleThread = useCallback(async (threadId: string) => {
+    try {
+      const response = await api.get(`/api/emails/thread/${threadId}`);
+      setThreadData(prev => ({
+        ...prev,
+        [threadId]: response.data as EmailThread
+      }));
+    } catch (error) {
+      console.error('Error fetching thread:', error);
     }
   }, []);
 
@@ -333,61 +357,6 @@ export default function Dashboard() {
     }
   };
 
-  useEffect(() => {
-    if (selectedEmail && iframeRef.current) {
-      const iframe = iframeRef.current;
-      
-      const handleIframeLoad = () => {
-        try { 
-          const doc = iframe.contentDocument || iframe.contentWindow?.document;
-          if (doc) {
-            // Initial reasonable height
-            setIframeHeight(500);
-          }
-        } catch {
-          setRenderError(true);
-        }
-      };
-      
-      iframe.addEventListener('load', handleIframeLoad);
-      return () => iframe.removeEventListener('load', handleIframeLoad);
-    }
-  }, [selectedEmail]);
-
-  useEffect(() => {
-    if (!selectedEmail) return;
-    setRenderError(false); // Reset error state when email changes
-
-    const handleIframeMessage = (event: MessageEvent) => {
-      if (event.data && event.data.type === 'resize') {
-        // Add small buffer without excessive space
-        setIframeHeight(event.data.height + 20);
-      } else if (event.data && event.data.type === 'error') {
-        setRenderError(true);
-      }
-    };
-
-    // Set a timeout to check if content loaded properly
-    const timeoutId = setTimeout(() => {
-      if (iframeRef.current) {
-        try {
-          const doc = iframeRef.current.contentDocument || iframeRef.current.contentWindow?.document;
-          if (!doc || !doc.body || doc.body.innerHTML.trim() === '') {
-            setRenderError(true);
-          }
-        } catch {
-          setRenderError(true);
-        }
-      }
-    }, 2000);
-
-    window.addEventListener('message', handleIframeMessage);
-    return () => {
-      window.removeEventListener('message', handleIframeMessage);
-      clearTimeout(timeoutId);
-    };
-  }, [selectedEmail]);
-
   const handleReplyComplete = () => {
     setIsReplying(false);
     // Optionally refresh the emails list
@@ -424,13 +393,31 @@ export default function Dashboard() {
     }
   };
 
-  const handleEmailClick = (emailId: string) => {
+  const handleEmailClick = useCallback((email: Email) => {
+    // Update URL with threadId only
+    const params = new URLSearchParams(window.location.search);
+    if (email.threadId) {
+      params.set('threadId', email.threadId);
+      // Auto-load thread data if not already loaded
+      if (email.threadId && !threadData[email.threadId]) {
+        handleToggleThread(email.threadId);
+      }
+    } else {
+      params.delete('threadId');
+    }
+    router.replace(`/dashboard?${params.toString()}`, { scroll: false });
+    
+    // Set email immediately - no loading bullshit
+    setSelectedEmail(email);
+  }, [router, threadData, handleToggleThread]);
+
+  const handleEmailClickFromSummary = useCallback((emailId: string) => {
     const email = emails.find(e => e.id === emailId);
     if (email) {
-      setSelectedEmail(email);
+      handleEmailClick(email);
       setIsSummaryDialogOpen(false);
     }
-  };
+  }, [emails, handleEmailClick]);
 
   const formatEmailDate = useCallback((dateStr: string) => {
     const date = new Date(dateStr);
@@ -482,6 +469,25 @@ export default function Dashboard() {
       })
       .catch(() => setFlaggedEmails(getFlaggedEmailsLS()));
   }, [emails]);
+
+  // Handle URL-based email/thread navigation
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const urlThreadId = params.get('threadId');
+
+    if (urlThreadId && !threadData[urlThreadId]) {
+      // Auto-expand thread if threadId in URL
+      handleToggleThread(urlThreadId);
+    }
+
+    if (urlThreadId && emails.length > 0) {
+      // Find and select the main email from the thread
+      const targetEmail = emails.find(email => email.threadId === urlThreadId);
+      if (targetEmail) {
+        handleEmailClick(targetEmail);
+      }
+    }
+  }, [emails, threadData, handleToggleThread, handleEmailClick]);
 
   if (loading && !searchLoading && emails.length === 0) {
     return (
@@ -641,6 +647,11 @@ export default function Dashboard() {
                   setCurrentFolder('inbox');
                   setSelectedEmail(null); // Clear selected email when switching folders
                   setSelectedFlag(null); // Clear flag filter when switching to inbox
+                  // Clear email/thread URL params when switching folders
+                  const params = new URLSearchParams(window.location.search);
+                  params.delete('threadId');
+                  params.set('folder', 'inbox');
+                  router.replace(`/dashboard?${params.toString()}`, { scroll: false });
                   fetchEmails(undefined, searchQuery);
                 }}
               >
@@ -657,11 +668,35 @@ export default function Dashboard() {
                 onClick={() => {
                   setCurrentFolder('sent');
                   setSelectedEmail(null); // Clear selected email when switching folders
+                  setSelectedFlag(null); // Clear flag filter when switching to sent
+                  // Clear email/thread URL params when switching folders
+                  const params = new URLSearchParams(window.location.search);
+                  params.delete('threadId');
+                  params.set('folder', 'sent');
+                  router.replace(`/dashboard?${params.toString()}`, { scroll: false });
                   fetchEmails(undefined, searchQuery);
                 }}
               >
                 <Send className="mr-2 h-5 w-5" />
                 Sent
+              </Button>
+              <Button 
+                variant="ghost" 
+                className={`w-full justify-start font-medium ${currentFolder === 'spam' ? 'text-orange-700 dark:text-orange-300 bg-orange-500/10' : 'text-muted-foreground hover:text-orange-600 hover:bg-orange-500/10'}`}
+                onClick={() => {
+                  setCurrentFolder('spam');
+                  setSelectedEmail(null); // Clear selected email when switching folders
+                  setSelectedFlag(null); // Clear flag filter when switching to spam
+                  // Clear email/thread URL params when switching folders
+                  const params = new URLSearchParams(window.location.search);
+                  params.delete('threadId');
+                  params.set('folder', 'spam');
+                  router.replace(`/dashboard?${params.toString()}`, { scroll: false });
+                  fetchEmails(undefined, searchQuery);
+                }}
+              >
+                <Shield className="mr-2 h-5 w-5" />
+                Spam
               </Button>
               <Button variant="ghost" className="w-full justify-start font-medium text-muted-foreground hover:text-orange-600 hover:bg-orange-500/10">
                 <FileText className="mr-2 h-5 w-5" />
@@ -751,47 +786,51 @@ export default function Dashboard() {
                   return flag === selectedFlag;
                 })
                 .map((email, index) => (
-                  <div
-                    key={`${currentFolder}-${email.id}`}
-                    ref={index === emails.length - 1 ? lastEmailElementRef : undefined}
-                    onClick={() => setSelectedEmail(email)}
-                    className={`relative flex items-center px-4 py-3 cursor-pointer border-b border-border/50 hover:bg-orange-500/5 ${selectedEmail?.id === email.id ? 'bg-orange-500/10' : ''}`}
-                    style={{ minHeight: '64px' }}
-                  >
-                    {/* Avatar */}
-                    <div className="flex-shrink-0 mr-4">
-                      <Avatar className="h-9 w-9">
-                        <AvatarImage src={undefined} alt={email.from} />
-                        <AvatarFallback className="bg-muted text-foreground font-bold">
-                          {email.from.trim()[0]?.toUpperCase()}
-                        </AvatarFallback>
-                      </Avatar>
-                    </div>
-                    {/* Main content */}
-                    <div className="flex-1 min-w-0">
-                      <div className="flex justify-between items-baseline">
-                        <span className="font-bold text-sm truncate max-w-[180px] text-foreground">
-                          {email.from.split('<')[0] || email.from}
-                        </span>
-                        <span className="text-xs text-muted-foreground whitespace-nowrap ml-2">
-                          {formatEmailDate(email.date)}
-                        </span>
+                  <React.Fragment key={`${currentFolder}-${email.id}`}>
+                    <div
+                      key={`${currentFolder}-${email.id}`}
+                      ref={index === emails.length - 1 ? lastEmailElementRef : undefined}
+                      onClick={() => handleEmailClick(email)}
+                      className={`relative flex items-center px-4 py-3 cursor-pointer border-b border-border/50 hover:bg-orange-500/5 ${selectedEmail?.id === email.id ? 'bg-orange-500/10' : ''}`}
+                      style={{ minHeight: '64px' }}
+                    >
+                      {/* Avatar */}
+                      <div className="flex-shrink-0 mr-4">
+                        <Avatar className="h-9 w-9">
+                          <AvatarImage src={undefined} alt={email.from} />
+                          <AvatarFallback className="bg-muted text-foreground font-bold">
+                            {email.from.trim()[0]?.toUpperCase()}
+                          </AvatarFallback>
+                        </Avatar>
                       </div>
-                      <div className="text-xs text-muted-foreground truncate mt-0.5">
-                        {email.snippet}
+                      {/* Main content */}
+                      <div className="flex-1 min-w-0">
+                        <div className="flex justify-between items-baseline">
+                          <span className="font-bold text-sm truncate max-w-[180px] text-foreground">
+                            {email.from.split('<')[0] || email.from}
+                          </span>
+                          <div className="flex items-center gap-2">
+                            <span className="text-xs text-muted-foreground whitespace-nowrap ml-2">
+                              {formatEmailDate(email.date)}
+                            </span>
+                          </div>
+                        </div>
+                        <div className="text-xs text-muted-foreground truncate mt-0.5">
+                          {email.snippet}
+                        </div>
                       </div>
+                      {/* Flag badge in right-bottom corner */}
+                      {flaggedEmails[email.id]?.flag && (
+                        <span
+                          className={`absolute right-4 bottom-2 inline-flex items-center px-2 py-0.5 rounded-full text-xs font-semibold ${FLAG_COLORS[flaggedEmails[email.id].flag]} text-white shadow`}
+                          title={FLAG_LABELS[flaggedEmails[email.id].flag]}
+                          style={{ minWidth: '2.5rem', justifyContent: 'center', textTransform: 'lowercase', pointerEvents: 'none' }}
+                        >
+                          {flaggedEmails[email.id].flag}
+                        </span>
+                      )}
                     </div>
-                    {/* Flag badge in right-bottom corner */}
-                    {flaggedEmails[email.id]?.flag && (
-                      <span
-                        className={`absolute right-4 bottom-2 inline-flex items-center px-2 py-0.5 rounded-full text-xs font-semibold ${FLAG_COLORS[flaggedEmails[email.id].flag]} text-white shadow`}
-                        title={FLAG_LABELS[flaggedEmails[email.id].flag]}
-                        style={{ minWidth: '2.5rem', justifyContent: 'center', textTransform: 'lowercase', pointerEvents: 'none' }}
-                      >
-                        {flaggedEmails[email.id].flag}
-                      </span>
-                    )}
-                  </div>
+                  </React.Fragment>
                 ))}
               {(loading || searchLoading) && !loadingMore && (
                 <div className="p-4 space-y-4">
@@ -881,56 +920,86 @@ export default function Dashboard() {
                     </div>
                   </div>
                   <div className="prose prose-sm dark:prose-invert max-w-none">
-                    {renderError ? (
-                      <div className="p-4 border border-muted rounded-md">
-                        <div className="flex items-center mb-4">
-                          <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 text-amber-500 mr-2" viewBox="0 0 20 20" fill="currentColor">
-                            <path fillRule="evenodd" d="M8.257 3.099c.765-1.36 2.722-1.36 3.486 0l5.58 9.92c.75 1.334-.213 2.98-1.742 2.98H4.42c-1.53 0-2.493-1.646-1.743-2.98l5.58-9.92zM11 13a1 1 0 11-2 0 1 1 0 012 0zm-1-8a1 1 0 00-1 1v3a1 1 0 002 0V6a1 1 0 00-1-1z" clipRule="evenodd" />
-                          </svg>
-                          <span className="font-medium text-foreground">This email contains complex formatting that couldn&apos;t be displayed properly.</span>
-                        </div>
-                        
-                        {/* Simple text view */}
-                        <div className="mb-4 p-4 bg-card rounded-md">
-                          <h3 className="text-lg font-medium mb-2 text-foreground">Plain Text Version:</h3>
-                          <div className="whitespace-pre-wrap text-sm text-foreground">
-                            {selectedEmail.body
-                              .replace(/<style[\s\S]*?<\/style>/gi, '') // Remove style tags
-                              .replace(/<script[\s\S]*?<\/script>/gi, '') // Remove script tags
-                              .replace(/<[^>]*>/g, '') // Remove HTML tags
-                              .replace(/&nbsp;/g, ' ') // Replace non-breaking spaces
-                              .replace(/\s+/g, ' ') // Collapse whitespace
-                              .trim()}
-                          </div>
-                        </div>
-                        
-                        {/* Toggle for HTML source */}
-                        <details className="mt-4">
-                          <summary className="cursor-pointer text-sm font-medium text-muted-foreground hover:text-foreground">
-                            View HTML source
-                          </summary>
-                          <div className="mt-2 bg-muted/30 p-4 rounded overflow-auto max-h-[300px]">
-                            <pre className="text-xs whitespace-pre-wrap text-foreground">{selectedEmail.body}</pre>
-                          </div>
-                        </details>
-                      </div>
-                    ) : (
-                      <div className="relative w-full">
-                        <iframe 
-                          ref={iframeRef}
-                          srcDoc={createEmailDocument(sanitizeHtml(selectedEmail.body))}
-                          className="w-full border-none"
-                          style={{ 
-                            height: `${iframeHeight}px`,
-                            minHeight: "300px",
-                          }}
-                          sandbox="allow-same-origin allow-popups allow-scripts"
-                          title="Email content"
-                          onError={() => setRenderError(true)}
+                    <div className="relative w-full">
+                      <div 
+                        className="email-content-wrapper animate-in fade-in duration-300"
+                        style={{
+                          minHeight: "300px",
+                          padding: '16px',
+                          borderRadius: '8px',
+                          backgroundColor: 'hsl(var(--card))',
+                          color: 'hsl(var(--card-foreground))'
+                        }}
+                      >
+                        <div 
+                          dangerouslySetInnerHTML={{ 
+                            __html: selectedEmail.body
+                              .replace(/<script[\s\S]*?<\/script>/gi, '') // Remove scripts for security
+                              .replace(/<style[\s\S]*?<\/style>/gi, '') // Remove original styles
+                          }} 
                         />
                       </div>
-                    )}
+                    </div>
                   </div>
+                  
+                  {/* Thread conversation */}
+                  {selectedEmail.threadId && threadData[selectedEmail.threadId] && threadData[selectedEmail.threadId].messages.length > 1 && (
+                    <div className="mt-8 border-t border-border/50 pt-6">
+                      <h3 className="text-lg font-semibold mb-4 text-foreground">Conversation ({threadData[selectedEmail.threadId].messages.length} messages)</h3>
+                      <div className="space-y-4">
+                        {threadData[selectedEmail.threadId].messages
+                          .sort((a, b) => {
+                            const aTime = a.internalDate ? parseInt(a.internalDate) : new Date(a.date).getTime();
+                            const bTime = b.internalDate ? parseInt(b.internalDate) : new Date(b.date).getTime();
+                            return aTime - bTime;
+                          })
+                          .map((threadMsg) => (
+                            <div
+                              key={threadMsg.id}
+                              className={`border border-border/50 rounded-lg overflow-hidden ${
+                                threadMsg.id === selectedEmail.id ? 'ring-2 ring-orange-500/50 bg-orange-50/50 dark:bg-orange-950/20' : 'bg-card/50'
+                              }`}
+                            >
+                              <div className="p-3 border-b border-border/50 bg-muted/20">
+                                <div className="flex items-center justify-between">
+                                  <div className="flex items-center gap-3">
+                                    <Avatar className="h-7 w-7">
+                                      <AvatarFallback className="bg-primary/10 text-primary text-xs">
+                                        {threadMsg.from.charAt(0).toUpperCase()}
+                                      </AvatarFallback>
+                                    </Avatar>
+                                    <div>
+                                      <div className="font-medium text-sm text-foreground">
+                                        {threadMsg.from.split('<')[0] || threadMsg.from}
+                                      </div>
+                                      <div className="text-xs text-muted-foreground">
+                                        {new Date(threadMsg.date).toLocaleString()}
+                                      </div>
+                                    </div>
+                                  </div>
+                                  {threadMsg.id === selectedEmail.id && (
+                                    <span className="text-xs px-2 py-1 bg-orange-500 text-white rounded-full">Current</span>
+                                  )}
+                                </div>
+                              </div>
+                              {threadMsg.id !== selectedEmail.id && (
+                                <div className="p-3">
+                                  <div 
+                                    className="prose prose-sm dark:prose-invert max-w-none text-sm"
+                                    dangerouslySetInnerHTML={{ 
+                                      __html: threadMsg.body
+                                        .replace(/<script[\s\S]*?<\/script>/gi, '')
+                                        .replace(/<style[\s\S]*?<\/style>/gi, '')
+                                    }} 
+                                  />
+                                </div>
+                              )}
+                            </div>
+                          ))}
+                      </div>
+                    </div>
+                  )}
+                  
                   <div className="mt-8 pt-4 border-t border-border/50">
                     <Suspense fallback={<></>}>
                       {isReplying && selectedEmail && (
@@ -938,6 +1007,7 @@ export default function Dashboard() {
                           recipientEmail={selectedEmail.from}
                           originalSubject={selectedEmail.subject}
                           originalContent={selectedEmail.body.replace(/<[^>]*>/g, '')}
+                          originalMessageId={selectedEmail.id}
                           onClose={() => setIsReplying(false)}
                           onSend={handleReplyComplete}
                         />
@@ -1068,7 +1138,7 @@ export default function Dashboard() {
           isOpen={isSummaryDialogOpen}
           onOpenChange={setIsSummaryDialogOpen}
           summary={summary}
-          onEmailClick={handleEmailClick}
+          onEmailClick={handleEmailClickFromSummary}
         />
       </Suspense>
     </div>

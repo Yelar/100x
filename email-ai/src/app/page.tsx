@@ -149,7 +149,7 @@ export default function Home() {
         {/* Main Content */}
         <main className="flex-1 flex flex-col items-center w-full px-4 sm:px-6 lg:px-8 pt-24">
           {/* Hero Section */}
-          <section className="flex flex-col items-center mt-12 mb-16 text-center max-w-3xl mx-auto relative">
+          <section className="flex flex-col items-center mt-12 mb-16 text-center max-w-3xl mx-auto relative animate-in fade-in slide-in-from-bottom duration-1000 delay-200">
             <RevealText
               text="Control your email 100X more effective"
               className="text-5xl sm:text-6xl lg:text-7xl font-bold tracking-tight mb-6"
@@ -159,7 +159,7 @@ export default function Home() {
               className="text-xl text-muted-foreground max-w-2xl mx-auto mb-8"
             />
             <form
-              className="flex flex-col sm:flex-row gap-4 justify-center items-center w-full max-w-lg mx-auto"
+              className="flex flex-col sm:flex-row gap-4 justify-center items-center w-full max-w-lg mx-auto animate-in fade-in slide-in-from-bottom duration-700 delay-800"
               onSubmit={async (e) => {
                 e.preventDefault();
                 setWaitlistStatus('idle');
@@ -188,26 +188,36 @@ export default function Home() {
                 value={waitlistEmail}
                 onChange={e => setWaitlistEmail(e.target.value)}
                 placeholder="Enter your email"
-                className="rounded-lg px-4 py-3 w-full sm:w-72 bg-background border border-orange-300 focus:border-orange-500 outline-none text-lg text-foreground"
+                className="rounded-lg px-4 py-3 w-full sm:w-72 bg-background border border-orange-300 focus:border-orange-500 outline-none text-lg text-foreground transition-all duration-300 hover:border-orange-400 focus:shadow-lg focus:shadow-orange-500/20"
                 disabled={waitlistStatus === 'success'}
               />
               <Button
                 type="submit"
                 size="lg"
-                className="bg-gradient-to-r from-orange-500 to-orange-600 hover:from-orange-600 hover:to-orange-700 shadow-lg shadow-orange-500/20 hover:shadow-xl hover:shadow-orange-500/30 transition-all duration-300 text-white px-8 py-3 text-lg font-semibold"
+                className="bg-gradient-to-r from-orange-500 to-orange-600 hover:from-orange-600 hover:to-orange-700 shadow-lg shadow-orange-500/20 hover:shadow-xl hover:shadow-orange-500/30 transition-all duration-300 text-white px-8 py-3 text-lg font-semibold hover:scale-105 active:scale-95"
                 disabled={waitlistStatus === 'success'}
               >
                 Join Waitlist
               </Button>
             </form>
-            {waitlistCount !== null && (
-              <div className="mt-2 text-orange-300 text-sm font-medium">
-                Already {waitlistCount} {waitlistCount === 1 ? 'person' : 'people'} on the waitlist!
+            {waitlistMsg && (
+              <div className="animate-in fade-in slide-in-from-bottom duration-500">
+                <p className={`mt-4 text-lg font-medium ${
+                  waitlistStatus === 'success' ? 'text-green-600' :
+                  waitlistStatus === 'duplicate' ? 'text-yellow-600' :
+                  'text-red-600'
+                }`}>
+                  {waitlistMsg}
+                </p>
               </div>
             )}
-            <div className="mt-4 text-orange-400 text-base font-medium">
-              {waitlistMsg}
-            </div> 
+            {waitlistCount !== null && (
+              <div className="animate-in fade-in slide-in-from-bottom duration-700 delay-1000">
+                <p className="mt-4 text-sm text-muted-foreground">
+                  {waitlistCount} people have joined the waitlist
+                </p>
+              </div>
+            )}
           </section>
 
           {/* App Preview */}
