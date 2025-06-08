@@ -2,7 +2,7 @@
 
 import * as React from 'react';
 import { useEffect, useState, useRef, useCallback, Suspense, lazy } from 'react';
-import { useRouter } from 'next/navigation';
+import { useRouter, useSearchParams } from 'next/navigation';
 import { Button } from "@/components/ui/button";
 import { Avatar, AvatarImage, AvatarFallback } from "@/components/ui/avatar";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -98,6 +98,7 @@ function setFlaggedEmailsLS(flags: Record<string, { flag: string, subject: strin
 
 export default function Dashboard() {
   const router = useRouter();
+  const searchParams = useSearchParams();
   const [userInfo, setUserInfo] = useState<UserInfo | null>(null);
   const [emails, setEmails] = useState<Email[]>([]);
   const [loading, setLoading] = useState(true);
@@ -129,6 +130,7 @@ export default function Dashboard() {
   const [flaggedEmails, setFlaggedEmails] = useState<Record<string, { flag: string, subject: string, snippet: string, sender: string, flaggedAt: number }>>({});
   const [selectedFlag, setSelectedFlag] = useState<string | null>(null);
   const [threadData, setThreadData] = useState<Record<string, EmailThread>>({});
+  const loadingThreadIds = useRef<Set<string>>(new Set());
 
   const { refs, sizes, onResize } = useEmailPanelLayout();
 
@@ -165,6 +167,43 @@ export default function Dashboard() {
     } catch (error) {
       console.error('Error fetching thread:', error);
     }
+  }, []);
+
+  // Fetch a specific email by threadId when it's not in the current list
+  const fetchEmailByThreadId = useCallback(async (threadId: string) => {
+    // Prevent redundant API calls
+    if (loadingThreadIds.current.has(threadId)) {
+      console.log('Already loading threadId:', threadId);
+      return null;
+    }
+    
+    loadingThreadIds.current.add(threadId);
+    try {
+      console.log('Fetching email by threadId:', threadId);
+      const response = await api.get(`/api/emails/thread/${threadId}`);
+      const threadData = response.data as EmailThread & { mainEmail?: Email };
+      
+      if (threadData.mainEmail) {
+        console.log('Found main email for threadId:', threadData.mainEmail.subject);
+        // Add to thread data
+        setThreadData(prev => ({
+          ...prev,
+          [threadId]: {
+            threadId: threadData.threadId,
+            messages: threadData.messages,
+            historyId: threadData.historyId
+          }
+        }));
+        // Set as selected email
+        setSelectedEmail(threadData.mainEmail);
+        return threadData.mainEmail;
+      }
+    } catch (error) {
+      console.error('Error fetching email by threadId:', error);
+    } finally {
+      loadingThreadIds.current.delete(threadId);
+    }
+    return null;
   }, []);
 
   const fetchEmails = useCallback(async (pageToken?: string, query?: string) => {
@@ -274,6 +313,13 @@ export default function Dashboard() {
         setUserInfo(JSON.parse(storedUserInfo));
 
         await fetchEmails(undefined, '');
+        
+        // After emails are loaded, check if there's a threadId in URL that needs loading
+        const urlThreadId = searchParams.get('threadId');
+        if (urlThreadId) {
+          console.log('Page loaded with threadId in URL:', urlThreadId);
+          // The URL navigation effect will handle this, but we may need to fetch it if not in list
+        }
       } catch (error) {
         console.error('Error fetching data:', error);
         setLoading(false);
@@ -281,7 +327,7 @@ export default function Dashboard() {
     };
 
     fetchData();
-  }, [router, fetchEmails, setUserInfo, setLoading]);
+  }, [router, fetchEmails, setUserInfo, setLoading, searchParams]);
 
   const handleSearch = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
     setSearchQuery(e.target.value);
@@ -411,6 +457,24 @@ export default function Dashboard() {
     setSelectedEmail(email);
   }, [router, threadData, handleToggleThread]);
 
+  const handleEmailClickById = useCallback((emailId: string) => {
+    console.log('Opening email from chat:', emailId);
+     
+     // Update URL and let the URL navigation effect handle the rest
+     const params = new URLSearchParams(window.location.search);
+     params.set('threadId', emailId); // Treat emailId as threadId since chat passes threadId
+     const newUrl = `/dashboard?${params.toString()}`;
+     console.log('Calling router.push with:', newUrl);
+     console.log('Current URL before push:', window.location.href);
+     router.push(newUrl);
+     
+     // Check if URL actually changed after a short delay
+     setTimeout(() => {
+       console.log('URL after push:', window.location.href);
+       console.log('SearchParams after push:', searchParams.get('threadId'));
+     }, 100);
+   }, [router, searchParams]);
+
   const handleEmailClickFromSummary = useCallback((emailId: string) => {
     const email = emails.find(e => e.id === emailId);
     if (email) {
@@ -472,22 +536,49 @@ export default function Dashboard() {
 
   // Handle URL-based email/thread navigation
   useEffect(() => {
-    const params = new URLSearchParams(window.location.search);
-    const urlThreadId = params.get('threadId');
+    const urlThreadId = searchParams.get('threadId');
+    console.log('URL navigation effect triggered, threadId:', urlThreadId);
+    console.log('Current selectedEmail threadId:', selectedEmail?.threadId);
+    console.log('ThreadData has this threadId:', !!threadData[urlThreadId || '']);
+    console.log('Currently loading:', loadingThreadIds.current.has(urlThreadId || ''));
 
-    if (urlThreadId && !threadData[urlThreadId]) {
-      // Auto-expand thread if threadId in URL
-      handleToggleThread(urlThreadId);
-    }
-
-    if (urlThreadId && emails.length > 0) {
-      // Find and select the main email from the thread
+    if (urlThreadId) {
+      // Check if we already have this email selected
+      if (selectedEmail?.threadId === urlThreadId) {
+        console.log('Email already selected for threadId:', urlThreadId);
+        return;
+      }
+      
+      // First try to find the email in current list
       const targetEmail = emails.find(email => email.threadId === urlThreadId);
+      
       if (targetEmail) {
-        handleEmailClick(targetEmail);
+        console.log('Found target email in current list, selecting:', targetEmail.subject);
+        setSelectedEmail(targetEmail);
+        
+        // Load thread data if needed
+        if (!threadData[urlThreadId]) {
+          console.log('Loading thread data for URL threadId:', urlThreadId);
+          handleToggleThread(urlThreadId);
+        }
+      } else if (!loadingThreadIds.current.has(urlThreadId) && !threadData[urlThreadId]) {
+        // Email not in current list, fetch it directly
+        console.log('Email not found in current list, fetching by threadId:', urlThreadId);
+        fetchEmailByThreadId(urlThreadId);
+      } else if (threadData[urlThreadId] && threadData[urlThreadId].messages && threadData[urlThreadId].messages.length > 0) {
+        // We have thread data but might not have selected the email yet
+        const mainEmail = threadData[urlThreadId].messages[0];
+        console.log('Thread data exists, selecting main email:', mainEmail.subject);
+        setSelectedEmail(mainEmail);
+      } else {
+        console.log('Not fetching because:', {
+          alreadyLoading: loadingThreadIds.current.has(urlThreadId),
+          hasThreadData: !!threadData[urlThreadId],
+          threadDataKeys: Object.keys(threadData)
+        });
       }
     }
-  }, [emails, threadData, handleToggleThread, handleEmailClick]);
+  }, [emails, threadData, handleToggleThread, fetchEmailByThreadId, searchParams]);
 
   if (loading && !searchLoading && emails.length === 0) {
     return (
@@ -787,9 +878,9 @@ export default function Dashboard() {
                 })
                 .map((email, index) => (
                   <React.Fragment key={`${currentFolder}-${email.id}`}>
-                    <div
-                      key={`${currentFolder}-${email.id}`}
-                      ref={index === emails.length - 1 ? lastEmailElementRef : undefined}
+                <div
+                  key={`${currentFolder}-${email.id}`}
+                  ref={index === emails.length - 1 ? lastEmailElementRef : undefined}
                       onClick={() => handleEmailClick(email)}
                       className={`relative flex items-center px-4 py-3 cursor-pointer border-b border-border/50 hover:bg-orange-500/5 ${selectedEmail?.id === email.id ? 'bg-orange-500/10' : ''}`}
                       style={{ minHeight: '64px' }}
@@ -802,23 +893,23 @@ export default function Dashboard() {
                             {email.from.trim()[0]?.toUpperCase()}
                           </AvatarFallback>
                         </Avatar>
-                      </div>
+                  </div>
                       {/* Main content */}
-                      <div className="flex-1 min-w-0">
-                        <div className="flex justify-between items-baseline">
+                  <div className="flex-1 min-w-0">
+                    <div className="flex justify-between items-baseline">
                           <span className="font-bold text-sm truncate max-w-[180px] text-foreground">
-                            {email.from.split('<')[0] || email.from}
+                        {email.from.split('<')[0] || email.from}
                           </span>
                           <div className="flex items-center gap-2">
                             <span className="text-xs text-muted-foreground whitespace-nowrap ml-2">
-                              {formatEmailDate(email.date)}
+                        {formatEmailDate(email.date)}
                             </span>
-                          </div>
-                        </div>
+                      </div>
+                    </div>
                         <div className="text-xs text-muted-foreground truncate mt-0.5">
                           {email.snippet}
-                        </div>
-                      </div>
+                  </div>
+                </div>
                       {/* Flag badge in right-bottom corner */}
                       {flaggedEmails[email.id]?.flag && (
                         <span
@@ -831,7 +922,7 @@ export default function Dashboard() {
                       )}
                     </div>
                   </React.Fragment>
-                ))}
+              ))}
               {(loading || searchLoading) && !loadingMore && (
                 <div className="p-4 space-y-4">
                   {[...Array(6)].map((_, i) => (
@@ -938,10 +1029,10 @@ export default function Dashboard() {
                               .replace(/<style[\s\S]*?<\/style>/gi, '') // Remove original styles
                           }} 
                         />
-                      </div>
-                    </div>
-                  </div>
-                  
+                        </div>
+                          </div>
+                        </div>
+                        
                   {/* Thread conversation */}
                   {selectedEmail.threadId && threadData[selectedEmail.threadId] && threadData[selectedEmail.threadId].messages.length > 1 && (
                     <div className="mt-8 border-t border-border/50 pt-6">
@@ -971,10 +1062,10 @@ export default function Dashboard() {
                                     <div>
                                       <div className="font-medium text-sm text-foreground">
                                         {threadMsg.from.split('<')[0] || threadMsg.from}
-                                      </div>
+                          </div>
                                       <div className="text-xs text-muted-foreground">
                                         {new Date(threadMsg.date).toLocaleString()}
-                                      </div>
+                      </div>
                                     </div>
                                   </div>
                                   {threadMsg.id === selectedEmail.id && (
@@ -991,10 +1082,10 @@ export default function Dashboard() {
                                         .replace(/<script[\s\S]*?<\/script>/gi, '')
                                         .replace(/<style[\s\S]*?<\/style>/gi, '')
                                     }} 
-                                  />
-                                </div>
-                              )}
-                            </div>
+                        />
+                      </div>
+                    )}
+                  </div>
                           ))}
                       </div>
                     </div>
@@ -1002,16 +1093,16 @@ export default function Dashboard() {
                   
                   <div className="mt-8 pt-4 border-t border-border/50">
                     <Suspense fallback={<></>}>
-                      {isReplying && selectedEmail && (
-                        <ReplyComposer
-                          recipientEmail={selectedEmail.from}
-                          originalSubject={selectedEmail.subject}
-                          originalContent={selectedEmail.body.replace(/<[^>]*>/g, '')}
+                    {isReplying && selectedEmail && (
+                      <ReplyComposer
+                        recipientEmail={selectedEmail.from}
+                        originalSubject={selectedEmail.subject}
+                        originalContent={selectedEmail.body.replace(/<[^>]*>/g, '')}
                           originalMessageId={selectedEmail.id}
-                          onClose={() => setIsReplying(false)}
-                          onSend={handleReplyComplete}
-                        />
-                      )}
+                        onClose={() => setIsReplying(false)}
+                        onSend={handleReplyComplete}
+                      />
+                    )}
                     </Suspense>
                     <div className="flex space-x-2 mt-4">
                       <Button 
@@ -1044,7 +1135,7 @@ export default function Dashboard() {
       </div>
 
       <Suspense fallback={<></>}>
-        <ChatWith100x />
+        <ChatWith100x onEmailClick={handleEmailClickById} />
       </Suspense>
 
       {/* Email compose dialog */}
@@ -1134,14 +1225,17 @@ export default function Dashboard() {
       </Dialog>
 
       <Suspense fallback={<></>}>
-        <EmailSummaryDialog
-          isOpen={isSummaryDialogOpen}
-          onOpenChange={setIsSummaryDialogOpen}
-          summary={summary}
+      <EmailSummaryDialog
+        isOpen={isSummaryDialogOpen}
+        onOpenChange={setIsSummaryDialogOpen}
+        summary={summary}
           onEmailClick={handleEmailClickFromSummary}
-        />
+      />
       </Suspense>
     </div>
  )
  ;
-}
+} 
+
+
+

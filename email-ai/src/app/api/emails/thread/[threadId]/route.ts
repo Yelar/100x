@@ -11,11 +11,11 @@ interface GmailError {
 
 export async function GET(
   request: Request,
-  { params }: { params: Promise<{ threadId: string }> }
+  context: { params: Promise<{ threadId: string }> }
 ) {
   try {
-    const { threadId } = await params;
-
+    const { threadId } = await context.params;
+    
     const cookiesList = await cookies();
     const accessTokenCookie = cookiesList.get('access_token')?.value;
 
@@ -27,8 +27,17 @@ export async function GET(
     }
 
     try {
-      const thread = await getEmailThread(accessTokenCookie, threadId);
-      return NextResponse.json(thread);
+      const threadData = await getEmailThread(accessTokenCookie, threadId);
+      
+      // Also return the main email data for easy access
+      const mainEmail = threadData.messages && threadData.messages.length > 0 
+        ? threadData.messages[0] 
+        : null;
+      
+      return NextResponse.json({
+        ...threadData,
+        mainEmail
+      });
     } catch (error: unknown) {
       // Check if error is due to token expiration
       const gmailError = error as GmailError;
@@ -57,16 +66,25 @@ export async function GET(
         }
 
         // Retry the request with new token
-        const thread = await getEmailThread(newAccessToken, threadId);
-        return NextResponse.json(thread);
+        const threadData = await getEmailThread(newAccessToken, threadId);
+        
+        // Also return the main email data for easy access
+        const mainEmail = threadData.messages && threadData.messages.length > 0 
+          ? threadData.messages[0] 
+          : null;
+        
+        return NextResponse.json({
+          ...threadData,
+          mainEmail
+        });
       }
 
       throw error; // Re-throw if it's not a token expiration error
     }
   } catch (error) {
-    console.error('Error fetching email thread:', error);
+    console.error('Error fetching thread:', error);
     return NextResponse.json(
-      { error: 'Failed to fetch email thread' },
+      { error: 'Failed to fetch thread' },
       { status: 500 }
     );
   }

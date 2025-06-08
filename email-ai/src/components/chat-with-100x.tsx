@@ -10,7 +10,6 @@ import { ScrollArea } from "@/components/ui/scroll-area";
 import { Send, Bot, Mail, Info, Search, Loader2, CheckCircle2, Activity, Mic, X } from 'lucide-react';
 import { Badge } from "@/components/ui/badge";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
-import { EmailPreviewDialog } from '@/components/email-preview-dialog';
 import { EmailComposeDialog, EmailComposeDialogHandle } from '@/components/email-compose-dialog';
 
 interface ParsedAIResponse {
@@ -21,15 +20,14 @@ interface ParsedAIResponse {
 interface ChatWith100xProps {
   isOpen?: boolean;
   onToggle?: () => void;
+  onEmailClick?: (emailId: string) => void;
 }
 
-export function ChatWith100x({ isOpen: propIsOpen, onToggle: propOnToggle }: ChatWith100xProps) {
+export function ChatWith100x({ isOpen: propIsOpen, onToggle: propOnToggle, onEmailClick }: ChatWith100xProps) {
   const [isOpenInternal, setIsOpenInternal] = useState(false);
   const isOpen = propIsOpen ?? isOpenInternal;
   const onToggle = propOnToggle ?? (() => setIsOpenInternal(!isOpenInternal));
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
-  const [previewEmail, setPreviewEmail] = useState<string | null>(null);
-  const [previewDialogOpen, setPreviewDialogOpen] = useState(false);
   
   const { messages, input, handleInputChange, handleSubmit, isLoading } = useChat({
     api: '/api/chat',
@@ -178,10 +176,14 @@ export function ChatWith100x({ isOpen: propIsOpen, onToggle: propOnToggle }: Cha
   
   // Handle email reference clicks
   const handleEmailReferenceClick = (emailId: string) => {
-    console.log("Opening email in preview dialog:", emailId);
-    setPreviewEmail(emailId);
-    setPreviewDialogOpen(true);
-    return false;
+    console.log("Opening email in dashboard:", emailId);
+    console.log("onEmailClick function exists:", !!onEmailClick);
+    if (onEmailClick) {
+      console.log("Calling onEmailClick with emailId:", emailId);
+      onEmailClick(emailId);
+    } else {
+      console.warn("onEmailClick is not provided!");
+    }
   };
   
   // Format answer text with clickable email references
@@ -717,11 +719,6 @@ export function ChatWith100x({ isOpen: propIsOpen, onToggle: propOnToggle }: Cha
       )}
       
       {/* Email preview dialog */}
-      <EmailPreviewDialog 
-        isOpen={previewDialogOpen}
-        onOpenChange={setPreviewDialogOpen}
-        emailId={previewEmail}
-      />
       <EmailComposeDialog ref={composeDialogRef} />
     </div>
   );
