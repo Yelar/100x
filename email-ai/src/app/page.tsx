@@ -17,7 +17,7 @@ const mockEmail = {
   from: "sarah@company.com",
   to: "team@company.com",
   content: "Hi team,\n\nLet's sync up on the project progress tomorrow at 2 PM.\n\nBest,\nSarah",
-  date: new Date().toISOString(),
+  date: "2024-01-15T10:00:00.000Z",
 };
 
 // Wrapper component to prevent scrolling
@@ -67,6 +67,10 @@ export default function Home() {
   const [mounted, setMounted] = useState(false);
   const featuresRef = useRef<HTMLElement>(null);
   const resourcesRef = useRef<HTMLElement>(null);
+  const [waitlistEmail, setWaitlistEmail] = useState('');
+  const [waitlistStatus, setWaitlistStatus] = useState<'idle' | 'success' | 'duplicate' | 'error'>('idle');
+  const [waitlistMsg, setWaitlistMsg] = useState('');
+  const [waitlistCount, setWaitlistCount] = useState<number | null>(null);
 
   useEffect(() => {
     setMounted(true);
@@ -78,6 +82,14 @@ export default function Home() {
     
     // Force scroll to top
     window.scrollTo(0, 0);
+  }, []);
+
+  useEffect(() => {
+    fetch('/api/waitlist/count')
+      .then(res => res.json())
+      .then(data => {
+        if (typeof data.count === 'number') setWaitlistCount(data.count);
+      });
   }, []);
 
   const scrollToSection = (section: 'features' | 'resources') => {
@@ -93,7 +105,7 @@ export default function Home() {
 
   return (
     <ScrollLock>
-      <div className="flex flex-col min-h-screen bg-background text-foreground font-[family-name:var(--font-geist-sans)] relative overflow-x-hidden">
+      <div className="flex flex-col min-h-screen bg-background text-foreground font-[family-name:var(--font-geist-sans)] relative overflow-x-hidden dark">
         {/* Scroll Progress Bar */}
         <ScrollProgress />
 
@@ -146,15 +158,56 @@ export default function Home() {
               text="Your intelligent email assistant that understands your inbox and helps you stay productive"
               className="text-xl text-muted-foreground max-w-2xl mx-auto mb-8"
             />
-            <div className="flex flex-col sm:flex-row gap-4 justify-center items-center">
-              <MagneticButton className="relative inline-flex items-center justify-center px-6 py-3 overflow-hidden font-medium transition-all bg-orange-500 rounded-lg hover:bg-orange-600 group">
-                <span className="w-full h-full bg-gradient-to-br from-orange-600 absolute"></span>
-                <span className="relative text-white">Get started for free</span>
-              </MagneticButton>
-              <MagneticButton className="relative inline-flex items-center justify-center px-6 py-3 overflow-hidden font-medium transition-all bg-white/10 rounded-lg border border-orange-200/30 hover:bg-white/20 group">
-                <span className="relative">Watch demo</span>
-              </MagneticButton>
-            </div>
+            <form
+              className="flex flex-col sm:flex-row gap-4 justify-center items-center w-full max-w-lg mx-auto"
+              onSubmit={async (e) => {
+                e.preventDefault();
+                setWaitlistStatus('idle');
+                setWaitlistMsg('');
+                const res = await fetch('/api/waitlist', {
+                  method: 'POST',
+                  headers: { 'Content-Type': 'application/json' },
+                  body: JSON.stringify({ email: waitlistEmail }),
+                });
+                const data = await res.json();
+                if (data.message === 'Added to waitlist') {
+                  setWaitlistStatus('success');
+                  setWaitlistMsg('You are on the waitlist! You might become one of the first beta users, yay!');
+                } else if (data.message === 'Already on waitlist') {
+                  setWaitlistStatus('duplicate');
+                  setWaitlistMsg('You are already on the waitlist!');
+                } else {
+                  setWaitlistStatus('error');
+                  setWaitlistMsg('Something went wrong. Please try again.');
+                }
+              }}
+            >
+              <input
+                type="email"
+                required
+                value={waitlistEmail}
+                onChange={e => setWaitlistEmail(e.target.value)}
+                placeholder="Enter your email"
+                className="rounded-lg px-4 py-3 w-full sm:w-72 bg-background border border-orange-300 focus:border-orange-500 outline-none text-lg text-foreground"
+                disabled={waitlistStatus === 'success'}
+              />
+              <Button
+                type="submit"
+                size="lg"
+                className="bg-gradient-to-r from-orange-500 to-orange-600 hover:from-orange-600 hover:to-orange-700 shadow-lg shadow-orange-500/20 hover:shadow-xl hover:shadow-orange-500/30 transition-all duration-300 text-white px-8 py-3 text-lg font-semibold"
+                disabled={waitlistStatus === 'success'}
+              >
+                Join Waitlist
+              </Button>
+            </form>
+            {waitlistCount !== null && (
+              <div className="mt-2 text-orange-300 text-sm font-medium">
+                Already {waitlistCount} {waitlistCount === 1 ? 'person' : 'people'} on the waitlist!
+              </div>
+            )}
+            <div className="mt-4 text-orange-400 text-base font-medium">
+              {waitlistMsg}
+            </div> 
           </section>
 
           {/* App Preview */}
