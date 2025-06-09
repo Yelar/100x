@@ -722,6 +722,28 @@ function DashboardContent() {
     setShowSummary(false);
   }, [selectedEmail?.id]);
 
+  // Helper function to format TLDR summary
+  const formatTLDRSummary = (text: string) => {
+    return text
+      .replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>') // Bold text
+      .split('\n')
+      .map(line => {
+        if (line.trim().startsWith('* ')) {
+          return `<li>${line.trim().substring(2)}</li>`;
+        } else if (line.trim().match(/^ {2,}\+ /)) {
+          return `<li class="ml-4">${line.trim().substring(2)}</li>`;
+        } else if (line.trim() === '') {
+          return '<br>';
+        } else {
+          return line;
+        }
+      })
+      .join('<br>')
+      .replace(/(<li>.*?<\/li>(?:<br><li>.*?<\/li>)*)/g, '<ul class="list-disc list-inside space-y-1 ml-4">$1</ul>')
+      .replace(/(<li class="ml-4">.*?<\/li>(?:<br><li class="ml-4">.*?<\/li>)*)/g, '<ul class="list-disc list-inside space-y-1 ml-8">$1</ul>')
+      .replace(/<br><br>/g, '<div class="my-2"></div>');
+  };
+
   if (loading && !searchLoading && emails.length === 0) {
     return (
       <div className="min-h-screen bg-background flex flex-col h-screen overflow-hidden">
@@ -1503,14 +1525,7 @@ function DashboardContent() {
                       lineHeight: '1.6'
                     }}
                     dangerouslySetInnerHTML={{
-                      __html: emailSummary
-                        .replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>') // Bold text
-                        .replace(/^\* (.*$)/gim, '<li>$1</li>') // Convert bullet points
-                        .replace(/^ {2,}\+ (.*$)/gim, '<li class="ml-4">$1</li>') // Sub bullet points
-                        .replace(/(<li>.*<\/li>)/s, '<ul class="list-disc list-inside space-y-1 ml-4">$1</ul>') // Wrap in ul
-                        .replace(/(<li class="ml-4">.*<\/li>)/s, '<ul class="list-disc list-inside space-y-1 ml-8">$1</ul>') // Wrap sub items
-                        .replace(/\n\n/g, '<br><br>') // Double line breaks
-                        .replace(/\n/g, '<br>') // Single line breaks
+                      __html: formatTLDRSummary(emailSummary)
                     }}
                   />
                 </div>
