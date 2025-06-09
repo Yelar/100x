@@ -15,6 +15,7 @@ import { ResizablePanelGroup, ResizablePanel } from "@/components/ui/resizable";
 import { ResizableHandleWithReset } from "@/components/ui/resizable-handle-with-reset";
 import { useEmailPanelLayout } from "@/hooks/use-email-panel-layout";
 import { toast } from 'sonner';
+import { processEmailContent, sanitizeHtml } from '@/lib/sanitize-html';
 
 interface UserInfo {
   email: string;
@@ -154,6 +155,15 @@ function DashboardContent() {
   const [selectedFlag, setSelectedFlag] = useState<string | null>(null);
   const [threadData, setThreadData] = useState<Record<string, EmailThread>>({});
   const loadingThreadIds = useRef<Set<string>>(new Set());
+  const [isReplying, setIsReplying] = useState(false);
+  const [isSummarizing, setIsSummarizing] = useState(false);
+  const [summary, setSummary] = useState<EmailSummary | null>(null);
+  const [isSummaryDialogOpen, setIsSummaryDialogOpen] = useState(false);
+  const [currentFolder, setCurrentFolder] = useState<'inbox' | 'sent' | 'spam'>('inbox');
+  const [flaggedEmails, setFlaggedEmails] = useState<Record<string, { flag: string, subject: string, snippet: string, sender: string, flaggedAt: number }>>({});
+  const [emailSummary, setEmailSummary] = useState<string | null>(null);
+  const [isGeneratingSummary, setIsGeneratingSummary] = useState(false);
+  const [showSummary, setShowSummary] = useState(false);
 
   const { refs, sizes, onResize } = useEmailPanelLayout();
 
@@ -163,12 +173,6 @@ function DashboardContent() {
       callback(query);
     }, 800)
   ).current;
-  const [isReplying, setIsReplying] = useState(false);
-  const [isSummarizing, setIsSummarizing] = useState(false);
-  const [summary, setSummary] = useState<EmailSummary | null>(null);
-  const [isSummaryDialogOpen, setIsSummaryDialogOpen] = useState(false);
-  const [currentFolder, setCurrentFolder] = useState<'inbox' | 'sent' | 'spam'>('inbox');
-  const [flaggedEmails, setFlaggedEmails] = useState<Record<string, { flag: string, subject: string, snippet: string, sender: string, flaggedAt: number }>>({});
 
   const toneOptions = [
     { value: 'professional', label: '💼 Professional', emoji: '💼' },
@@ -506,6 +510,41 @@ function DashboardContent() {
     fetchEmails(undefined);
   };
 
+  // Helper function to detect if email is long enough for TLDR
+  const isEmailLong = (emailBody: string) => {
+    const textContent = emailBody.replace(/<[^>]*>/g, '').trim();
+    return textContent.length > 1000; // More than 1000 characters
+  };
+
+  // Generate TLDR summary for email
+  const handleGenerateTLDR = async (email: Email) => {
+    if (isGeneratingSummary) return;
+    
+    setIsGeneratingSummary(true);
+    try {
+      const response = await api.post('/api/emails/tldr', {
+        emailContent: email.body,
+        subject: email.subject,
+      });
+
+      const data = response.data as { summary?: string; error?: string };
+      
+      if (data.error) {
+        setEmailSummary(`Error: ${data.error}`);
+      } else {
+        setEmailSummary(data.summary || 'Unable to generate summary');
+      }
+      
+      setShowSummary(true);
+    } catch (error) {
+      console.error('Error generating TLDR:', error);
+      setEmailSummary('Failed to generate summary. Please try again.');
+      setShowSummary(true);
+    } finally {
+      setIsGeneratingSummary(false);
+    }
+  };
+
   const handleSummarize = async () => {
     if (!emails.length) return;
     
@@ -676,6 +715,12 @@ function DashboardContent() {
       }
     }
   }, [emails, threadData, handleToggleThread, fetchEmailByThreadId, searchParams]);
+
+  // Clear TLDR summary when email changes
+  useEffect(() => {
+    setEmailSummary(null);
+    setShowSummary(false);
+  }, [selectedEmail?.id]);
 
   if (loading && !searchLoading && emails.length === 0) {
     return (
@@ -1065,6 +1110,28 @@ function DashboardContent() {
                     <div className="flex items-center justify-between mb-3">
                       <h1 className="text-xl font-bold text-foreground">{selectedEmail.subject}</h1>
                       <div className="flex space-x-2">
+                        {isEmailLong(selectedEmail.body) && (
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={() => handleGenerateTLDR(selectedEmail)}
+                            disabled={isGeneratingSummary}
+                            className="gap-2"
+                            title="Generate TLDR summary"
+                          >
+                            {isGeneratingSummary ? (
+                              <>
+                                <span className="animate-spin">⟳</span>
+                                Summarizing...
+                              </>
+                            ) : (
+                              <>
+                                <Sparkles className="h-4 w-4" />
+                                TLDR
+                              </>
+                            )}
+                          </Button>
+                        )}
                         <Button variant="ghost" size="icon" className="text-muted-foreground">
                           <Archive className="h-5 w-5" />
                         </Button>
@@ -1110,26 +1177,21 @@ function DashboardContent() {
                   <div className="prose prose-sm dark:prose-invert max-w-none">
                     <div className="relative w-full">
                       <div 
-                        className="email-content-wrapper animate-in fade-in duration-300"
+                        className="email-content-container animate-in fade-in duration-300"
                         style={{
                           minHeight: "300px",
-                          padding: '16px',
-                          borderRadius: '8px',
-                          backgroundColor: 'hsl(var(--card))',
-                          color: 'hsl(var(--card-foreground))'
+                          borderRadius: '8px'
                         }}
                       >
                         <div 
                           dangerouslySetInnerHTML={{ 
-                            __html: selectedEmail.body
-                              .replace(/<script[\s\S]*?<\/script>/gi, '') // Remove scripts for security
-                              .replace(/<style[\s\S]*?<\/style>/gi, '') // Remove original styles
+                            __html: processEmailContent(sanitizeHtml(selectedEmail.body))
                           }} 
                         />
-                        </div>
-                          </div>
-                        </div>
-                        
+                      </div>
+                    </div>
+                  </div>
+                  
                   {/* Thread conversation */}
                   {selectedEmail.threadId && threadData[selectedEmail.threadId] && threadData[selectedEmail.threadId].messages.length > 1 && (
                     <div className="mt-8 border-t border-border/50 pt-6">
@@ -1420,6 +1482,52 @@ function DashboardContent() {
          onEmailClick={handleEmailClickFromSummary}
        />
       </Suspense>
+
+      {/* TLDR Summary Dialog */}
+      <Dialog open={showSummary} onOpenChange={setShowSummary}>
+        <DialogContent className="max-w-2xl">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <Sparkles className="h-5 w-5 text-orange-500" />
+              TLDR Summary
+            </DialogTitle>
+          </DialogHeader>
+          <div className="py-4">
+            {emailSummary ? (
+              <div className="prose prose-sm dark:prose-invert max-w-none">
+                <div className="bg-orange-50 dark:bg-orange-950/20 p-6 rounded-lg border border-orange-200 dark:border-orange-800">
+                  <div 
+                    className="text-foreground leading-relaxed"
+                    style={{ 
+                      whiteSpace: 'pre-wrap',
+                      lineHeight: '1.6'
+                    }}
+                    dangerouslySetInnerHTML={{
+                      __html: emailSummary
+                        .replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>') // Bold text
+                        .replace(/^\* (.*$)/gim, '<li>$1</li>') // Convert bullet points
+                        .replace(/^ {2,}\+ (.*$)/gim, '<li class="ml-4">$1</li>') // Sub bullet points
+                        .replace(/(<li>.*<\/li>)/s, '<ul class="list-disc list-inside space-y-1 ml-4">$1</ul>') // Wrap in ul
+                        .replace(/(<li class="ml-4">.*<\/li>)/s, '<ul class="list-disc list-inside space-y-1 ml-8">$1</ul>') // Wrap sub items
+                        .replace(/\n\n/g, '<br><br>') // Double line breaks
+                        .replace(/\n/g, '<br>') // Single line breaks
+                    }}
+                  />
+                </div>
+              </div>
+            ) : (
+              <div className="flex items-center justify-center py-8">
+                <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-orange-500"></div>
+              </div>
+            )}
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setShowSummary(false)}>
+              Close
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 } 

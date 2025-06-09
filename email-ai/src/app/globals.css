@@ -62,7 +62,7 @@
   --destructive: oklch(0.577 0.245 27.325);
   --border: oklch(0.922 0 0);
   --input: oklch(0.922 0 0);
-  --ring: oklch(0.708 0 0);
+  --ring: oklch(0.708 0 0)
   --chart-1: oklch(0.646 0.222 41.116);
   --chart-2: oklch(0.6 0.118 184.704);
   --chart-3: oklch(0.398 0.07 227.392);
@@ -148,84 +148,154 @@
   opacity: 1;
 }
 
-/* Email content dark theme styles */
-.email-content-wrapper {
-  line-height: 1.6;
-  font-size: 14px;
+/* Email content styling */
+.email-content {
+  @apply max-w-none;
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+  line-height: 1.5;
+  word-wrap: break-word;
 }
 
-.email-content-wrapper * {
-  color: hsl(var(--card-foreground)) !important;
-  background-color: transparent !important;
+/* Email content container - provides clean viewing context */
+.email-content-container {
+  background: transparent;
+  overflow-y: auto;
+  overflow-x: hidden;
+  position: relative;
+  width: 100%;
+  height: 100%;
 }
 
-.email-content-wrapper a {
-  color: hsl(var(--primary)) !important;
+/* Simple email styling - applies dark theme */
+.email-content.simple-email {
+  @apply text-foreground;
+}
+
+.email-content.simple-email p,
+.email-content.simple-email div,
+.email-content.simple-email span,
+.email-content.simple-email li,
+.email-content.simple-email td,
+.email-content.simple-email th {
+  @apply max-w-full;
+  word-wrap: break-word;
+}
+
+.email-content.simple-email img {
+  @apply max-w-full h-auto;
+}
+
+.email-content.simple-email table {
+  @apply max-w-full border-collapse;
+}
+
+.email-content.simple-email a {
+  @apply text-blue-600 underline font-medium;
+  @apply dark:text-blue-400;
+  text-decoration-thickness: 1px;
+}
+
+.email-content.simple-email a:hover {
+  @apply text-blue-800 dark:text-blue-300;
+}
+
+.email-content.simple-email .gmail_quote,
+.email-content.simple-email .gmail_attr {
+  @apply mt-4 pl-4 border-l-4 border-gray-300 dark:border-gray-600;
+}
+
+/* Complex email styling - preserves original beauty completely */
+.email-content.complex-email-beautiful {
+  /* Minimal container styling - let the email's original design shine */
+  background: transparent;
+  border-radius: 8px;
+  overflow: visible;
+  position: relative;
+  width: 100%;
+  min-height: 200px;
+}
+
+/* Ensure the email content area has a proper viewing context */
+.email-content.complex-email-beautiful > * {
+  /* Preserve all original styling completely */
+  color: inherit;
+  background: inherit;
+  font-family: inherit;
+  font-size: inherit;
+  line-height: inherit;
+}
+
+/* Smart readability fixes - only override when text would be unreadable */
+.email-content.complex-email-beautiful {
+  /* Ensure there's always some contrast */
+  text-shadow: 0 0 1px rgba(0,0,0,0.1);
+}
+
+/* Fix invisible white text on white/light backgrounds */
+.email-content.complex-email-beautiful [style*="color: #fff"],
+.email-content.complex-email-beautiful [style*="color: white"],
+.email-content.complex-email-beautiful [style*="color: #ffffff"],
+.email-content.complex-email-beautiful [style*="color: rgb(255, 255, 255)"],
+.email-content.complex-email-beautiful font[color="white"],
+.email-content.complex-email-beautiful font[color="#fff"],
+.email-content.complex-email-beautiful font[color="#ffffff"] {
+  color: #333 !important;
+  text-shadow: none;
+}
+
+/* Fix very light gray text that might be hard to read */
+.email-content.complex-email-beautiful [style*="color: #f"],
+.email-content.complex-email-beautiful [style*="color: rgb(240"],
+.email-content.complex-email-beautiful [style*="color: rgb(250"],
+.email-content.complex-email-beautiful [style*="color: rgb(245"] {
+  color: #666 !important;
+}
+
+/* Ensure links are always visible and clickable */
+.email-content.complex-email-beautiful a {
+  color: #0066cc !important;
   text-decoration: underline !important;
+  text-shadow: none !important;
 }
 
-.email-content-wrapper table {
-  border-collapse: collapse !important;
-  width: 100% !important;
-  margin: 16px 0 !important;
+.email-content.complex-email-beautiful a:hover {
+  color: #004499 !important;
 }
 
-.email-content-wrapper td, 
-.email-content-wrapper th {
-  padding: 8px !important;
-  border: 1px solid hsl(var(--border)) !important;
-}
-
-.email-content-wrapper img {
+/* Only ensure responsiveness without changing design */
+.email-content.complex-email-beautiful img {
   max-width: 100% !important;
   height: auto !important;
-  border-radius: 4px !important;
-  margin: 8px 0 !important;
 }
 
-.email-content-wrapper blockquote {
-  border-left: 4px solid hsl(var(--primary)) !important;
-  padding-left: 16px !important;
-  margin: 16px 0 !important;
-  font-style: italic !important;
-  opacity: 0.8 !important;
+.email-content.complex-email-beautiful table {
+  max-width: 100% !important;
 }
 
-.email-content-wrapper pre {
-  background: hsl(var(--muted)) !important;
-  padding: 12px !important;
-  border-radius: 6px !important;
-  overflow-x: auto !important;
-  font-family: ui-monospace, 'Cascadia Code', 'Source Code Pro', Menlo, consolas, 'DejaVu Sans Mono', monospace !important;
+/* Responsive tables for all email types */
+.email-content table {
+  @apply max-w-full;
 }
 
-.email-content-wrapper code {
-  background: hsl(var(--muted)) !important;
-  padding: 2px 4px !important;
-  border-radius: 3px !important;
-  font-family: ui-monospace, 'Cascadia Code', 'Source Code Pro', Menlo, consolas, 'DejaVu Sans Mono', monospace !important;
+.email-content td,
+.email-content th {
+  @apply max-w-full;
+  word-wrap: break-word;
 }
 
-.email-content-wrapper h1,
-.email-content-wrapper h2,
-.email-content-wrapper h3,
-.email-content-wrapper h4,
-.email-content-wrapper h5,
-.email-content-wrapper h6 {
-  color: hsl(var(--card-foreground)) !important;
-  margin: 16px 0 8px 0 !important;
+/* Image error handling */
+.email-content img {
+  @apply max-w-full h-auto;
 }
 
-.email-content-wrapper p {
-  margin: 8px 0 !important;
+.email-content .image-placeholder {
+  @apply p-4 text-center border border-dashed border-gray-400 opacity-70;
 }
 
-.email-content-wrapper ul,
-.email-content-wrapper ol {
-  margin: 8px 0 !important;
-  padding-left: 20px !important;
+.email-content .image-placeholder::before {
+  content: "🖼️ Image failed to load";
 }
 
-.email-content-wrapper li {
-  margin: 4px 0 !important;
+/* General responsive styling for all emails */
+.email-content table {
 }
