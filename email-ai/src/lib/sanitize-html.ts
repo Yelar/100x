@@ -48,9 +48,9 @@ export function sanitizeHtml(html: string): string {
     WHOLE_DOCUMENT: false,
     FORCE_BODY: false
   };
-
+  
   try {
-    return DOMPurify.sanitize(html, purifyConfig);
+  return DOMPurify.sanitize(html, purifyConfig);
   } catch (error) {
     console.error('Error sanitizing HTML:', error);
     return html.replace(/<script[\s\S]*?<\/script>/gi, '').replace(/<[^>]*>/g, '');
@@ -125,21 +125,32 @@ export function processEmailContent(emailBody: string): string {
   // Format plain text emails
   if (isPlainText) {
     const formattedContent = emailBody
-      .split('\n')
-      .map(line => line.trim() ? `<p>${line}</p>` : '<br>')
+        .split('\n')
+        .map(line => line.trim() ? `<p>${line}</p>` : '<br>')
       .join('');
-    
+
     return `<div class="email-content simple-email">${formattedContent}</div>`;
-  }
+          }
 
   // Check if email has complex styling
   const hasComplex = hasComplexStyling(emailBody);
   
   if (hasComplex) {
-    // For complex styled emails, return raw HTML with minimal wrapper for responsiveness only
+    // For complex styled emails, wrap with readable class that ensures text is visible
     return `<div class="email-content complex-email-beautiful">${emailBody}</div>`;
   } else {
     // For simple HTML emails, apply theme-aware styling
     return `<div class="email-content simple-email">${emailBody}</div>`;
   }
+            }
+
+/**
+ * Processes email content without any sanitization - returns raw HTML exactly as received
+ * 
+ * @param emailBody - Raw email body HTML
+ * @returns Raw HTML content with minimal wrapper for responsiveness
+ */
+export function processRawEmailContent(emailBody: string): string {
+  // Return completely raw HTML with just a minimal container for responsiveness
+  return `<div class="email-content-raw">${emailBody}</div>`;
 } 

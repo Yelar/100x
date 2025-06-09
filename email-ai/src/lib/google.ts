@@ -89,7 +89,6 @@ export const getGmailMessages = async (accessToken: string, options: GetEmailsOp
       
       // Get the email body
       let body = '';
-      let contentType = '';
       
       // Helper function to decode base64 content
       const decodeBase64 = (data: string) => {
@@ -146,41 +145,29 @@ export const getGmailMessages = async (accessToken: string, options: GetEmailsOp
             } else if (mimeType === 'text/plain' && !result.body) {
               result = { body: content, contentType: 'text/plain' };
             }
+
+            // Always prefer HTML over plain text - override if HTML is found
+            if (mimeType === 'text/html') {
+              result = { body: content, contentType: 'text/html' };
+            } else if (mimeType === 'text/plain' && result.contentType !== 'text/html') {
+              result = { body: content, contentType: 'text/plain' };
+            }
           }
         }
         
         return result;
       };
 
-      // Process the email parts
+      // Process the email parts - NO FORMATTING, just raw content
       if (parts.length > 0) {
         const result = processParts(parts);
         body = result.body;
-        contentType = result.contentType;
       } else if (msg.data.payload?.body?.data) {
-        // Handle single-part messages
         body = decodeBase64(msg.data.payload.body.data);
-        contentType = msg.data.payload.mimeType || 'text/plain';
       }
 
-      // If no content was found, use the snippet
       if (!body) {
         body = msg.data.snippet || '';
-        contentType = 'text/plain';
-      }
-
-      // Convert plain text to HTML if needed
-      if (contentType === 'text/plain') {
-        body = body
-          .split('\n')
-          .map(line => {
-            // Preserve empty lines
-            if (!line.trim()) return '<br>';
-            // Convert URLs to clickable links
-            const urlRegex = /(https?:\/\/[^\s]+)/g;
-            return `<p>${line.replace(urlRegex, '<a href="$1" target="_blank">$1</a>')}</p>`;
-          })
-          .join('');
       }
 
       return {
@@ -315,9 +302,17 @@ export const getEmailThread = async (accessToken: string, threadId: string) => {
         const content = decodeBase64(part.body.data);
         const mimeType = part.mimeType || '';
         
+        // Prefer HTML over plain text
         if (mimeType === 'text/html' && !result.body) {
           result = { body: content, contentType: 'text/html' };
         } else if (mimeType === 'text/plain' && !result.body) {
+          result = { body: content, contentType: 'text/plain' };
+        }
+
+        // Always prefer HTML over plain text - override if HTML is found
+        if (mimeType === 'text/html') {
+          result = { body: content, contentType: 'text/html' };
+        } else if (mimeType === 'text/plain' && result.contentType !== 'text/html') {
           result = { body: content, contentType: 'text/plain' };
         }
       }
@@ -332,33 +327,17 @@ export const getEmailThread = async (accessToken: string, threadId: string) => {
       const parts = message.payload?.parts || [];
       
       let body = '';
-      let contentType = '';
 
-      // Process the email parts
+      // Process the email parts - NO FORMATTING, just raw content
       if (parts.length > 0) {
         const result = processParts(parts);
         body = result.body;
-        contentType = result.contentType;
       } else if (message.payload?.body?.data) {
         body = decodeBase64(message.payload.body.data);
-        contentType = message.payload.mimeType || 'text/plain';
       }
 
       if (!body) {
         body = message.snippet || '';
-        contentType = 'text/plain';
-      }
-
-      // Convert plain text to HTML if needed
-      if (contentType === 'text/plain') {
-        body = body
-          .split('\n')
-          .map(line => {
-            if (!line.trim()) return '<br>';
-            const urlRegex = /(https?:\/\/[^\s]+)/g;
-            return `<p>${line.replace(urlRegex, '<a href="$1" target="_blank">$1</a>')}</p>`;
-          })
-          .join('');
       }
 
       return {

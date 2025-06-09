@@ -166,6 +166,38 @@
   height: 100%;
 }
 
+/* Raw email content - absolutely no interference with original HTML */
+.email-content-raw {
+  /* Create complete isolation from theme */
+  all: unset;
+  display: block;
+  width: 100%;
+  max-width: 100%;
+  overflow-x: auto;
+  
+  /* Force light background context to prevent dark theme bleeding */
+  color-scheme: light;
+  background: white;
+  color: #000000;
+  padding: 16px;
+  border-radius: 8px;
+  
+  /* Reset any inherited styling completely */
+  font-family: initial;
+  font-size: initial;
+  line-height: initial;
+  text-align: initial;
+  
+  /* Create a contained rendering context */
+  contain: layout style paint;
+}
+
+/* Ensure raw content images are responsive only if they don't have explicit sizing */
+.email-content-raw img:not([width]):not([style*="width"]) {
+  max-width: 100% !important;
+  height: auto !important;
+}
+
 /* Simple email styling - applies dark theme */
 .email-content.simple-email {
   @apply text-foreground;

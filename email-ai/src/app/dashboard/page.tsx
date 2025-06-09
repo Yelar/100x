@@ -15,7 +15,6 @@ import { ResizablePanelGroup, ResizablePanel } from "@/components/ui/resizable";
 import { ResizableHandleWithReset } from "@/components/ui/resizable-handle-with-reset";
 import { useEmailPanelLayout } from "@/hooks/use-email-panel-layout";
 import { toast } from 'sonner';
-import { processEmailContent, sanitizeHtml } from '@/lib/sanitize-html';
 
 interface UserInfo {
   email: string;
@@ -1205,9 +1204,11 @@ function DashboardContent() {
                           borderRadius: '8px'
                         }}
                       >
+
                         <div 
+                          className="email-content-raw"
                           dangerouslySetInnerHTML={{ 
-                            __html: processEmailContent(sanitizeHtml(selectedEmail.body))
+                            __html: selectedEmail.body
                           }} 
                         />
                       </div>
@@ -1546,6 +1547,10 @@ function DashboardContent() {
     </div>
   );
 } 
+
+
+
+
 
 
 
