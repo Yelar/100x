@@ -145,9 +145,19 @@ function DashboardContent() {
     subject: '',
     content: ''
   });
+  const [emailChips, setEmailChips] = useState<string[]>([]);
+  const [emailInput, setEmailInput] = useState('');
   const [sending, setSending] = useState(false);
   const [generating, setGenerating] = useState<'idle' | 'subject' | 'content'>('idle');
-  const observer = useRef<IntersectionObserver | null>(null); // Fixed linter error
+  const [selectedTone, setSelectedTone] = useState('professional');
+  const [showToneDropdown, setShowToneDropdown] = useState(false);
+  const [selectedFlag, setSelectedFlag] = useState<string | null>(null);
+  const [threadData, setThreadData] = useState<Record<string, EmailThread>>({});
+  const loadingThreadIds = useRef<Set<string>>(new Set());
+
+  const { refs, sizes, onResize } = useEmailPanelLayout();
+
+  const observer = useRef<IntersectionObserver | null>(null);
   const debouncedSearchRef = useRef(
     debounce((query: string, callback: (query: string) => void) => {
       callback(query);
@@ -159,17 +169,63 @@ function DashboardContent() {
   const [isSummaryDialogOpen, setIsSummaryDialogOpen] = useState(false);
   const [currentFolder, setCurrentFolder] = useState<'inbox' | 'sent' | 'spam'>('inbox');
   const [flaggedEmails, setFlaggedEmails] = useState<Record<string, { flag: string, subject: string, snippet: string, sender: string, flaggedAt: number }>>({});
-  const [selectedFlag, setSelectedFlag] = useState<string | null>(null);
-  const [threadData, setThreadData] = useState<Record<string, EmailThread>>({});
-  const loadingThreadIds = useRef<Set<string>>(new Set());
 
-  const { refs, sizes, onResize } = useEmailPanelLayout();
+  const toneOptions = [
+    { value: 'professional', label: '💼 Professional', emoji: '💼' },
+    { value: 'casual', label: '😊 Casual', emoji: '😊' },
+    { value: 'formal', label: '🎩 Formal', emoji: '🎩' },
+    { value: 'persuasive', label: '🎯 Persuasive', emoji: '🎯' },
+    { value: 'friendly', label: '🤝 Friendly', emoji: '🤝' },
+    { value: 'urgent', label: '⚡ Urgent', emoji: '⚡' },
+    { value: 'apologetic', label: '🙏 Apologetic', emoji: '🙏' },
+    { value: 'confident', label: '💪 Confident', emoji: '💪' },
+  ];
+
+  // Email validation regex
+  const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+
+  // Handle adding email chips
+  const addEmailChip = (email: string) => {
+    const trimmedEmail = email.trim();
+    if (trimmedEmail && emailRegex.test(trimmedEmail) && !emailChips.includes(trimmedEmail)) {
+      setEmailChips(prev => [...prev, trimmedEmail]);
+    }
+  };
+
+  // Handle removing email chips
+  const removeEmailChip = (emailToRemove: string) => {
+    setEmailChips(prev => prev.filter(email => email !== emailToRemove));
+  };
+
+  // Handle input key events
+  const handleEmailInputKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
+    if ((e.key === ' ' || e.key === ',' || e.key === 'Enter') && emailInput.trim()) {
+      e.preventDefault();
+      addEmailChip(emailInput);
+      setEmailInput('');
+    } else if (e.key === 'Backspace' && !emailInput && emailChips.length > 0) {
+      // Remove last chip when backspace is pressed on empty input
+      setEmailChips(prev => prev.slice(0, -1));
+    }
+  };
 
   // Initialize flagged emails from localStorage on mount
   useEffect(() => {
     const flaggedLS = getFlaggedEmailsLS();
     setFlaggedEmails(flaggedLS);
   }, []);
+
+  // Handle click outside to close tone dropdown
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      if (showToneDropdown && !(event.target as Element)?.closest('.tone-dropdown-container')) {
+        setShowToneDropdown(false);
+      }
+    };
+
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, [showToneDropdown]);
 
   // Update URL when folder changes
   useEffect(() => {
@@ -373,17 +429,26 @@ function DashboardContent() {
   };
 
   const handleSendEmail = async () => {
-    if (!newEmail.to || !newEmail.subject || !newEmail.content) {
+    if (emailChips.length === 0 || !newEmail.subject || !newEmail.content) {
       alert('Please fill in all fields');
       return;
     }
 
     try {
       setSending(true);
-      const response = await api.post<{ success: boolean }>('/api/emails/send', newEmail);
+      const response = await api.post<{ success: boolean }>('/api/emails/send', {
+        ...newEmail,
+        to: emailChips.join(', ') // Send as comma-separated string
+      });
       if (response.data.success) {
+        const recipientCount = emailChips.length;
+        alert(`Email sent successfully to ${recipientCount} recipient${recipientCount !== 1 ? 's' : ''}!`);
         setComposing(false);
         setNewEmail({ to: '', subject: '', content: '' });
+        setEmailChips([]);
+        setEmailInput('');
+        setSelectedTone('professional');
+        setShowToneDropdown(false);
         // Optionally refresh the sent emails list
         fetchEmails(undefined);
       }
@@ -416,6 +481,7 @@ function DashboardContent() {
       const response = await api.post('/api/generate', {
         prompt,
         type,
+        tone: selectedTone,
         userName: userInfo?.name || '',
       });
 
@@ -1129,7 +1195,7 @@ function DashboardContent() {
                         recipientEmail={selectedEmail.from}
                         originalSubject={selectedEmail.subject}
                         originalContent={selectedEmail.body.replace(/<[^>]*>/g, '')}
-                          originalMessageId={selectedEmail.id}
+                        originalMessageId={selectedEmail.id}
                         onClose={() => setIsReplying(false)}
                         onSend={handleReplyComplete}
                       />
@@ -1180,13 +1246,46 @@ function DashboardContent() {
               <label htmlFor="to" className="text-right font-medium text-sm">
                 To:
               </label>
-              <Input
-                id="to"
-                value={newEmail.to}
-                onChange={(e) => setNewEmail({ ...newEmail, to: e.target.value })}
-                className="col-span-3"
-                type="email"
-              />
+              <div className="col-span-3">
+                <div className="border border-border rounded-md p-2 min-h-[42px] flex flex-wrap gap-1 items-center">
+                  {emailChips.map((email, index) => (
+                    <span
+                      key={index}
+                      className="inline-flex items-center gap-1 px-2 py-1 bg-orange-100 dark:bg-orange-900/30 text-orange-800 dark:text-orange-200 rounded-full text-xs font-medium"
+                    >
+                      {email}
+                      <button
+                        type="button"
+                        onClick={() => removeEmailChip(email)}
+                        className="ml-1 text-orange-600 dark:text-orange-400 hover:text-orange-800 dark:hover:text-orange-200 transition-colors"
+                      >
+                        ×
+                      </button>
+                    </span>
+                  ))}
+                  <Input
+                    value={emailInput}
+                    onChange={(e) => setEmailInput(e.target.value)}
+                    onKeyDown={handleEmailInputKeyDown}
+                    onBlur={() => {
+                      if (emailInput.trim()) {
+                        addEmailChip(emailInput);
+                        setEmailInput('');
+                      }
+                    }}
+                    placeholder={emailChips.length === 0 ? "Enter email addresses (space or comma to add)" : "Add another email..."}
+                    className="border-0 shadow-none focus-visible:ring-0 p-0 h-auto flex-1 min-w-[200px]"
+                  />
+                </div>
+                <div className="text-xs text-muted-foreground mt-1">
+                  Press space, comma, or enter to add emails. Backspace to remove.
+                  {emailChips.length > 0 && (
+                    <span className="ml-2 text-orange-600 font-medium">
+                      • {emailChips.length} recipient{emailChips.length !== 1 ? 's' : ''}
+                    </span>
+                  )}
+                </div>
+              </div>
             </div>
             <div className="grid grid-cols-4 items-center gap-4">
               <label htmlFor="subject" className="text-right font-medium text-sm">
@@ -1236,32 +1335,90 @@ function DashboardContent() {
                     AI Generate
                   </Button>
                 </div>
-                <textarea
-                  value={newEmail.content}
-                  onChange={(e) => setNewEmail({ ...newEmail, content: e.target.value })}
-                  className="border border-border rounded-md h-64 p-2 text-sm"
-                />
+                <div className="relative">
+                  <textarea
+                    value={newEmail.content}
+                    onChange={(e) => setNewEmail({ ...newEmail, content: e.target.value })}
+                    className="border border-border rounded-md h-64 p-2 text-sm w-full"
+                    placeholder="Write your email content here..."
+                  />
+                </div>
+                {/* Tone selector outside textbox - bottom right */}
+                <div className="flex justify-end mt-2">
+                  <div className="tone-dropdown-container">
+                    <div className="relative">
+                      <button
+                        type="button"
+                        onClick={() => setShowToneDropdown(!showToneDropdown)}
+                        className="flex items-center gap-1 px-3 py-1.5 text-xs bg-white/90 dark:bg-background/90 border border-border/50 rounded-full shadow-sm hover:shadow-md transition-all duration-200 backdrop-blur-sm"
+                        title="Select email tone"
+                      >
+                        <span className="text-sm">{toneOptions.find(t => t.value === selectedTone)?.emoji}</span>
+                        <span className="text-xs font-medium">{toneOptions.find(t => t.value === selectedTone)?.label.split(' ')[1]}</span>
+                        <span className="text-xs text-muted-foreground ml-1">▼</span>
+                      </button>
+                      {showToneDropdown && (
+                        <div className="absolute bottom-full right-0 mb-1 bg-white dark:bg-background border border-border rounded-lg shadow-lg backdrop-blur-sm z-50 min-w-[160px]">
+                          <div className="p-1">
+                            {toneOptions.map((option) => (
+                              <button
+                                key={option.value}
+                                type="button"
+                                onClick={() => {
+                                  setSelectedTone(option.value);
+                                  setShowToneDropdown(false);
+                                }}
+                                className={`w-full flex items-center gap-2 px-3 py-2 text-sm rounded-md transition-colors ${
+                                  selectedTone === option.value 
+                                    ? 'bg-orange-500/10 text-orange-600 dark:text-orange-400' 
+                                    : 'hover:bg-muted/50'
+                                }`}
+                              >
+                                <span className="text-base">{option.emoji}</span>
+                                <span className="font-medium">{option.label.split(' ')[1]}</span>
+                                {selectedTone === option.value && (
+                                  <span className="ml-auto text-orange-500">✓</span>
+                                )}
+                              </button>
+                            ))}
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                </div>
               </div>
             </div>
           </div>
           <DialogFooter>
-            <Button type="button" variant="ghost" onClick={() => setComposing(false)}>
+            <Button type="button" variant="ghost" onClick={() => {
+              setComposing(false);
+              setEmailChips([]);
+              setEmailInput('');
+              setSelectedTone('professional');
+              setShowToneDropdown(false);
+            }}>
               Discard
             </Button>
             <Button type="button" onClick={handleSendEmail} disabled={sending}>
-              {sending ? 'Sending...' : 'Send'}
+              {sending ? 'Sending...' : (() => {
+                if (emailChips.length > 1) {
+                  return `Send to ${emailChips.length} recipients`;
+                }
+                return 'Send';
+              })()}
             </Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
 
       <Suspense fallback={<></>}>
-      <EmailSummaryDialog
-        isOpen={isSummaryDialogOpen}
-        onOpenChange={setIsSummaryDialogOpen}
-        summary={summary}
-          onEmailClick={handleEmailClickFromSummary}
-      />
+       <EmailSummaryDialog
+         isOpen={isSummaryDialogOpen}
+         onOpenChange={setIsSummaryDialogOpen}
+         summary={summary}
+         onEmailClick={handleEmailClickFromSummary}
+       />
       </Suspense>
     </div>
   );

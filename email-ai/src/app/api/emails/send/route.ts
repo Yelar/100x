@@ -50,6 +50,9 @@ export async function POST(request: Request) {
       );
     }
 
+    // 'to' field can contain multiple recipients separated by commas
+    // e.g., "user1@example.com, user2@example.com"
+
     oauth2Client.setCredentials({
       access_token: accessToken,
     });

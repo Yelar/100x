@@ -5,16 +5,29 @@ const groq = new Groq({
   apiKey: process.env.GROQ_API_KEY || '',
 });
 
-async function generateEmailContent(prompt: string, userName: string) {
+async function generateEmailContent(prompt: string, userName: string, tone: string = 'professional') {
+  const toneInstructions = {
+    professional: 'Use a professional, respectful tone.',
+    casual: 'Use a casual, friendly tone.',
+    formal: 'Use a formal, official tone.',
+    persuasive: 'Use a persuasive, compelling tone.',
+    friendly: 'Use a warm, friendly tone.',
+    urgent: 'Use an urgent, action-oriented tone.',
+    apologetic: 'Use an apologetic, understanding tone.',
+    confident: 'Use a confident, assertive tone.',
+  };
+  
+  const toneInstruction = toneInstructions[tone as keyof typeof toneInstructions] || toneInstructions.professional;
+  
   const completion = await groq.chat.completions.create({
     messages: [
       {
         role: 'system',
-        content: 'You are an AI email assistant. Generate ONLY the main body of the email. Do NOT include a subject line, greeting, signature, or any explanations. Output only the main email content, ready to be pasted into the email body.',
+        content: `You are rewriting email content. Take the user's existing email content and rewrite it in the specified tone. Do NOT write a response or answer to the content. Do NOT add greetings, closings, or signatures. Simply rewrite the exact same message in the requested tone. Keep the same meaning and intent, just change the style/tone. ${toneInstruction}`,
       },
       {
         role: 'user',
-        content: `My name is ${userName}. Please consider this when generating the email body.`,
+        content: `Rewrite this email content in the specified tone:`,
       },
       {
         role: 'user',
@@ -28,12 +41,25 @@ async function generateEmailContent(prompt: string, userName: string) {
   return (completion.choices[0]?.message?.content || '').trim();
 }
 
-async function generateSubjectLine(prompt: string, userName: string) {
+async function generateSubjectLine(prompt: string, userName: string, tone: string = 'professional') {
+  const toneInstructions = {
+    professional: 'Use a professional, respectful tone.',
+    casual: 'Use a casual, friendly tone.',
+    formal: 'Use a formal, official tone.',
+    persuasive: 'Use a persuasive, compelling tone.',
+    friendly: 'Use a warm, friendly tone.',
+    urgent: 'Use an urgent, action-oriented tone.',
+    apologetic: 'Use an apologetic, understanding tone.',
+    confident: 'Use a confident, assertive tone.',
+  };
+  
+  const toneInstruction = toneInstructions[tone as keyof typeof toneInstructions] || toneInstructions.professional;
+  
   const completion = await groq.chat.completions.create({
     messages: [
       {
         role: 'system',
-        content: 'You are an AI email assistant. Return ONLY the subject line, nothing else. Do not include any explanations, preambles, or extra text. The subject line should be clear, concise, and professional.',
+        content: `Generate ONLY the email subject line, nothing else. No explanations, no quotes, no extra text. Just the subject line text. ${toneInstruction}`,
       },
       {
         role: 'user',
@@ -41,7 +67,7 @@ async function generateSubjectLine(prompt: string, userName: string) {
       },
       {
         role: 'user',
-        content: `Generate a subject line for an email about: ${prompt}`,
+        content: `Create a subject line for this email content: ${prompt}`,
       },
     ],
     model: 'gemma2-9b-it',
@@ -53,7 +79,7 @@ async function generateSubjectLine(prompt: string, userName: string) {
 
 export async function POST(req: NextRequest) {
   try {
-    const { prompt, type, userName } = await req.json();
+    const { prompt, type, userName, tone } = await req.json();
 
     if (!prompt) {
       return NextResponse.json(
@@ -63,10 +89,10 @@ export async function POST(req: NextRequest) {
     }
 
     if (type === 'subject') {
-      const subject = await generateSubjectLine(prompt, userName || '');
+      const subject = await generateSubjectLine(prompt, userName || '', tone || 'professional');
       return NextResponse.json({ subject });
     } else if (type === 'content') {
-      const content = await generateEmailContent(prompt, userName || '');
+      const content = await generateEmailContent(prompt, userName || '', tone || 'professional');
       return NextResponse.json({ content });
     } else {
       return NextResponse.json(
