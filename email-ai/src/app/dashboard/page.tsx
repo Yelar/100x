@@ -1347,32 +1347,38 @@ function DashboardContent() {
                         <Paperclip className="h-5 w-5" />
                         Attachments ({selectedEmail.attachments.length})
                       </h3>
-                      <div className="space-y-3">
+                      <div className="bg-muted/10 rounded-lg border border-border/30 overflow-hidden">
                         {selectedEmail.attachments.map((attachment, index) => (
                           <div
                             key={index}
-                            className="flex items-center justify-between p-3 bg-muted/20 rounded-lg border border-border/50 hover:bg-muted/30 transition-colors"
+                            className={`flex items-center justify-between p-4 hover:bg-muted/20 transition-colors ${
+                              index < selectedEmail.attachments!.length - 1 ? 'border-b border-border/20' : ''
+                            }`}
                           >
                             <div className="flex items-center gap-3 flex-1 min-w-0">
-                              <span className="text-2xl flex-shrink-0">
-                                {getFileTypeIcon(attachment.mimeType, attachment.filename)}
-                              </span>
+                              <div className="w-10 h-10 rounded-lg bg-primary/10 flex items-center justify-center flex-shrink-0">
+                                <span className="text-lg">
+                                  {getFileTypeIcon(attachment.mimeType, attachment.filename)}
+                                </span>
+                              </div>
                               <div className="flex-1 min-w-0">
                                 <div className="font-medium text-foreground truncate" title={attachment.filename}>
                                   {attachment.filename}
                                 </div>
-                                <div className="text-sm text-muted-foreground">
-                                  {formatFileSize(attachment.size)} • {attachment.mimeType}
+                                <div className="text-sm text-muted-foreground flex items-center gap-2">
+                                  <span>{formatFileSize(attachment.size)}</span>
+                                  <span>•</span>
+                                  <span className="truncate">{attachment.mimeType}</span>
                                 </div>
                               </div>
                             </div>
-                            <div className="flex items-center gap-2 ml-3">
+                            <div className="flex items-center gap-1 ml-3">
                               {attachment.mimeType.startsWith('image/') && (
                                 <Button
                                   variant="ghost"
-                                  size="icon"
+                                  size="sm"
                                   onClick={() => handleAttachmentPreview(attachment, selectedEmail.id)}
-                                  className="text-muted-foreground hover:text-foreground"
+                                  className="text-muted-foreground hover:text-foreground h-8 px-2"
                                   title="Preview image"
                                 >
                                   <Eye className="h-4 w-4" />
@@ -1380,9 +1386,9 @@ function DashboardContent() {
                               )}
                               <Button
                                 variant="ghost"
-                                size="icon"
+                                size="sm"
                                 onClick={() => handleAttachmentDownload(attachment, selectedEmail.id)}
-                                className="text-muted-foreground hover:text-foreground"
+                                className="text-muted-foreground hover:text-foreground h-8 px-2"
                                 title="Download attachment"
                               >
                                 <Download className="h-4 w-4" />
@@ -1397,56 +1403,107 @@ function DashboardContent() {
                   {/* Thread conversation */}
                   {selectedEmail.threadId && threadData[selectedEmail.threadId] && threadData[selectedEmail.threadId].messages.length > 1 && (
                     <div className="mt-8 border-t border-border/50 pt-6">
-                      <h3 className="text-lg font-semibold mb-4 text-foreground">Conversation ({threadData[selectedEmail.threadId].messages.length} messages)</h3>
-                      <div className="space-y-4">
+                      <h3 className="text-lg font-semibold mb-4 text-foreground flex items-center gap-2">
+                        <Mail className="h-5 w-5" />
+                        Conversation ({threadData[selectedEmail.threadId].messages.length} messages)
+                      </h3>
+                      <div className="space-y-3">
                         {threadData[selectedEmail.threadId].messages
                           .sort((a, b) => {
                             const aTime = a.internalDate ? parseInt(a.internalDate) : new Date(a.date).getTime();
                             const bTime = b.internalDate ? parseInt(b.internalDate) : new Date(b.date).getTime();
                             return aTime - bTime;
                           })
-                          .map((threadMsg) => (
+                          .map((threadMsg, messageIndex) => (
                             <div
                               key={threadMsg.id}
-                              className={`border border-border/50 rounded-lg overflow-hidden ${
-                                threadMsg.id === selectedEmail.id ? 'ring-2 ring-orange-500/50 bg-orange-50/50 dark:bg-orange-950/20' : 'bg-card/50'
+                              className={`border border-border/30 rounded-lg overflow-hidden transition-all hover:shadow-sm ${
+                                threadMsg.id === selectedEmail.id 
+                                  ? 'ring-2 ring-orange-500/30 bg-orange-50/30 dark:bg-orange-950/10 border-orange-200/50 dark:border-orange-800/30' 
+                                  : 'bg-card/30 hover:bg-card/50'
                               }`}
                             >
-                              <div className="p-3 border-b border-border/50 bg-muted/20">
+                              <div className="p-4 border-b border-border/20 bg-muted/10">
                                 <div className="flex items-center justify-between">
                                   <div className="flex items-center gap-3">
-                                    <Avatar className="h-7 w-7">
-                                      <AvatarFallback className="bg-primary/10 text-primary text-xs">
+                                    <Avatar className="h-8 w-8 ring-2 ring-background">
+                                      <AvatarFallback className="bg-primary/10 text-primary text-sm font-medium">
                                         {threadMsg.from.charAt(0).toUpperCase()}
                                       </AvatarFallback>
                                     </Avatar>
                                     <div>
                                       <div className="font-medium text-sm text-foreground">
                                         {threadMsg.from.split('<')[0] || threadMsg.from}
-                          </div>
-                                      <div className="text-xs text-muted-foreground">
-                                        {new Date(threadMsg.date).toLocaleString()}
-                      </div>
+                                      </div>
+                                      <div className="text-xs text-muted-foreground flex items-center gap-2">
+                                        <span>{new Date(threadMsg.date).toLocaleString()}</span>
+                                        {threadMsg.attachments && threadMsg.attachments.length > 0 && (
+                                          <span className="flex items-center gap-1">
+                                            <Paperclip className="h-3 w-3" />
+                                            <span>{threadMsg.attachments.length}</span>
+                                          </span>
+                                        )}
+                                      </div>
                                     </div>
                                   </div>
-                                  {threadMsg.id === selectedEmail.id && (
-                                    <span className="text-xs px-2 py-1 bg-orange-500 text-white rounded-full">Current</span>
-                                  )}
+                                  <div className="flex items-center gap-2">
+                                    {threadMsg.id === selectedEmail.id && (
+                                      <span className="text-xs px-2 py-1 bg-orange-500 text-white rounded-full font-medium">
+                                        Current
+                                      </span>
+                                    )}
+                                    <span className="text-xs text-muted-foreground bg-muted/50 px-2 py-1 rounded-full">
+                                      #{messageIndex + 1}
+                                    </span>
+                                  </div>
                                 </div>
                               </div>
                               {threadMsg.id !== selectedEmail.id && (
-                                <div className="p-3">
+                                <div className="p-4">
                                   <div 
-                                    className="prose prose-sm dark:prose-invert max-w-none text-sm"
+                                    className="prose prose-sm dark:prose-invert max-w-none text-sm leading-relaxed"
                                     dangerouslySetInnerHTML={{ 
                                       __html: threadMsg.body
                                         .replace(/<script[\s\S]*?<\/script>/gi, '')
                                         .replace(/<style[\s\S]*?<\/style>/gi, '')
                                     }} 
-                        />
-                      </div>
-                    )}
-                  </div>
+                                  />
+                                  
+                                  {/* Show attachments for conversation messages */}
+                                  {threadMsg.attachments && threadMsg.attachments.length > 0 && (
+                                    <div className="mt-4 pt-4 border-t border-border/20">
+                                      <div className="text-xs text-muted-foreground mb-2 flex items-center gap-1">
+                                        <Paperclip className="h-3 w-3" />
+                                        {threadMsg.attachments.length} attachment{threadMsg.attachments.length > 1 ? 's' : ''}
+                                      </div>
+                                      <div className="space-y-1">
+                                        {threadMsg.attachments.map((attachment, attachIndex) => (
+                                          <div
+                                            key={attachIndex}
+                                            className="flex items-center gap-2 p-2 bg-muted/20 rounded text-xs hover:bg-muted/30 transition-colors"
+                                          >
+                                            <span className="text-sm">
+                                              {getFileTypeIcon(attachment.mimeType, attachment.filename)}
+                                            </span>
+                                            <span className="flex-1 truncate font-medium">{attachment.filename}</span>
+                                            <span className="text-muted-foreground">{formatFileSize(attachment.size)}</span>
+                                            <Button
+                                              variant="ghost"
+                                              size="sm"
+                                              onClick={() => handleAttachmentDownload(attachment, threadMsg.id)}
+                                              className="h-6 w-6 p-0 text-muted-foreground hover:text-foreground"
+                                              title="Download"
+                                            >
+                                              <Download className="h-3 w-3" />
+                                            </Button>
+                                          </div>
+                                        ))}
+                                      </div>
+                                    </div>
+                                  )}
+                                </div>
+                              )}
+                            </div>
                           ))}
                       </div>
                     </div>
