@@ -11,9 +11,10 @@ interface GmailError {
 
 export async function GET(
   request: Request,
-  { params }: { params: { messageId: string; attachmentId: string } }
+  context: { params: { messageId: string; attachmentId: string } }
 ) {
   try {
+    const params = await context.params;
     const { messageId, attachmentId } = params;
 
     const cookiesList = await cookies();
