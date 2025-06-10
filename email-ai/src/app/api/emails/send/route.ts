@@ -40,8 +40,26 @@ export async function POST(request: Request) {
       );
     }
 
-    const body = await request.json();
-    const { to, subject, content } = body;
+    // Handle both JSON and FormData
+    const contentType = request.headers.get('content-type') || '';
+    let to: string, subject: string, content: string;
+    let attachments: File[] = [];
+
+    if (contentType.includes('multipart/form-data')) {
+      const formData = await request.formData();
+      to = formData.get('to') as string;
+      subject = formData.get('subject') as string;
+      content = formData.get('content') as string;
+      
+      // Get attachments
+      const attachmentFiles = formData.getAll('attachments') as File[];
+      attachments = attachmentFiles.filter(file => file.size > 0);
+    } else {
+      const body = await request.json();
+      to = body.to;
+      subject = body.subject;
+      content = body.content;
+    }
 
     if (!to || !subject || !content) {
       return NextResponse.json(
@@ -49,9 +67,6 @@ export async function POST(request: Request) {
         { status: 400 }
       );
     }
-
-    // 'to' field can contain multiple recipients separated by commas
-    // e.g., "user1@example.com, user2@example.com"
 
     oauth2Client.setCredentials({
       access_token: accessToken,
@@ -70,19 +85,58 @@ export async function POST(request: Request) {
       return subject;
     };
 
-    // Construct the email message
-    const emailLines = [
-      `From: ${userEmail}`,
-      `To: ${to}`,
-      `Subject: ${encodeSubject(subject)}`,
-      'MIME-Version: 1.0',
-      'Content-Type: text/html; charset=UTF-8',
-      'Content-Transfer-Encoding: base64',
-      '',
-      content
-    ];
+    // Function to create email with attachments
+    const createMimeMessage = async () => {
+      const boundary = `----=_NextPart_${Date.now()}_${Math.random().toString(36)}`;
+      
+      const emailLines = [
+        `From: ${userEmail}`,
+        `To: ${to}`,
+        `Subject: ${encodeSubject(subject)}`,
+        'MIME-Version: 1.0'
+      ];
 
-    const email = emailLines.join('\r\n');
+      if (attachments.length > 0) {
+        emailLines.push(`Content-Type: multipart/mixed; boundary="${boundary}"`);
+        emailLines.push('');
+        
+        // Add the main content part
+        emailLines.push(`--${boundary}`);
+        emailLines.push('Content-Type: text/html; charset=UTF-8');
+        emailLines.push('Content-Transfer-Encoding: base64');
+        emailLines.push('');
+        emailLines.push(Buffer.from(content).toString('base64'));
+        emailLines.push('');
+        
+        // Add attachments
+        for (const attachment of attachments) {
+          const buffer = await attachment.arrayBuffer();
+          const base64Data = Buffer.from(buffer).toString('base64');
+          
+          emailLines.push(`--${boundary}`);
+          emailLines.push(`Content-Type: ${attachment.type || 'application/octet-stream'}`);
+          emailLines.push('Content-Transfer-Encoding: base64');
+          emailLines.push(`Content-Disposition: attachment; filename="${attachment.name}"`);
+          emailLines.push('');
+          
+          // Split base64 data into 76-character lines (RFC requirement)
+          const lines = base64Data.match(/.{1,76}/g) || [];
+          emailLines.push(...lines);
+          emailLines.push('');
+        }
+        
+        emailLines.push(`--${boundary}--`);
+      } else {
+        emailLines.push('Content-Type: text/html; charset=UTF-8');
+        emailLines.push('Content-Transfer-Encoding: base64');
+        emailLines.push('');
+        emailLines.push(Buffer.from(content).toString('base64'));
+      }
+
+      return emailLines.join('\r\n');
+    };
+
+    const email = await createMimeMessage();
     const encodedEmail = Buffer.from(email).toString('base64')
       .replace(/\+/g, '-')
       .replace(/\//g, '_')
@@ -99,6 +153,7 @@ export async function POST(request: Request) {
       return NextResponse.json({
         success: true,
         messageId: response.data.id,
+        attachmentCount: attachments.length,
       });
     } catch (error: unknown) {
       // Check if error is due to token expiration
@@ -143,6 +198,7 @@ export async function POST(request: Request) {
         return NextResponse.json({
           success: true,
           messageId: retryResponse.data.id,
+          attachmentCount: attachments.length,
         });
       }
 
@@ -155,4 +211,4 @@ export async function POST(request: Request) {
       { status: 500 }
     );
   }
-} 
+}

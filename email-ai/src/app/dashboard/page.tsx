@@ -206,6 +206,10 @@ function DashboardContent() {
     isVisible: false
   });
 
+  // New state for attachments
+  const [selectedFiles, setSelectedFiles] = useState<File[]>([]);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+
   const { refs, sizes, onResize } = useEmailPanelLayout();
 
   const observer = useRef<IntersectionObserver | null>(null);
@@ -252,6 +256,45 @@ function DashboardContent() {
       // Remove last chip when backspace is pressed on empty input
       setEmailChips(prev => prev.slice(0, -1));
     }
+  };
+
+  // Handle file selection
+  const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const files = Array.from(e.target.files || []);
+    if (files.length > 0) {
+      // Validate file size (max 25MB per file)
+      const maxSize = 25 * 1024 * 1024; // 25MB
+      const validFiles = files.filter(file => {
+        if (file.size > maxSize) {
+          toast.error(`File "${file.name}" is too large. Maximum size is 25MB.`);
+          return false;
+        }
+        return true;
+      });
+
+      // Check total attachment size (max 100MB total)
+      const totalSize = [...selectedFiles, ...validFiles].reduce((sum, file) => sum + file.size, 0);
+      const maxTotalSize = 100 * 1024 * 1024; // 100MB
+      
+      if (totalSize > maxTotalSize) {
+        toast.error('Total attachment size cannot exceed 100MB.');
+        return;
+      }
+
+      setSelectedFiles(prev => [...prev, ...validFiles]);
+    }
+    // Reset the input
+    if (e.target) e.target.value = '';
+  };
+
+  // Handle file removal
+  const removeFile = (index: number) => {
+    setSelectedFiles(prev => prev.filter((_, i) => i !== index));
+  };
+
+  // Trigger file input
+  const triggerFileInput = () => {
+    fileInputRef.current?.click();
   };
 
   // Initialize flagged emails from localStorage on mount
@@ -487,17 +530,34 @@ function DashboardContent() {
 
     try {
       setSending(true);
-      const response = await api.post<{ success: boolean }>('/api/emails/send', {
-        ...newEmail,
-        to: emailChips.join(', ') // Send as comma-separated string
+      
+      // Prepare form data for attachments
+      const formData = new FormData();
+      formData.append('to', emailChips.join(', '));
+      formData.append('subject', newEmail.subject);
+      formData.append('content', newEmail.content);
+      
+      // Add attachments
+      selectedFiles.forEach((file) => {
+        formData.append(`attachments`, file);
       });
-      if (response.data.success) {
+
+      const response = await fetch('/api/emails/send', {
+        method: 'POST',
+        body: formData,
+      });
+
+      const data = await response.json();
+      
+      if (data.success) {
         const recipientCount = emailChips.length;
-        alert(`Email sent successfully to ${recipientCount} recipient${recipientCount !== 1 ? 's' : ''}!`);
+        const attachmentText = selectedFiles.length > 0 ? ` with ${selectedFiles.length} attachment${selectedFiles.length !== 1 ? 's' : ''}` : '';
+        toast.success(`Email sent successfully to ${recipientCount} recipient${recipientCount !== 1 ? 's' : ''}${attachmentText}!`);
         setComposing(false);
         setNewEmail({ to: '', subject: '', content: '' });
         setEmailChips([]);
         setEmailInput('');
+        setSelectedFiles([]);
         setSelectedTone('professional');
         setShowToneDropdown(false);
         // Optionally refresh the sent emails list
@@ -505,7 +565,7 @@ function DashboardContent() {
       }
     } catch (error) {
       console.error('Error sending email:', error);
-      alert('Failed to send email. Please try again.');
+      toast.error('Failed to send email. Please try again.');
     } finally {
       setSending(false);
     }
@@ -2116,8 +2176,29 @@ function DashboardContent() {
                   <span className="ml-2 text-orange-200">⌘ ↵</span>
                 </Button>
                 
-                <Button variant="outline" size="sm" className="border-border/60 hover:bg-gray-50 dark:hover:bg-gray-800">
-                  + Add
+                {/* Hidden file input */}
+                <input
+                  ref={fileInputRef}
+                  type="file"
+                  multiple
+                  onChange={handleFileSelect}
+                  className="hidden"
+                  accept="*/*"
+                />
+                
+                <Button 
+                  variant="outline" 
+                  size="sm" 
+                  onClick={triggerFileInput}
+                  className="border-border/60 hover:bg-gray-50 dark:hover:bg-gray-800 gap-2"
+                >
+                  <Paperclip className="h-4 w-4" />
+                  Add Files
+                  {selectedFiles.length > 0 && (
+                    <span className="bg-orange-500 text-white text-xs rounded-full px-1.5 py-0.5 min-w-[1.25rem] h-5 flex items-center justify-center">
+                      {selectedFiles.length}
+                    </span>
+                  )}
                 </Button>
 
                 {/* Tone Selection */}
@@ -2176,6 +2257,62 @@ function DashboardContent() {
                 </Button>
               </div>
             </div>
+
+            {/* Attachments preview */}
+            {selectedFiles.length > 0 && (
+              <div className="pt-4 border-t border-border/20">
+                <div className="flex items-center gap-2 mb-3">
+                  <Paperclip className="h-4 w-4 text-muted-foreground" />
+                  <span className="text-sm font-medium text-foreground">
+                    Attachments ({selectedFiles.length})
+                  </span>
+                  <span className="text-xs text-muted-foreground">
+                    Total size: {formatFileSize(selectedFiles.reduce((sum, file) => sum + file.size, 0))}
+                  </span>
+                </div>
+                <div className="bg-gray-50 dark:bg-gray-800/50 rounded-lg border border-border/30 max-h-32 overflow-y-auto">
+                  {selectedFiles.map((file, index) => (
+                    <div
+                      key={`${file.name}-${index}`}
+                      className={`flex items-center justify-between p-3 hover:bg-gray-100 dark:hover:bg-gray-700/50 transition-colors ${
+                        index < selectedFiles.length - 1 ? 'border-b border-border/20' : ''
+                      }`}
+                    >
+                      <div className="flex items-center gap-3 flex-1 min-w-0">
+                        <div className="w-8 h-8 rounded bg-primary/10 flex items-center justify-center flex-shrink-0">
+                          <span className="text-sm">
+                            {getFileTypeIcon(file.type, file.name)}
+                          </span>
+                        </div>
+                        <div className="flex-1 min-w-0">
+                          <div className="font-medium text-sm text-foreground truncate" title={file.name}>
+                            {file.name}
+                          </div>
+                          <div className="text-xs text-muted-foreground flex items-center gap-2">
+                            <span>{formatFileSize(file.size)}</span>
+                            {file.type && (
+                              <>
+                                <span>•</span>
+                                <span className="truncate">{file.type}</span>
+                              </>
+                            )}
+                          </div>
+                        </div>
+                      </div>
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        onClick={() => removeFile(index)}
+                        className="text-muted-foreground hover:text-red-500 h-8 w-8 p-0 ml-2 flex-shrink-0"
+                        title="Remove attachment"
+                      >
+                        <X className="h-4 w-4" />
+                      </Button>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
           </div>
         </DialogContent>
       </Dialog>
