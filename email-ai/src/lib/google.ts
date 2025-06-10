@@ -1,6 +1,5 @@
-import { google } from 'googleapis';
+import { google, gmail_v1 } from 'googleapis';
 import { OAuth2Client } from 'google-auth-library';
-import { gmail_v1 } from 'googleapis';
 
 const CLIENT_SECRETS_FILE = process.env.GOOGLE_CLIENT_SECRETS || '{}';
 const SCOPES = [
@@ -60,22 +59,134 @@ interface GetEmailsOptions {
   folder?: string;
 }
 
+interface Attachment {
+  id: string;
+  filename: string;
+  mimeType: string;
+  size: number;
+}
+
 export const getGmailMessages = async (accessToken: string, options: GetEmailsOptions = {}) => {
-  const { pageToken, query, maxResults = 20, folder } = options;
-  
   oauth2Client.setCredentials({ access_token: accessToken });
   const gmail = google.gmail({ version: 'v1', auth: oauth2Client });
-  
-  // List messages with search query if provided
+
+  let query = '';
+  if (options.folder === 'sent') {
+    query = 'in:sent';
+  } else if (options.folder === 'spam') {
+    query = 'in:spam';
+  } else {
+    query = 'in:inbox';
+  }
+
+  if (options.query) {
+    query += ` ${options.query}`;
+  }
+
   const response = await gmail.users.messages.list({
     userId: 'me',
-    maxResults,
-    pageToken,
-    q: query, // Gmail search query
-    labelIds: folder === 'sent' ? ['SENT'] : folder === 'spam' ? ['SPAM'] : ['INBOX'] // Use appropriate label for each folder
+    q: query,
+    maxResults: options.maxResults || 20,
+    pageToken: options.pageToken,
   });
 
   const messages = response.data.messages || [];
+
+  // Helper function to decode base64 content
+  const decodeBase64 = (data: string) => {
+    try {
+      return Buffer.from(data, 'base64').toString('utf-8');
+    } catch (e) {
+      console.error('Error decoding base64:', e);
+      return '';
+    }
+  };
+
+  // Helper function to decode email subject
+  const decodeSubject = (subject: string) => {
+    try {
+      // Handle encoded subjects (e.g., =?UTF-8?B?...?=)
+      if (subject.startsWith('=?') && subject.includes('?B?')) {
+        const match = subject.match(/=\?([^?]+)\?B\?([^?]+)\?=/);
+        if (match) {
+          const charset = match[1].toLowerCase() as BufferEncoding;
+          const encoded = match[2];
+          return Buffer.from(encoded, 'base64').toString(charset);
+        }
+      }
+      return subject;
+    } catch (e) {
+      console.error('Error decoding subject:', e);
+      return subject;
+    }
+  };
+
+  // Helper function to extract attachments from message parts
+  const extractAttachments = (parts: gmail_v1.Schema$MessagePart[]): Attachment[] => {
+    const attachments: Attachment[] = [];
+    
+    const processParts = (parts: gmail_v1.Schema$MessagePart[]) => {
+      for (const part of parts) {
+        // Check if this part has nested parts
+        if (part.parts) {
+          processParts(part.parts);
+        }
+        
+        // Check if this part is an attachment
+        if (part.filename && part.filename.length > 0) {
+          const attachment: Attachment = {
+            id: part.body?.attachmentId || part.partId || '',
+            filename: part.filename,
+            mimeType: part.mimeType || 'application/octet-stream',
+            size: part.body?.size || 0
+          };
+          attachments.push(attachment);
+        }
+      }
+    };
+    
+    processParts(parts);
+    return attachments;
+  };
+
+  // Helper function to process email parts recursively
+  const processParts = (parts: gmail_v1.Schema$MessagePart[]): { body: string; contentType: string } => {
+    let result = { body: '', contentType: '' };
+    
+    for (const part of parts) {
+      // If this part has nested parts, process them
+      if (part.parts) {
+        const nestedResult = processParts(part.parts);
+        if (nestedResult.body) {
+          result = nestedResult;
+          break;
+        }
+      }
+      
+      // Process the current part (skip if it's an attachment)
+      if (part.body?.data && (!part.filename || part.filename.length === 0)) {
+        const content = decodeBase64(part.body.data);
+        const mimeType = part.mimeType || '';
+        
+        // Prefer HTML over plain text
+        if (mimeType === 'text/html' && !result.body) {
+          result = { body: content, contentType: 'text/html' };
+        } else if (mimeType === 'text/plain' && !result.body) {
+          result = { body: content, contentType: 'text/plain' };
+        }
+
+        // Always prefer HTML over plain text - override if HTML is found
+        if (mimeType === 'text/html') {
+          result = { body: content, contentType: 'text/html' };
+        } else if (mimeType === 'text/plain' && result.contentType !== 'text/html') {
+          result = { body: content, contentType: 'text/plain' };
+        }
+      }
+    }
+    
+    return result;
+  };
+
   const detailedMessages = await Promise.all(
     messages.map(async (message) => {
       const msg = await gmail.users.messages.get({
@@ -86,77 +197,7 @@ export const getGmailMessages = async (accessToken: string, options: GetEmailsOp
 
       const headers = msg.data.payload?.headers || [];
       const parts = msg.data.payload?.parts || [];
-      
-      // Get the email body
       let body = '';
-      
-      // Helper function to decode base64 content
-      const decodeBase64 = (data: string) => {
-        try {
-          // Decode base64 and handle UTF-8 encoding
-          return Buffer.from(data, 'base64').toString('utf-8');
-        } catch (e) {
-          console.error('Error decoding base64:', e);
-          return '';
-        }
-      };
-
-      // Helper function to decode email subject
-      const decodeSubject = (subject: string) => {
-        try {
-          // Handle encoded subjects (e.g., =?UTF-8?B?...?=)
-          if (subject.startsWith('=?') && subject.includes('?B?')) {
-            const match = subject.match(/=\?([^?]+)\?B\?([^?]+)\?=/);
-            if (match) {
-              const charset = match[1].toLowerCase() as BufferEncoding;
-              const encoded = match[2];
-              return Buffer.from(encoded, 'base64').toString(charset);
-            }
-          }
-          return subject;
-        } catch (e) {
-          console.error('Error decoding subject:', e);
-          return subject;
-        }
-      };
-
-      // Helper function to process email parts recursively
-      const processParts = (parts: gmail_v1.Schema$MessagePart[]): { body: string; contentType: string } => {
-        let result = { body: '', contentType: '' };
-        
-        for (const part of parts) {
-          // If this part has nested parts, process them
-          if (part.parts) {
-            const nestedResult = processParts(part.parts);
-            if (nestedResult.body) {
-              result = nestedResult;
-              break;
-            }
-          }
-          
-          // Process the current part
-          if (part.body?.data) {
-            const content = decodeBase64(part.body.data);
-            const mimeType = part.mimeType || '';
-            
-            // Prefer HTML over plain text
-            if (mimeType === 'text/html' && !result.body) {
-              result = { body: content, contentType: 'text/html' };
-            } else if (mimeType === 'text/plain' && !result.body) {
-              result = { body: content, contentType: 'text/plain' };
-            }
-
-            // Always prefer HTML over plain text - override if HTML is found
-            if (mimeType === 'text/html') {
-              result = { body: content, contentType: 'text/html' };
-            } else if (mimeType === 'text/plain' && result.contentType !== 'text/html') {
-              result = { body: content, contentType: 'text/plain' };
-            }
-          }
-        }
-        
-        return result;
-      };
 
       // Process the email parts - NO FORMATTING, just raw content
       if (parts.length > 0) {
@@ -170,6 +211,9 @@ export const getGmailMessages = async (accessToken: string, options: GetEmailsOp
         body = msg.data.snippet || '';
       }
 
+      // Extract attachments
+      const attachments = parts.length > 0 ? extractAttachments(parts) : [];
+
       return {
         id: msg.data.id,
         threadId: msg.data.threadId,
@@ -177,7 +221,8 @@ export const getGmailMessages = async (accessToken: string, options: GetEmailsOp
         subject: decodeSubject(headers.find(h => h.name === 'Subject')?.value || 'No Subject'),
         date: headers.find(h => h.name === 'Date')?.value || 'Unknown',
         snippet: msg.data.snippet || '',
-        body: body
+        body: body,
+        attachments: attachments.length > 0 ? attachments : undefined
       };
     })
   );
@@ -361,5 +406,24 @@ export const getEmailThread = async (accessToken: string, threadId: string) => {
     threadId: thread.data.id,
     messages: detailedMessages,
     historyId: thread.data.historyId
+  };
+};
+
+/**
+ * Fetch an email attachment by message ID and attachment ID
+ */
+export const getEmailAttachment = async (accessToken: string, messageId: string, attachmentId: string) => {
+  oauth2Client.setCredentials({ access_token: accessToken });
+  const gmail = google.gmail({ version: 'v1', auth: oauth2Client });
+
+  const attachment = await gmail.users.messages.attachments.get({
+    userId: 'me',
+    messageId: messageId,
+    id: attachmentId
+  });
+
+  return {
+    data: attachment.data.data, // base64 encoded data
+    size: attachment.data.size
   };
 }; 

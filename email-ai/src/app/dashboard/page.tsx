@@ -7,7 +7,7 @@ import { Button } from "@/components/ui/button";
 import { Avatar, AvatarImage, AvatarFallback } from "@/components/ui/avatar";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Input } from "@/components/ui/input";
-import { Search, Mail, LogOut, Inbox, FileText, Send, Trash, Plus, ChevronLeft, ChevronRight, MoreVertical, Star, Tag, Flag, Archive, Sparkles, Shield } from "lucide-react";
+import { Search, Mail, LogOut, Inbox, FileText, Send, Trash, Plus, ChevronLeft, ChevronRight, MoreVertical, Star, Tag, Flag, Archive, Sparkles, Shield, Paperclip, Download, Eye } from "lucide-react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import api from '@/lib/axios';
 import debounce from 'lodash/debounce';
@@ -15,11 +15,18 @@ import { ResizablePanelGroup, ResizablePanel } from "@/components/ui/resizable";
 import { ResizableHandleWithReset } from "@/components/ui/resizable-handle-with-reset";
 import { useEmailPanelLayout } from "@/hooks/use-email-panel-layout";
 import { toast } from 'sonner';
-
 interface UserInfo {
   email: string;
   name: string;
   picture: string;
+}
+
+interface Attachment {
+  id: string;
+  filename: string;
+  mimeType: string;
+  size: number;
+  data?: string; // base64 encoded data for inline viewing
 }
 
 interface Email {
@@ -31,6 +38,7 @@ interface Email {
   snippet: string;
   body: string;
   internalDate?: string;
+  attachments?: Attachment[];
 }
 
 interface EmailThread {
@@ -743,6 +751,118 @@ function DashboardContent() {
       .replace(/<br><br>/g, '<div class="my-2"></div>');
   };
 
+  // Helper function to format file size
+  const formatFileSize = (bytes: number) => {
+    if (bytes === 0) return '0 Bytes';
+    const k = 1024;
+    const sizes = ['Bytes', 'KB', 'MB', 'GB'];
+    const i = Math.floor(Math.log(bytes) / Math.log(k));
+    return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
+  };
+
+  // Helper function to get file type icon
+  const getFileTypeIcon = (mimeType: string, filename: string) => {
+    if (mimeType.startsWith('image/')) {
+      return '🖼️';
+    } else if (mimeType.includes('pdf')) {
+      return '📄';
+    } else if (mimeType.includes('word') || filename.endsWith('.doc') || filename.endsWith('.docx')) {
+      return '📝';
+    } else if (mimeType.includes('excel') || filename.endsWith('.xls') || filename.endsWith('.xlsx')) {
+      return '📊';
+    } else if (mimeType.includes('powerpoint') || filename.endsWith('.ppt') || filename.endsWith('.pptx')) {
+      return '📊';
+    } else if (mimeType.includes('zip') || mimeType.includes('rar') || mimeType.includes('archive')) {
+      return '🗄️';
+    } else if (mimeType.startsWith('audio/')) {
+      return '🎵';
+    } else if (mimeType.startsWith('video/')) {
+      return '🎬';
+    } else {
+      return '📎';
+    }
+  };
+
+  // Handle attachment download
+  const handleAttachmentDownload = async (attachment: Attachment, emailId: string) => {
+    try {
+      const response = await api.get(`/api/emails/attachments/${emailId}/${attachment.id}`);
+      const responseData = response.data as { data: string; size: number };
+      
+      // Validate base64 data
+      if (!responseData.data) {
+        throw new Error('No attachment data received');
+      }
+
+      // Clean the base64 string by removing any whitespace and ensuring it's properly padded
+      const base64Data = responseData.data.replace(/\s/g, '');
+      const padding = base64Data.length % 4;
+      const paddedBase64 = padding ? base64Data + '='.repeat(4 - padding) : base64Data;
+
+      try {
+        // Convert base64 to blob
+        const byteCharacters = atob(paddedBase64);
+        const byteNumbers = new Array(byteCharacters.length);
+        for (let i = 0; i < byteCharacters.length; i++) {
+          byteNumbers[i] = byteCharacters.charCodeAt(i);
+        }
+        const byteArray = new Uint8Array(byteNumbers);
+        const blob = new Blob([byteArray], { type: attachment.mimeType });
+        
+        // Create download link
+        const url = window.URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = attachment.filename;
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        window.URL.revokeObjectURL(url);
+        
+        toast.success(`Downloaded ${attachment.filename}`);
+      } catch (error) {
+        console.error('Error processing attachment data:', error);
+        toast.error('Failed to process attachment data');
+      }
+    } catch (error) {
+      console.error('Error downloading attachment:', error);
+      toast.error('Failed to download attachment');
+    }
+  };
+
+  // Handle attachment preview (for images)
+  const handleAttachmentPreview = async (attachment: Attachment, emailId: string) => {
+    if (!attachment.mimeType.startsWith('image/')) {
+      // For non-images, just download
+      handleAttachmentDownload(attachment, emailId);
+      return;
+    }
+    
+    try {
+      const response = await api.get(`/api/emails/attachments/${emailId}/${attachment.id}`);
+      const responseData = response.data as { data: string; size: number };
+      
+      // Create a blob URL for the image
+      const byteCharacters = atob(responseData.data);
+      const byteNumbers = new Array(byteCharacters.length);
+      for (let i = 0; i < byteCharacters.length; i++) {
+        byteNumbers[i] = byteCharacters.charCodeAt(i);
+      }
+      const byteArray = new Uint8Array(byteNumbers);
+      const blob = new Blob([byteArray], { type: attachment.mimeType });
+      const url = window.URL.createObjectURL(blob);
+      
+      // Open in new window for preview
+      window.open(url, '_blank');
+      
+      // Clean up after some time
+      setTimeout(() => window.URL.revokeObjectURL(url), 10000);
+    } catch (error) {
+      console.error('Error previewing attachment:', error);
+      toast.error('Failed to preview attachment');
+    }
+  };
+
   if (loading && !searchLoading && emails.length === 0) {
     return (
       <div className="min-h-screen bg-background flex flex-col h-screen overflow-hidden">
@@ -1064,6 +1184,11 @@ function DashboardContent() {
                         {email.from.split('<')[0] || email.from}
                           </span>
                           <div className="flex items-center gap-2">
+                            {email.attachments && email.attachments.length > 0 && (
+                              <span title={`${email.attachments.length} attachment${email.attachments.length > 1 ? 's' : ''}`}>
+                                <Paperclip className="h-3 w-3 text-muted-foreground" />
+                              </span>
+                            )}
                             <span className="text-xs text-muted-foreground whitespace-nowrap ml-2">
                         {formatEmailDate(email.date)}
                             </span>
@@ -1214,6 +1339,60 @@ function DashboardContent() {
                       </div>
                     </div>
                   </div>
+                  
+                  {/* Attachments section */}
+                  {selectedEmail.attachments && selectedEmail.attachments.length > 0 && (
+                    <div className="mt-6 border-t border-border/50 pt-6">
+                      <h3 className="text-lg font-semibold mb-4 text-foreground flex items-center gap-2">
+                        <Paperclip className="h-5 w-5" />
+                        Attachments ({selectedEmail.attachments.length})
+                      </h3>
+                      <div className="space-y-3">
+                        {selectedEmail.attachments.map((attachment, index) => (
+                          <div
+                            key={index}
+                            className="flex items-center justify-between p-3 bg-muted/20 rounded-lg border border-border/50 hover:bg-muted/30 transition-colors"
+                          >
+                            <div className="flex items-center gap-3 flex-1 min-w-0">
+                              <span className="text-2xl flex-shrink-0">
+                                {getFileTypeIcon(attachment.mimeType, attachment.filename)}
+                              </span>
+                              <div className="flex-1 min-w-0">
+                                <div className="font-medium text-foreground truncate" title={attachment.filename}>
+                                  {attachment.filename}
+                                </div>
+                                <div className="text-sm text-muted-foreground">
+                                  {formatFileSize(attachment.size)} • {attachment.mimeType}
+                                </div>
+                              </div>
+                            </div>
+                            <div className="flex items-center gap-2 ml-3">
+                              {attachment.mimeType.startsWith('image/') && (
+                                <Button
+                                  variant="ghost"
+                                  size="icon"
+                                  onClick={() => handleAttachmentPreview(attachment, selectedEmail.id)}
+                                  className="text-muted-foreground hover:text-foreground"
+                                  title="Preview image"
+                                >
+                                  <Eye className="h-4 w-4" />
+                                </Button>
+                              )}
+                              <Button
+                                variant="ghost"
+                                size="icon"
+                                onClick={() => handleAttachmentDownload(attachment, selectedEmail.id)}
+                                className="text-muted-foreground hover:text-foreground"
+                                title="Download attachment"
+                              >
+                                <Download className="h-4 w-4" />
+                              </Button>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
                   
                   {/* Thread conversation */}
                   {selectedEmail.threadId && threadData[selectedEmail.threadId] && threadData[selectedEmail.threadId].messages.length > 1 && (
@@ -1547,10 +1726,3 @@ function DashboardContent() {
     </div>
   );
 } 
-
-
-
-
-
-
-
