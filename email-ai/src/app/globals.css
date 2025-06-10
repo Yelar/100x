@@ -585,7 +585,7 @@
 
 /* Clean end of email content styling - all email content now uses .email-content-isolated-complete */
 
-/* Safe email display container - balanced isolation */
+/* Safe email display container - balanced isolation with better theme integration */
 .email-content-safe-display {
   /* Create containment without breaking content */
   position: relative;
@@ -595,16 +595,20 @@
   /* Basic styling setup */
   width: 100%;
   max-width: 100%;
-  background: #ffffff;
-  color: #000000;
   font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
   font-size: 14px;
   line-height: 1.6;
   
+  /* Always use light background for email readability */
+  background: #ffffff;
+  color: #000000;
+  
+  /* Theme-aware border only */
+  @apply border border-border;
+  
   /* Visual container */
   padding: 20px;
   border-radius: 8px;
-  border: 1px solid #e0e0e0;
   
   /* Prevent overflow issues */
   overflow-x: auto;
@@ -613,6 +617,9 @@
   
   /* Ensure proper box model */
   box-sizing: border-box;
+  
+  /* Add subtle shadow for better visual separation */
+  @apply shadow-sm;
 }
 
 /* Reset problematic inherited styles only */
@@ -644,20 +651,46 @@
 
 /* Ensure readable links */
 .email-content-safe-display a {
-  color: #0066cc !important;
-  text-decoration: underline !important;
+  @apply text-primary hover:text-primary/80 underline;
 }
 
-.email-content-safe-display a:hover {
-  color: #004499 !important;
+/* Dialog and modal fixes - updated to target the correct elements */
+/* Ensure dialog overlay has proper z-index and positioning */
+[data-radix-dialog-overlay] {
+  z-index: 50 !important;
+  position: fixed !important;
+  inset: 0 !important;
 }
 
-/* Dark mode support */
-@media (prefers-color-scheme: dark) {
-  .email-content-safe-display {
-    /* Keep light theme for email readability */
-    background: #ffffff !important;
-    color: #000000 !important;
-    border-color: rgba(255,255,255,0.2);
-  }
+/* Ensure dialog content is properly positioned */
+[data-radix-dialog-content] {
+  z-index: 50 !important;
+  position: fixed !important;
+  left: 50% !important;
+  top: 50% !important;
+  transform: translate(-50%, -50%) !important;
+  max-height: 85vh !important;
+  max-width: 90vw !important;
+}
+
+/* Additional fixes for Radix UI dialogs */
+.fixed.z-50 {
+  z-index: 1000 !important;
+}
+
+/* Ensure dialog portal content is above everything */
+[data-radix-portal] {
+  z-index: 1000 !important;
+}
+
+/* Fix for any transform issues */
+[data-radix-dialog-content].fixed {
+  position: fixed !important;
+  z-index: 1000 !important;
+}
+
+/* Ensure proper backdrop styling */
+[data-radix-dialog-overlay].fixed {
+  z-index: 999 !important;
+  background-color: rgba(0, 0, 0, 0.8) !important;
 }
