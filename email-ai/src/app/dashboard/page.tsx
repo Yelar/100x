@@ -39,6 +39,7 @@ interface Email {
   body: string;
   internalDate?: string;
   attachments?: Attachment[];
+  starred?: boolean;
 }
 
 interface EmailThread {
@@ -171,6 +172,8 @@ function DashboardContent() {
   const [emailSummary, setEmailSummary] = useState<string | null>(null);
   const [isGeneratingSummary, setIsGeneratingSummary] = useState(false);
   const [showSummary, setShowSummary] = useState(false);
+  const [starringEmails, setStarringEmails] = useState<Set<string>>(new Set());
+  const [showStarredOnly, setShowStarredOnly] = useState(false);
 
   const { refs, sizes, onResize } = useEmailPanelLayout();
 
@@ -251,6 +254,12 @@ function DashboardContent() {
     const folder = params.get('folder');
     if (folder === 'sent' || folder === 'inbox' || folder === 'spam') {
       setCurrentFolder(folder);
+    }
+    
+    // Initialize starred view
+    const view = params.get('view');
+    if (view === 'starred') {
+      setShowStarredOnly(true);
     }
   }, []);
 
@@ -549,6 +558,62 @@ function DashboardContent() {
       setShowSummary(true);
     } finally {
       setIsGeneratingSummary(false);
+    }
+  };
+
+  // Handle starring/unstarring emails
+  const handleStarEmail = async (emailId: string, currentlyStarred: boolean) => {
+    if (starringEmails.has(emailId)) return;
+
+    setStarringEmails(prev => new Set(prev).add(emailId));
+    
+    try {
+      const response = await api.post('/api/emails/star', {
+        messageId: emailId,
+        star: !currentlyStarred
+      });
+
+      const responseData = response.data as { success: boolean; starred: boolean };
+
+      if (responseData.success) {
+        // Update the email in the local state
+        setEmails(prevEmails => 
+          prevEmails.map(email => 
+            email.id === emailId 
+              ? { ...email, starred: !currentlyStarred }
+              : email
+          )
+        );
+
+        // Update selected email if it's the one being starred
+        if (selectedEmail?.id === emailId) {
+          setSelectedEmail(prev => prev ? { ...prev, starred: !currentlyStarred } : null);
+        }
+
+        // Update thread data if the email is part of a thread
+        if (selectedEmail?.threadId && threadData[selectedEmail.threadId]) {
+          setThreadData(prev => ({
+            ...prev,
+            [selectedEmail.threadId!]: {
+              ...prev[selectedEmail.threadId!],
+              messages: prev[selectedEmail.threadId!].messages.map(msg =>
+                msg.id === emailId ? { ...msg, starred: !currentlyStarred } : msg
+              )
+            }
+          }));
+        }
+
+        toast.success(currentlyStarred ? 'Email unstarred' : 'Email starred');
+      }
+    } catch (error) {
+      console.error('Error starring email:', error);
+      toast.error('Failed to update star status');
+    } finally {
+      setStarringEmails(prev => {
+        const newSet = new Set(prev);
+        newSet.delete(emailId);
+        return newSet;
+      });
     }
   };
 
@@ -1032,8 +1097,25 @@ function DashboardContent() {
                 <Inbox className="mr-2 h-5 w-5" />
                 Inbox
               </Button>
-              <Button variant="ghost" className="w-full justify-start font-medium text-muted-foreground hover:text-orange-600 hover:bg-orange-500/10">
-                <Star className="mr-2 h-5 w-5" />
+              <Button 
+                variant="ghost" 
+                className={`w-full justify-start font-medium ${showStarredOnly ? 'text-orange-700 dark:text-orange-300 bg-orange-500/10' : 'text-muted-foreground hover:text-orange-600 hover:bg-orange-500/10'}`}
+                onClick={() => {
+                  setShowStarredOnly(!showStarredOnly);
+                  setSelectedEmail(null);
+                  setSelectedFlag(null);
+                  // Clear email/thread URL params when switching to starred view
+                  const params = new URLSearchParams(window.location.search);
+                  params.delete('threadId');
+                  if (!showStarredOnly) {
+                    params.set('view', 'starred');
+                  } else {
+                    params.delete('view');
+                  }
+                  router.replace(`/dashboard?${params.toString()}`, { scroll: false });
+                }}
+              >
+                <Star className={`mr-2 h-5 w-5 ${showStarredOnly ? 'fill-current text-amber-500' : ''}`} />
                 Starred
               </Button>
               <Button 
@@ -1155,9 +1237,18 @@ function DashboardContent() {
             <div className="flex-1 overflow-y-auto">
               {emails
                 .filter(email => {
-                  if (!selectedFlag) return true;
-                  const flag = flaggedEmails[email.id]?.flag;
-                  return flag === selectedFlag;
+                  // First filter by starred status if showStarredOnly is true
+                  if (showStarredOnly && !email.starred) {
+                    return false;
+                  }
+                  
+                  // Then filter by flag if selectedFlag is set
+                  if (selectedFlag) {
+                    const flag = flaggedEmails[email.id]?.flag;
+                    return flag === selectedFlag;
+                  }
+                  
+                  return true;
                 })
                 .map((email, index) => (
                   <React.Fragment key={`${currentFolder}-${email.id}`}>
@@ -1189,6 +1280,27 @@ function DashboardContent() {
                                 <Paperclip className="h-3 w-3 text-muted-foreground" />
                               </span>
                             )}
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                handleStarEmail(email.id, email.starred || false);
+                              }}
+                              disabled={starringEmails.has(email.id)}
+                              className={`p-1 h-6 w-6 ${
+                                email.starred 
+                                  ? 'text-amber-500 hover:text-amber-600' 
+                                  : 'text-muted-foreground hover:text-amber-500'
+                              }`}
+                              title={email.starred ? 'Unstar email' : 'Star email'}
+                            >
+                              {starringEmails.has(email.id) ? (
+                                <span className="animate-spin text-xs">⟳</span>
+                              ) : (
+                                <Star className={`h-3 w-3 ${email.starred ? 'fill-current' : ''}`} />
+                              )}
+                            </Button>
                             <span className="text-xs text-muted-foreground whitespace-nowrap ml-2">
                         {formatEmailDate(email.date)}
                             </span>
@@ -1280,6 +1392,24 @@ function DashboardContent() {
                         )}
                         <Button variant="ghost" size="icon" className="text-muted-foreground">
                           <Archive className="h-5 w-5" />
+                        </Button>
+                        <Button 
+                          variant="ghost" 
+                          size="icon" 
+                          onClick={() => handleStarEmail(selectedEmail.id, selectedEmail.starred || false)}
+                          disabled={starringEmails.has(selectedEmail.id)}
+                          className={`${
+                            selectedEmail.starred 
+                              ? 'text-amber-500 hover:text-amber-600' 
+                              : 'text-muted-foreground hover:text-amber-500'
+                          }`}
+                          title={selectedEmail.starred ? 'Unstar email' : 'Star email'}
+                        >
+                          {starringEmails.has(selectedEmail.id) ? (
+                            <span className="animate-spin">⟳</span>
+                          ) : (
+                            <Star className={`h-5 w-5 ${selectedEmail.starred ? 'fill-current' : ''}`} />
+                          )}
                         </Button>
                         <Button variant="ghost" size="icon" className="text-muted-foreground">
                           <Flag className="h-5 w-5" />

@@ -6,6 +6,7 @@ const SCOPES = [
   'https://www.googleapis.com/auth/userinfo.email',
   'https://www.googleapis.com/auth/gmail.readonly',
   'https://www.googleapis.com/auth/gmail.send',
+  'https://www.googleapis.com/auth/gmail.modify',
   'https://www.googleapis.com/auth/userinfo.profile',
   'openid'
 ];
@@ -222,7 +223,8 @@ export const getGmailMessages = async (accessToken: string, options: GetEmailsOp
         date: headers.find(h => h.name === 'Date')?.value || 'Unknown',
         snippet: msg.data.snippet || '',
         body: body,
-        attachments: attachments.length > 0 ? attachments : undefined
+        attachments: attachments.length > 0 ? attachments : undefined,
+        starred: msg.data.labelIds?.includes('STARRED') || false
       };
     })
   );
@@ -394,7 +396,8 @@ export const getEmailThread = async (accessToken: string, threadId: string) => {
         date: headers.find(h => h.name === 'Date')?.value || 'Unknown',
         snippet: message.snippet || '',
         body: body,
-        internalDate: message.internalDate || '0'
+        internalDate: message.internalDate || '0',
+        starred: message.labelIds?.includes('STARRED') || false
       };
     })
   );
@@ -426,4 +429,26 @@ export const getEmailAttachment = async (accessToken: string, messageId: string,
     data: attachment.data.data, // base64 encoded data
     size: attachment.data.size
   };
-}; 
+};
+
+/**
+ * Star or unstar an email
+ */
+export const starEmail = async (accessToken: string, messageId: string, star: boolean = true) => {
+  oauth2Client.setCredentials({ access_token: accessToken });
+  const gmail = google.gmail({ version: 'v1', auth: oauth2Client });
+
+  const labelsToAdd = star ? ['STARRED'] : [];
+  const labelsToRemove = star ? [] : ['STARRED'];
+
+  const response = await gmail.users.messages.modify({
+    userId: 'me',
+    id: messageId,
+    requestBody: {
+      addLabelIds: labelsToAdd,
+      removeLabelIds: labelsToRemove
+    }
+  });
+
+  return response.data;
+};
