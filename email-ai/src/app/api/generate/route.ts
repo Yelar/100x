@@ -23,15 +23,16 @@ async function generateEmailContent(prompt: string, userName: string, tone: stri
     messages: [
       {
         role: 'system',
-        content: `You are rewriting email content. Take the user's existing email content and rewrite it in the specified tone. Do NOT write a response or answer to the content. Do NOT add greetings, closings, or signatures. Simply rewrite the exact same message in the requested tone. Keep the same meaning and intent, just change the style/tone. ${toneInstruction}`,
+        content: `You are an AI assistant that rewrites email content to a specified tone.
+Your task is to take the user's text and rewrite it.
+- DO NOT change the core meaning or intent.
+- DO NOT add greetings (like "Hi John,"), closings (like "Sincerely,"), or signatures.
+- ONLY provide the rewritten body of the email.
+- Apply the following tone: ${toneInstruction}`,
       },
       {
         role: 'user',
-        content: `Rewrite this email content in the specified tone:`,
-      },
-      {
-        role: 'user',
-        content: prompt,
+        content: `Rewrite this email content in the specified tone:\n\n${prompt}`,
       },
     ],
     model: 'gemma2-9b-it',
@@ -59,7 +60,12 @@ async function generateSubjectLine(prompt: string, userName: string, tone: strin
     messages: [
       {
         role: 'system',
-        content: `Generate ONLY the email subject line, nothing else. No explanations, no quotes, no extra text. Just the subject line text. ${toneInstruction}`,
+        content: `You are an AI assistant that creates email subject lines.
+Your task is to generate a concise, relevant, and engaging subject line for the provided email content.
+- Your response must contain ONLY the subject line text.
+- Do not include prefixes like "Subject:".
+- Do not include any quotes or explanations.
+- Apply the following tone: ${toneInstruction}`,
       },
       {
         role: 'user',
@@ -74,7 +80,7 @@ async function generateSubjectLine(prompt: string, userName: string, tone: strin
     temperature: 0.7,
     max_tokens: 100,
   });
-  return (completion.choices[0]?.message?.content || '').trim();
+  return (completion.choices[0]?.message?.content || '').trim().replace(/^"|"$/g, '');
 }
 
 async function generateBothSubjectAndContent(prompt: string, userName: string, tone: string = 'professional') {
@@ -95,17 +101,28 @@ async function generateBothSubjectAndContent(prompt: string, userName: string, t
     messages: [
       {
         role: 'system',
-        content: `You are an AI assistant that generates email content and subject lines. Based on the user's input, generate both a subject line and email content. Return your response in this exact JSON format:
-{
-  "subject": "Subject line here",
-  "content": "Email content here"
-}
+        content: `You are an AI assistant that generates email content and subject lines.
+Your response MUST be a single, valid JSON object with proper escaping.
 
-${toneInstruction} Make the content professional and appropriate for business communication. Do not include signatures or closings - just the main message content.`,
+CRITICAL JSON FORMATTING RULES:
+- Use \\n for line breaks in content (not actual newlines)
+- Use \\" for quotes inside strings
+- Do not use unnecessary backslashes before $ or other characters
+- The JSON must be on a single line or properly formatted
+
+Required format:
+{"subject": "Your Subject", "content": "Line 1\\n\\nLine 2\\n\\nLine 3"}
+
+${toneInstruction}
+
+EXAMPLE RESPONSE:
+{"subject": "Investment Inquiry", "content": "Dear Investor,\\n\\nI am seeking funding for my startup.\\n\\nThank you."}
+
+Return ONLY the JSON object. No markdown, no explanations, no code blocks.`,
       },
       {
         role: 'user',
-        content: `My name is ${userName}. Generate both a subject line and email content for: ${prompt}`,
+        content: `My name is ${userName}. Generate a complete email (subject and content) for: ${prompt}`,
       },
     ],
     model: 'gemma2-9b-it',
@@ -113,20 +130,64 @@ ${toneInstruction} Make the content professional and appropriate for business co
     max_tokens: 1000,
   });
   
+  const response = completion.choices[0]?.message?.content || '';
+  console.log('Raw AI response:', response);
+  
   try {
-    const response = completion.choices[0]?.message?.content || '';
-    const parsed = JSON.parse(response);
+    // Clean the response by removing markdown formatting and extra text
+    let cleanedResponse = response.trim();
+    
+    // Remove markdown code blocks if present
+    cleanedResponse = cleanedResponse.replace(/```json\s*/g, '').replace(/```\s*/g, '');
+    
+    // Remove any text before the first {
+    const firstBrace = cleanedResponse.indexOf('{');
+    if (firstBrace !== -1) {
+      cleanedResponse = cleanedResponse.substring(firstBrace);
+    }
+    
+    // Remove any text after the last }
+    const lastBrace = cleanedResponse.lastIndexOf('}');
+    if (lastBrace !== -1) {
+      cleanedResponse = cleanedResponse.substring(0, lastBrace + 1);
+    }
+    
+    // Fix JSON formatting issues:
+    // 1. Replace actual newlines with escaped newlines in JSON strings
+    cleanedResponse = cleanedResponse.replace(/"content":\s*"([^"]*(?:\\.[^"]*)*)"/, (match, content) => {
+      // Replace actual newlines with \n in the content field
+      const escapedContent = content.replace(/\n/g, '\\n').replace(/\r/g, '\\r');
+      return `"content": "${escapedContent}"`;
+    });
+    
+    // 2. Fix common JSON escape issues for other backslashes
+    cleanedResponse = cleanedResponse.replace(/\\(?!["\\/bfnrt]|u[0-9a-fA-F]{4})/g, '\\\\');
+    
+    console.log('Cleaned response:', cleanedResponse);
+    
+    const parsed = JSON.parse(cleanedResponse);
+    
     return {
-      subject: parsed.subject || '',
-      content: parsed.content || ''
+      subject: (parsed.subject || 'Generated Subject').toString().trim(),
+      content: (parsed.content || 'Could not generate content.').toString().trim()
     };
   } catch (e) {
-    // Fallback if JSON parsing fails
-    console.warn('Failed to parse JSON response:', e);
-    const response = completion.choices[0]?.message?.content || '';
+    console.error('JSON parsing error:', e);
+    console.error('Raw response was:', response);
+    
+    // Last resort: try to manually extract content if it looks like proper text
+    const lines = response.split('\n').filter(line => line.trim());
+    if (lines.length >= 2) {
+      return {
+        subject: lines[0].replace(/^subject:?\s*/i, '').replace(/['"]/g, '').trim() || 'Generated Subject',
+        content: lines.slice(1).join('\n').trim() || 'Could not parse content from AI response.'
+      };
+    }
+    
+    // Ultimate fallback
     return {
-      subject: 'Generated Email',
-      content: response
+      subject: 'AI Response Error',
+      content: `The AI returned an unparseable response. Raw response: ${response}`
     };
   }
 }
@@ -163,5 +224,12 @@ export async function POST(req: NextRequest) {
       { error: 'Failed to generate content' },
       { status: 500 }
     );
-  }
+ 
+ 
+
+
+
+}
 } 
+
+
