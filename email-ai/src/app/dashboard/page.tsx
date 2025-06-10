@@ -7,7 +7,7 @@ import { Button } from "@/components/ui/button";
 import { Avatar, AvatarImage, AvatarFallback } from "@/components/ui/avatar";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Input } from "@/components/ui/input";
-import { Search, Mail, LogOut, Inbox, FileText, Send, Trash, Plus, ChevronLeft, ChevronRight, MoreVertical, Star, Tag, Flag, Archive, Sparkles, Shield, Paperclip, Download, Eye } from "lucide-react";
+import { Search, Mail, LogOut, Inbox, FileText, Send, Trash, Plus, ChevronLeft, ChevronRight, MoreVertical, Star, Tag, Flag, Archive, Sparkles, Shield, Paperclip, Download, Eye, Trash2 } from "lucide-react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import api from '@/lib/axios';
 import debounce from 'lodash/debounce';
@@ -15,6 +15,8 @@ import { ResizablePanelGroup, ResizablePanel } from "@/components/ui/resizable";
 import { ResizableHandleWithReset } from "@/components/ui/resizable-handle-with-reset";
 import { useEmailPanelLayout } from "@/hooks/use-email-panel-layout";
 import { toast } from 'sonner';
+import { processEmailContent } from '@/lib/sanitize-html';
+
 interface UserInfo {
   email: string;
   name: string;
@@ -167,13 +169,25 @@ function DashboardContent() {
   const [isSummarizing, setIsSummarizing] = useState(false);
   const [summary, setSummary] = useState<EmailSummary | null>(null);
   const [isSummaryDialogOpen, setIsSummaryDialogOpen] = useState(false);
-  const [currentFolder, setCurrentFolder] = useState<'inbox' | 'sent' | 'spam'>('inbox');
+  const [currentFolder, setCurrentFolder] = useState<'inbox' | 'sent' | 'spam' | 'trash'>('inbox');
   const [flaggedEmails, setFlaggedEmails] = useState<Record<string, { flag: string, subject: string, snippet: string, sender: string, flaggedAt: number }>>({});
   const [emailSummary, setEmailSummary] = useState<string | null>(null);
   const [isGeneratingSummary, setIsGeneratingSummary] = useState(false);
   const [showSummary, setShowSummary] = useState(false);
   const [starringEmails, setStarringEmails] = useState<Set<string>>(new Set());
   const [showStarredOnly, setShowStarredOnly] = useState(false);
+  const [deletingEmails, setDeletingEmails] = useState<Set<string>>(new Set());
+  const [deleteDialog, setDeleteDialog] = useState<{
+    isOpen: boolean;
+    emailId: string;
+    emailSubject: string;
+    action: 'trash' | 'permanent';
+  }>({
+    isOpen: false,
+    emailId: '',
+    emailSubject: '',
+    action: 'trash'
+  });
 
   const { refs, sizes, onResize } = useEmailPanelLayout();
 
@@ -252,7 +266,7 @@ function DashboardContent() {
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
     const folder = params.get('folder');
-    if (folder === 'sent' || folder === 'inbox' || folder === 'spam') {
+    if (folder === 'sent' || folder === 'inbox' || folder === 'spam' || folder === 'trash') {
       setCurrentFolder(folder);
     }
     
@@ -928,6 +942,125 @@ function DashboardContent() {
     }
   };
 
+  // Handle deleting emails
+  const handleDeleteEmail = async (emailId: string, action: 'trash' | 'permanent' = 'trash') => {
+    if (deletingEmails.has(emailId)) return;
+
+    setDeletingEmails(prev => new Set(prev).add(emailId));
+    
+    try {
+      const response = await api.post('/api/emails/delete', {
+        messageId: emailId,
+        action
+      });
+
+      const responseData = response.data as { success: boolean; action: string; messageId: string };
+
+      if (responseData.success) {
+        // Remove the email from the local state
+        setEmails(prevEmails => 
+          prevEmails.filter(email => email.id !== emailId)
+        );
+
+        // Clear selected email if it's the one being deleted
+        if (selectedEmail?.id === emailId) {
+          setSelectedEmail(null);
+          // Clear URL params
+          const params = new URLSearchParams(window.location.search);
+          params.delete('threadId');
+          router.replace(`/dashboard?${params.toString()}`, { scroll: false });
+        }
+
+        // Remove from thread data if present
+        Object.keys(threadData).forEach(threadId => {
+          if (threadData[threadId].messages.some(msg => msg.id === emailId)) {
+            setThreadData(prev => ({
+              ...prev,
+              [threadId]: {
+                ...prev[threadId],
+                messages: prev[threadId].messages.filter(msg => msg.id !== emailId)
+              }
+            }));
+          }
+        });
+
+        toast.success(
+          action === 'permanent' 
+            ? 'Email permanently deleted' 
+            : 'Email moved to trash'
+        );
+      }
+    } catch (error) {
+      console.error('Error deleting email:', error);
+      toast.error('Failed to delete email');
+    } finally {
+      setDeletingEmails(prev => {
+        const newSet = new Set(prev);
+        newSet.delete(emailId);
+        return newSet;
+      });
+    }
+  };
+
+  // Show delete confirmation dialog
+  const showDeleteConfirmation = (emailId: string, emailSubject: string, action: 'trash' | 'permanent' = 'trash') => {
+    setDeleteDialog({
+      isOpen: true,
+      emailId,
+      emailSubject,
+      action
+    });
+  };
+
+  // Confirm delete action
+  const confirmDelete = () => {
+    handleDeleteEmail(deleteDialog.emailId, deleteDialog.action);
+    setDeleteDialog({ isOpen: false, emailId: '', emailSubject: '', action: 'trash' });
+  };
+
+  // Handle restoring emails from trash
+  const handleRestoreEmail = async (emailId: string) => {
+    if (deletingEmails.has(emailId)) return;
+
+    setDeletingEmails(prev => new Set(prev).add(emailId));
+    
+    try {
+      const response = await api.post('/api/emails/delete', {
+        messageId: emailId,
+        action: 'restore'
+      });
+
+      const responseData = response.data as { success: boolean; action: string; messageId: string };
+
+      if (responseData.success) {
+        // Remove the email from the trash view
+        setEmails(prevEmails => 
+          prevEmails.filter(email => email.id !== emailId)
+        );
+
+        // Clear selected email if it's the one being restored
+        if (selectedEmail?.id === emailId) {
+          setSelectedEmail(null);
+          // Clear URL params
+          const params = new URLSearchParams(window.location.search);
+          params.delete('threadId');
+          router.replace(`/dashboard?${params.toString()}`, { scroll: false });
+        }
+
+        toast.success('Email restored to inbox');
+      }
+    } catch (error) {
+      console.error('Error restoring email:', error);
+      toast.error('Failed to restore email');
+    } finally {
+      setDeletingEmails(prev => {
+        const newSet = new Set(prev);
+        newSet.delete(emailId);
+        return newSet;
+      });
+    }
+  };
+
   if (loading && !searchLoading && emails.length === 0) {
     return (
       <div className="min-h-screen bg-background flex flex-col h-screen overflow-hidden">
@@ -1154,6 +1287,24 @@ function DashboardContent() {
                 <Shield className="mr-2 h-5 w-5" />
                 Spam
               </Button>
+              <Button 
+                variant="ghost" 
+                className={`w-full justify-start font-medium ${currentFolder === 'trash' ? 'text-orange-700 dark:text-orange-300 bg-orange-500/10' : 'text-muted-foreground hover:text-orange-600 hover:bg-orange-500/10'}`}
+                onClick={() => {
+                  setCurrentFolder('trash');
+                  setSelectedEmail(null); // Clear selected email when switching folders
+                  setSelectedFlag(null); // Clear flag filter when switching to trash
+                  // Clear email/thread URL params when switching folders
+                  const params = new URLSearchParams(window.location.search);
+                  params.delete('threadId');
+                  params.set('folder', 'trash');
+                  router.replace(`/dashboard?${params.toString()}`, { scroll: false });
+                  fetchEmails(undefined, searchQuery);
+                }}
+              >
+                <Trash className="mr-2 h-5 w-5" />
+                Trash
+              </Button>
               <Button variant="ghost" className="w-full justify-start font-medium text-muted-foreground hover:text-orange-600 hover:bg-orange-500/10">
                 <FileText className="mr-2 h-5 w-5" />
                 Drafts
@@ -1301,6 +1452,35 @@ function DashboardContent() {
                                 <Star className={`h-3 w-3 ${email.starred ? 'fill-current' : ''}`} />
                               )}
                             </Button>
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                if (currentFolder === 'trash') {
+                                  handleRestoreEmail(email.id);
+                                } else {
+                                  showDeleteConfirmation(email.id, email.subject, 'trash');
+                                }
+                              }}
+                              disabled={deletingEmails.has(email.id)}
+                              className={`p-1 h-6 w-6 ${
+                                currentFolder === 'trash' 
+                                  ? 'text-muted-foreground hover:text-green-500' 
+                                  : 'text-muted-foreground hover:text-red-500'
+                              }`}
+                              title={currentFolder === 'trash' ? 'Restore email' : 'Delete email'}
+                            >
+                              {deletingEmails.has(email.id) ? (
+                                <span className="animate-spin text-xs">⟳</span>
+                              ) : (
+                                currentFolder === 'trash' ? (
+                                  <Archive className="h-3 w-3" />
+                                ) : (
+                                  <Trash2 className="h-3 w-3" />
+                                )
+                              )}
+                            </Button>
                             <span className="text-xs text-muted-foreground whitespace-nowrap ml-2">
                         {formatEmailDate(email.date)}
                             </span>
@@ -1365,6 +1545,14 @@ function DashboardContent() {
               <div className="flex-1 overflow-y-auto email-content-container">
                 <div className="p-4 md:p-6 max-w-5xl mx-auto">
                   <div className="pb-4 mb-4 border-b border-border">
+                    {currentFolder === 'trash' && (
+                      <div className="mb-4 p-3 bg-amber-50 dark:bg-amber-950/20 border border-amber-200 dark:border-amber-800 rounded-lg">
+                        <div className="flex items-center gap-2 text-amber-800 dark:text-amber-200">
+                          <Trash className="h-4 w-4" />
+                          <span className="text-sm font-medium">This email is in trash</span>
+                        </div>
+                      </div>
+                    )}
                     <div className="flex items-center justify-between mb-3">
                       <h1 className="text-xl font-bold text-foreground">{selectedEmail.subject}</h1>
                       <div className="flex space-x-2">
@@ -1390,6 +1578,34 @@ function DashboardContent() {
                             )}
                           </Button>
                         )}
+                        <Button 
+                          variant="ghost" 
+                          size="icon" 
+                          onClick={() => {
+                            if (currentFolder === 'trash') {
+                              handleRestoreEmail(selectedEmail.id);
+                            } else {
+                              showDeleteConfirmation(selectedEmail.id, selectedEmail.subject, 'trash');
+                            }
+                          }}
+                          disabled={deletingEmails.has(selectedEmail.id)}
+                          className={`${
+                            currentFolder === 'trash' 
+                              ? 'text-muted-foreground hover:text-green-500' 
+                              : 'text-muted-foreground hover:text-red-500'
+                          }`}
+                          title={currentFolder === 'trash' ? 'Restore email' : 'Delete email'}
+                        >
+                          {deletingEmails.has(selectedEmail.id) ? (
+                            <span className="animate-spin">⟳</span>
+                          ) : (
+                            currentFolder === 'trash' ? (
+                              <Archive className="h-5 w-5" />
+                            ) : (
+                              <Trash2 className="h-5 w-5" />
+                            )
+                          )}
+                        </Button>
                         <Button variant="ghost" size="icon" className="text-muted-foreground">
                           <Archive className="h-5 w-5" />
                         </Button>
@@ -1459,11 +1675,9 @@ function DashboardContent() {
                           borderRadius: '8px'
                         }}
                       >
-
                         <div 
-                          className="email-content-raw"
                           dangerouslySetInnerHTML={{ 
-                            __html: selectedEmail.body
+                            __html: processEmailContent(selectedEmail.body)
                           }} 
                         />
                       </div>
@@ -1593,9 +1807,7 @@ function DashboardContent() {
                                   <div 
                                     className="prose prose-sm dark:prose-invert max-w-none text-sm leading-relaxed"
                                     dangerouslySetInnerHTML={{ 
-                                      __html: threadMsg.body
-                                        .replace(/<script[\s\S]*?<\/script>/gi, '')
-                                        .replace(/<style[\s\S]*?<\/style>/gi, '')
+                                      __html: processEmailContent(threadMsg.body)
                                     }} 
                                   />
                                   
@@ -1906,6 +2118,42 @@ function DashboardContent() {
           <DialogFooter>
             <Button variant="outline" onClick={() => setShowSummary(false)}>
               Close
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Delete confirmation dialog */}
+      <Dialog open={deleteDialog.isOpen} onOpenChange={() => setDeleteDialog({ ...deleteDialog, isOpen: false })}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Delete Email</DialogTitle>
+          </DialogHeader>
+          <div className="py-4">
+            <p className="text-sm text-muted-foreground mb-4">
+              Are you sure you want to delete this email?
+            </p>
+            <div className="bg-muted/20 p-3 rounded-lg border">
+              <p className="font-medium text-sm truncate">{deleteDialog.emailSubject}</p>
+              <p className="text-xs text-muted-foreground mt-1">
+                This action will move the email to trash. You can restore it later if needed.
+              </p>
+            </div>
+          </div>
+          <DialogFooter>
+            <Button 
+              variant="outline" 
+              onClick={() => setDeleteDialog({ ...deleteDialog, isOpen: false })}
+            >
+              Cancel
+            </Button>
+            <Button 
+              variant="destructive"
+              onClick={confirmDelete}
+              className="bg-red-600 hover:bg-red-700"
+            >
+              <Trash2 className="h-4 w-4 mr-2" />
+              Delete
             </Button>
           </DialogFooter>
         </DialogContent>

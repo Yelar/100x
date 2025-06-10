@@ -148,7 +148,7 @@
   opacity: 1;
 }
 
-/* Email content styling */
+/* Email content styling - ISOLATED FROM APP STYLES */
 .email-content {
   @apply max-w-none;
   font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
@@ -164,6 +164,199 @@
   position: relative;
   width: 100%;
   height: 100%;
+}
+
+/* COMPLETE CSS ISOLATION FOR EMAIL CONTENT */
+.email-content-isolated-complete {
+  /* Complete isolation from parent styles */
+  all: initial;
+  
+  /* Restore only essential display properties */
+  display: block;
+  position: relative;
+  width: 100%;
+  max-width: 100%;
+  
+  /* Create complete containment boundary */
+  contain: layout style paint size;
+  isolation: isolate;
+  
+  /* Set up clean rendering context */
+  box-sizing: border-box;
+  
+  /* Basic typography reset for email content */
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+  font-size: 14px;
+  line-height: 1.4;
+  color: #000000;
+  background: #ffffff;
+  
+  /* Prevent overflow issues */
+  overflow-x: auto;
+  overflow-y: visible;
+  word-wrap: break-word;
+  
+  /* Padding for readability */
+  padding: 16px;
+  border-radius: 8px;
+  border: 1px solid #e5e5e5;
+  
+  /* Ensure responsiveness */
+  min-width: 0;
+}
+
+/* Reset ALL inherited styles within email content */
+.email-content-isolated-complete * {
+  /* Reset everything to initial values */
+  all: unset;
+  
+  /* Restore basic display behavior */
+  display: revert;
+  box-sizing: border-box;
+  
+  /* Prevent any inheritance from app */
+  font-family: inherit;
+  font-size: inherit;
+  line-height: inherit;
+  color: inherit;
+}
+
+/* Restore essential HTML element behaviors within email */
+.email-content-isolated-complete p {
+  display: block;
+  margin: 1em 0;
+}
+
+.email-content-isolated-complete div {
+  display: block;
+}
+
+.email-content-isolated-complete span {
+  display: inline;
+}
+
+.email-content-isolated-complete a {
+  display: inline;
+  color: #0066cc;
+  text-decoration: underline;
+  cursor: pointer;
+}
+
+.email-content-isolated-complete a:hover {
+  color: #004499;
+}
+
+.email-content-isolated-complete img {
+  display: inline-block;
+  max-width: 100% !important;
+  height: auto !important;
+  vertical-align: middle;
+}
+
+.email-content-isolated-complete table {
+  display: table;
+  border-collapse: collapse;
+  max-width: 100% !important;
+  width: auto;
+}
+
+.email-content-isolated-complete tr {
+  display: table-row;
+}
+
+.email-content-isolated-complete td,
+.email-content-isolated-complete th {
+  display: table-cell;
+  padding: 4px 8px;
+  vertical-align: top;
+  word-wrap: break-word !important;
+  overflow-wrap: break-word !important;
+  max-width: 300px;
+}
+
+.email-content-isolated-complete th {
+  font-weight: bold;
+}
+
+.email-content-isolated-complete ul,
+.email-content-isolated-complete ol {
+  display: block;
+  margin: 1em 0;
+  padding-left: 2em;
+}
+
+.email-content-isolated-complete ul {
+  list-style-type: disc;
+}
+
+.email-content-isolated-complete ol {
+  list-style-type: decimal;
+}
+
+.email-content-isolated-complete li {
+  display: list-item;
+  margin: 0.5em 0;
+}
+
+.email-content-isolated-complete h1,
+.email-content-isolated-complete h2,
+.email-content-isolated-complete h3,
+.email-content-isolated-complete h4,
+.email-content-isolated-complete h5,
+.email-content-isolated-complete h6 {
+  display: block;
+  font-weight: bold;
+  margin: 1em 0 0.5em 0;
+}
+
+.email-content-isolated-complete h1 { font-size: 2em; }
+.email-content-isolated-complete h2 { font-size: 1.5em; }
+.email-content-isolated-complete h3 { font-size: 1.17em; }
+.email-content-isolated-complete h4 { font-size: 1em; }
+.email-content-isolated-complete h5 { font-size: 0.83em; }
+.email-content-isolated-complete h6 { font-size: 0.67em; }
+
+.email-content-isolated-complete strong,
+.email-content-isolated-complete b {
+  font-weight: bold;
+}
+
+.email-content-isolated-complete em,
+.email-content-isolated-complete i {
+  font-style: italic;
+}
+
+.email-content-isolated-complete u {
+  text-decoration: underline;
+}
+
+.email-content-isolated-complete br {
+  display: block;
+  content: "";
+  margin-top: 0.5em;
+}
+
+.email-content-isolated-complete blockquote {
+  display: block;
+  margin: 1em 2em;
+  padding-left: 1em;
+  border-left: 3px solid #ccc;
+}
+
+/* Dark mode handling for isolated email content */
+@media (prefers-color-scheme: dark) {
+  .email-content-isolated-complete {
+    /* Force light theme for email content to maintain readability */
+    background: #ffffff !important;
+    color: #000000 !important;
+    border-color: rgba(255,255,255,0.2);
+  }
+  
+  .email-content-isolated-complete * {
+    /* Ensure email content stays readable in dark mode */
+    background-color: revert;
+    color: revert;
+  }
 }
 
 /* Raw email content - absolutely no interference with original HTML */
@@ -328,6 +521,143 @@
   content: "🖼️ Image failed to load";
 }
 
-/* General responsive styling for all emails */
-.email-content table {
+/* Dark mode support for isolated containers */
+@media (prefers-color-scheme: dark) {
+  .email-content-isolated,
+  .email-content-isolated-frame {
+    /* Keep light theme for email content to maintain readability */
+    background: #ffffff;
+    color: #000000;
+    border-color: rgba(255,255,255,0.2);
+  }
+}
+
+/* Ensure no global styles leak into email content */
+.email-content-isolated *,
+.email-content-isolated-frame * {
+  /* Reset any external CSS that might interfere */
+  box-sizing: border-box;
+  max-width: 100%;
+}
+
+/* Prevent email content from affecting layout outside the container */
+.email-content-isolated,
+.email-content-isolated-frame {
+  /* Contain any layout changes within the container */
+  contain: layout style paint size;
+  /* Ensure the container doesn't grow beyond its bounds */
+  min-height: 0;
+  min-width: 0;
+}
+
+/* Safe email content container */
+.email-content-safe {
+  width: 100%;
+  max-width: 100%;
+  overflow-x: auto;
+  word-wrap: break-word;
+  overflow-wrap: break-word;
+}
+
+.email-content-safe img {
+  max-width: 100% !important;
+  height: auto !important;
+}
+
+.email-content-safe table {
+  max-width: 100% !important;
+}
+
+.email-content-safe td,
+.email-content-safe th {
+  word-wrap: break-word !important;
+  overflow-wrap: break-word !important;
+}
+
+.email-content-safe a {
+  color: #0066cc !important;
+  text-decoration: underline !important;
+}
+
+.email-content-safe a:hover {
+  color: #004499 !important;
+}
+
+/* Clean end of email content styling - all email content now uses .email-content-isolated-complete */
+
+/* Safe email display container - balanced isolation */
+.email-content-safe-display {
+  /* Create containment without breaking content */
+  position: relative;
+  isolation: isolate;
+  contain: layout style;
+  
+  /* Basic styling setup */
+  width: 100%;
+  max-width: 100%;
+  background: #ffffff;
+  color: #000000;
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+  font-size: 14px;
+  line-height: 1.6;
+  
+  /* Visual container */
+  padding: 20px;
+  border-radius: 8px;
+  border: 1px solid #e0e0e0;
+  
+  /* Prevent overflow issues */
+  overflow-x: auto;
+  word-wrap: break-word;
+  overflow-wrap: break-word;
+  
+  /* Ensure proper box model */
+  box-sizing: border-box;
+}
+
+/* Reset problematic inherited styles only */
+.email-content-safe-display * {
+  max-width: 100%;
+  box-sizing: border-box;
+}
+
+/* Ensure responsive images */
+.email-content-safe-display img {
+  max-width: 100% !important;
+  height: auto !important;
+}
+
+/* Ensure responsive tables */
+.email-content-safe-display table {
+  max-width: 100% !important;
+  width: auto;
+  border-collapse: collapse;
+}
+
+.email-content-safe-display td,
+.email-content-safe-display th {
+  word-wrap: break-word !important;
+  overflow-wrap: break-word !important;
+  padding: 4px 8px;
+  vertical-align: top;
+}
+
+/* Ensure readable links */
+.email-content-safe-display a {
+  color: #0066cc !important;
+  text-decoration: underline !important;
+}
+
+.email-content-safe-display a:hover {
+  color: #004499 !important;
+}
+
+/* Dark mode support */
+@media (prefers-color-scheme: dark) {
+  .email-content-safe-display {
+    /* Keep light theme for email readability */
+    background: #ffffff !important;
+    color: #000000 !important;
+    border-color: rgba(255,255,255,0.2);
+  }
 }

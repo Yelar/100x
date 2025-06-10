@@ -76,6 +76,8 @@ export const getGmailMessages = async (accessToken: string, options: GetEmailsOp
     query = 'in:sent';
   } else if (options.folder === 'spam') {
     query = 'in:spam';
+  } else if (options.folder === 'trash') {
+    query = 'in:trash';
   } else {
     query = 'in:inbox';
   }
@@ -448,6 +450,51 @@ export const starEmail = async (accessToken: string, messageId: string, star: bo
       addLabelIds: labelsToAdd,
       removeLabelIds: labelsToRemove
     }
+  });
+
+  return response.data;
+};
+
+/**
+ * Delete an email (move to trash)
+ */
+export const deleteEmail = async (accessToken: string, messageId: string) => {
+  oauth2Client.setCredentials({ access_token: accessToken });
+  const gmail = google.gmail({ version: 'v1', auth: oauth2Client });
+
+  const response = await gmail.users.messages.trash({
+    userId: 'me',
+    id: messageId
+  });
+
+  return response.data;
+};
+
+/**
+ * Permanently delete an email
+ */
+export const permanentlyDeleteEmail = async (accessToken: string, messageId: string) => {
+  oauth2Client.setCredentials({ access_token: accessToken });
+  const gmail = google.gmail({ version: 'v1', auth: oauth2Client });
+
+  const response = await gmail.users.messages.delete({
+    userId: 'me',
+    id: messageId
+  });
+
+  return response.data;
+};
+
+/**
+ * Restore an email from trash
+ */
+export const restoreEmail = async (accessToken: string, messageId: string) => {
+  oauth2Client.setCredentials({ access_token: accessToken });
+  const gmail = google.gmail({ version: 'v1', auth: oauth2Client });
+
+  const response = await gmail.users.messages.untrash({
+    userId: 'me',
+    id: messageId
   });
 
   return response.data;

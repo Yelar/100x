@@ -1,17 +1,23 @@
 import DOMPurify from 'dompurify';
 
 /**
- * Sanitizes HTML content to prevent XSS and other security issues
+ * Sanitizes HTML content to prevent XSS and CSS leakage into the parent page
  * 
  * @param html - Raw HTML content from emails
  * @returns Sanitized HTML string
  */
 export function sanitizeHtml(html: string): string {
   if (typeof window === 'undefined') {
-    return html;
+    // Server-side fallback - basic tag stripping
+    return html
+      .replace(/<script[\s\S]*?<\/script>/gi, '')
+      .replace(/<link[^>]*>/gi, '')
+      .replace(/<meta[^>]*>/gi, '')
+      .replace(/on\w+\s*=\s*["'][^"']*["']/gi, '')
+      .replace(/javascript:/gi, '');
   }
   
-  // Configure DOMPurify for safe email content
+  // Configure DOMPurify for safe email content - less aggressive
   const purifyConfig = {
     ALLOWED_TAGS: [
       'a', 'b', 'blockquote', 'br', 'caption', 'code', 'div', 
@@ -19,10 +25,10 @@ export function sanitizeHtml(html: string): string {
       'ol', 'p', 'pre', 'span', 'strong', 'table', 'tbody', 'td', 
       'th', 'thead', 'tr', 'ul', 'font', 'center', 'u', 's', 'sub', 'sup',
       'section', 'article', 'aside', 'details', 'figure', 'figcaption',
-      'main', 'nav', 'header', 'footer', 'style', 'mark', 'small', 'big',
+      'main', 'nav', 'header', 'footer', 'mark', 'small', 'big',
       'cite', 'q', 'samp', 'var', 'time', 'data', 'abbr', 'address',
       'bdi', 'bdo', 'del', 'ins', 'kbd', 'meter', 'progress', 'ruby',
-      'rt', 'rp', 'wbr'
+      'rt', 'rp', 'wbr', 'dl', 'dt', 'dd'
     ],
     ALLOWED_ATTR: [
       'alt', 'src', 'width', 'height', 'href', 'target', 'title', 'style',
@@ -41,20 +47,20 @@ export function sanitizeHtml(html: string): string {
     SANITIZE_NAMED_PROPS: true,
     KEEP_CONTENT: true,
     IN_PLACE: false,
-    ALLOWED_URI_REGEXP: /^(?:(?:(?:f|ht)tps?|mailto|tel|callto|cid|xmpp|xxx):|[^a-z]|[a-z+.\-]+(?:[^a-z+.\-:]|$))/i,
-    FORBID_TAGS: ['script', 'object', 'embed', 'form', 'input', 'button', 'select', 'textarea', 'iframe', 'frame', 'frameset'],
-    FORBID_ATTR: ['onerror', 'onload', 'onclick', 'onmouseover', 'onfocus', 'onblur', 'onchange', 'onsubmit'],
-    USE_PROFILES: { html: true },
-    WHOLE_DOCUMENT: false,
-    FORCE_BODY: false
+    ALLOWED_URI_REGEXP: /^(?:(?:(?:f|ht)tps?|mailto|tel|callto|cid|xmpp):|[^a-z]|[a-z+.\-]+(?:[^a-z+.\-:]|$))/i,
+    FORBID_TAGS: ['script', 'object', 'embed', 'form', 'input', 'button', 'select', 'textarea', 'iframe', 'frame', 'frameset', 'link', 'meta'],
+    FORBID_ATTR: ['onload', 'onerror', 'onclick', 'onmouseover', 'onfocus', 'onblur', 'onchange', 'onsubmit'] // Only remove dangerous event handlers
   };
+
+  // First pass: sanitize with DOMPurify
+  let sanitized = DOMPurify.sanitize(html, purifyConfig);
   
-  try {
-  return DOMPurify.sanitize(html, purifyConfig);
-  } catch (error) {
-    console.error('Error sanitizing HTML:', error);
-    return html.replace(/<script[\s\S]*?<\/script>/gi, '').replace(/<[^>]*>/g, '');
-  }
+  // Second pass: manually remove only the most dangerous content, preserve styling
+  sanitized = sanitized
+    .replace(/on\w+\s*=\s*["'][^"']*["']/gi, '') // Remove event handlers
+    .replace(/javascript:/gi, ''); // Remove javascript: URLs
+
+  return sanitized;
 }
 
 /**
@@ -72,9 +78,6 @@ export function hasComplexStyling(html: string): boolean {
   const hasSlackStyling = /slack\.com/i.test(html);
   const hasNotionStyling = /notion\.so/i.test(html);
   const hasZoomStyling = /zoom\.us/i.test(html);
-  
-  // Check for inline styles with specific colors
-  const hasInlineColors = /style\s*=\s*["'][^"']*(?:color|background|background-color)\s*:[^"']*["']/i.test(html);
   
   // Check for CSS rules
   const hasStyleTags = /<style[\s\S]*?<\/style>/i.test(html);
@@ -98,25 +101,17 @@ export function hasComplexStyling(html: string): boolean {
   const styledDivs = (html.match(/<div[^>]*style/gi) || []).length;
   const hasComplexLayout = styledDivs >= 3;
   
-  // Check for CSS grid or flexbox
-  const hasModernLayout = /(?:display\s*:\s*(?:flex|grid)|flex-|grid-)/i.test(html);
-  
-  // Check for multiple colors in the email
-  const colorMatches = html.match(/#[0-9a-f]{3,6}|rgb\s*\(|rgba\s*\(|hsl\s*\(/gi) || [];
-  const hasMultipleColors = colorMatches.length >= 3;
-  
   return hasLinkedInStyling || hasGoogleStyling || hasFacebookStyling || hasTwitterStyling || 
-         hasSlackStyling || hasNotionStyling || hasZoomStyling ||
-         hasInlineColors || hasStyleTags || hasStyledTables || hasFontColors || 
-         hasBackgroundColors || hasStyledImages || hasBrandedClasses || 
-         hasComplexLayout || hasModernLayout || hasMultipleColors;
+         hasSlackStyling || hasNotionStyling || hasZoomStyling || hasStyleTags || 
+         hasStyledTables || hasFontColors || hasBackgroundColors || hasStyledImages || 
+         hasBrandedClasses || hasComplexLayout;
 }
 
 /**
- * Processes email content for display, applying dark theme only to simple text-based emails
+ * Processes email content for display with proper CSS isolation
  * 
- * @param emailBody - Sanitized email body HTML
- * @returns Processed HTML with appropriate styling
+ * @param emailBody - Raw email body HTML
+ * @returns Processed HTML with appropriate styling and isolation
  */
 export function processEmailContent(emailBody: string): string {
   // Try to detect if the email is plain text
@@ -125,32 +120,56 @@ export function processEmailContent(emailBody: string): string {
   // Format plain text emails
   if (isPlainText) {
     const formattedContent = emailBody
-        .split('\n')
-        .map(line => line.trim() ? `<p>${line}</p>` : '<br>')
+      .split('\n')
+      .map(line => line.trim() ? `<p>${escapeHtml(line)}</p>` : '<br>')
       .join('');
 
-    return `<div class="email-content simple-email">${formattedContent}</div>`;
-          }
-
-  // Check if email has complex styling
-  const hasComplex = hasComplexStyling(emailBody);
-  
-  if (hasComplex) {
-    // For complex styled emails, wrap with readable class that ensures text is visible
-    return `<div class="email-content complex-email-beautiful">${emailBody}</div>`;
-  } else {
-    // For simple HTML emails, apply theme-aware styling
-    return `<div class="email-content simple-email">${emailBody}</div>`;
+    return `<div class="email-content-safe-display">${formattedContent}</div>`;
   }
-            }
+
+  // Sanitize the HTML content first
+  const sanitizedHtml = sanitizeHtml(emailBody);
+  
+  // Use safe display container that preserves content
+  return `<div class="email-content-safe-display">${sanitizedHtml}</div>`;
+}
 
 /**
- * Processes email content without any sanitization - returns raw HTML exactly as received
+ * Processes email content with minimal sanitization for display
  * 
  * @param emailBody - Raw email body HTML
- * @returns Raw HTML content with minimal wrapper for responsiveness
+ * @returns Processed HTML with CSS isolation container
  */
 export function processRawEmailContent(emailBody: string): string {
-  // Return completely raw HTML with just a minimal container for responsiveness
-  return `<div class="email-content-raw">${emailBody}</div>`;
+  // Apply only basic security sanitization
+  const basicSanitized = emailBody
+    .replace(/<script[\s\S]*?<\/script>/gi, '') // Remove scripts
+    .replace(/<link[^>]*>/gi, '') // Remove link tags
+    .replace(/<meta[^>]*>/gi, '') // Remove meta tags
+    .replace(/on\w+\s*=\s*["'][^"']*["']/gi, '') // Remove event handlers
+    .replace(/javascript:/gi, ''); // Remove javascript: URLs
+  
+  // Return with simple container
+  return `<div class="email-content-safe">${basicSanitized}</div>`;
+}
+
+/**
+ * Escape HTML entities to prevent XSS
+ */
+function escapeHtml(text: string): string {
+  if (typeof window === 'undefined') {
+    return text.replace(/[&<>"']/g, function(match) {
+      const htmlEscapes: Record<string, string> = {
+        '&': '&amp;',
+        '<': '&lt;',
+        '>': '&gt;',
+        '"': '&quot;',
+        "'": '&#39;'
+      };
+      return htmlEscapes[match];
+    });
+  }
+  const div = document.createElement('div');
+  div.textContent = text;
+  return div.innerHTML;
 } 
