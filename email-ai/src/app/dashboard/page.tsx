@@ -7,8 +7,16 @@ import { Button } from "@/components/ui/button";
 import { Avatar, AvatarImage, AvatarFallback } from "@/components/ui/avatar";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Input } from "@/components/ui/input";
-import { Search, Mail, LogOut, Inbox, FileText, Send, Trash, Plus, ChevronLeft, ChevronRight, MoreVertical, Star, Tag, Flag, Archive, Sparkles, Shield, Paperclip, Download, Eye, Trash2 } from "lucide-react";
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
+import { Search, Mail, LogOut, Inbox, FileText, Send, Trash, Plus, ChevronLeft, ChevronRight, MoreVertical, Star, Tag, Flag, Archive, Sparkles, Shield, Paperclip, Download, Eye, Trash2, X } from "lucide-react";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogFooter,
+  DialogClose,
+} from "@/components/ui/dialog";
+import { VisuallyHidden } from "@/components/ui/visually-hidden";
 import api from '@/lib/axios';
 import debounce from 'lodash/debounce';
 import { ResizablePanelGroup, ResizablePanel } from "@/components/ui/resizable";
@@ -187,6 +195,15 @@ function DashboardContent() {
     emailId: '',
     emailSubject: '',
     action: 'trash'
+  });
+
+  // New state for preview functionality
+  const [generatedPreview, setGeneratedPreview] = useState<{
+    subject?: string;
+    content?: string;
+    isVisible: boolean;
+  }>({
+    isVisible: false
   });
 
   const { refs, sizes, onResize } = useEmailPanelLayout();
@@ -496,6 +513,8 @@ function DashboardContent() {
 
   const handleGenerateContent = async (type: 'subject' | 'content') => {
     let prompt = '';
+    let shouldGenerateBoth = false;
+    
     if (type === 'subject') {
       prompt = newEmail.subject;
       if (!prompt.trim()) {
@@ -508,30 +527,51 @@ function DashboardContent() {
         alert('Please enter some content to generate or rewrite');
         return;
       }
+      // If content is being generated and no subject exists, generate both
+      if (!newEmail.subject.trim()) {
+        shouldGenerateBoth = true;
+      }
     }
 
     try {
       setGenerating(type);
       const response = await api.post('/api/generate', {
         prompt,
-        type,
+        type: shouldGenerateBoth ? 'both' : type,
         tone: selectedTone,
         userName: userInfo?.name || '',
       });
 
       const data = response.data as { subject?: string; content?: string };
       
-      if (type === 'subject' && data.subject) {
-        setNewEmail({ ...newEmail, subject: data.subject });
-      } else if (type === 'content' && data.content) {
-        setNewEmail({ ...newEmail, content: data.content });
-      }
+      // Show preview with generated content
+      setGeneratedPreview({
+        subject: shouldGenerateBoth ? data.subject : (type === 'subject' ? data.subject : undefined),
+        content: type === 'content' ? data.content : undefined,
+        isVisible: true
+      });
     } catch (error) {
       console.error(`Error generating ${type}:`, error);
       alert(`Failed to generate ${type}. Please try again.`);
     } finally {
       setGenerating('idle');
     }
+  };
+
+  // Accept generated content
+  const acceptGeneratedContent = () => {
+    if (generatedPreview.subject) {
+      setNewEmail(prev => ({ ...prev, subject: generatedPreview.subject! }));
+    }
+    if (generatedPreview.content) {
+      setNewEmail(prev => ({ ...prev, content: generatedPreview.content! }));
+    }
+    setGeneratedPreview({ isVisible: false });
+  };
+
+  // Reject generated content
+  const rejectGeneratedContent = () => {
+    setGeneratedPreview({ isVisible: false });
   };
 
   const handleReplyComplete = () => {
@@ -1900,27 +1940,43 @@ function DashboardContent() {
 
       {/* Email compose dialog */}
       <Dialog open={composing} onOpenChange={setComposing}>
-        <DialogContent className="sm:max-w-[600px]">
-          <DialogHeader>
-            <DialogTitle>New Email</DialogTitle>
-          </DialogHeader>
-          <div className="grid gap-4 py-4">
-            <div className="grid grid-cols-4 items-center gap-4">
-              <label htmlFor="to" className="text-right font-medium text-sm">
-                To:
-              </label>
-              <div className="col-span-3">
-                <div className="border border-border rounded-md p-2 min-h-[42px] flex flex-wrap gap-1 items-center">
+        <DialogContent className="max-w-5xl w-[90vw] h-[85vh] p-0 flex flex-col gap-0 overflow-hidden border-2 border-border/30 rounded-lg">
+          {/* Hidden title for accessibility */}
+          <VisuallyHidden>
+            <DialogTitle>Compose Email</DialogTitle>
+          </VisuallyHidden>
+          
+          {/* Header */}
+          <div className="flex items-center justify-between px-3 py-2 border-b border-border/20 flex-none">
+            <h2 className="text-base font-medium text-foreground">New Message</h2>
+            <DialogClose asChild>
+              <Button
+                variant="ghost"
+                size="sm"
+                className="text-muted-foreground hover:text-foreground hover:bg-black/10 dark:hover:bg-white/10 transition-colors h-5 w-5 p-0"
+              >
+                <X className="h-4 w-4" />
+              </Button>
+            </DialogClose>
+          </div>
+
+          {/* Content */}
+          <div className="flex-1 flex flex-col px-4 pt-2 pb-4 space-y-3 overflow-hidden bg-white dark:bg-gray-900">
+            {/* To field */}
+            <div className="flex items-center gap-4">
+              <span className="text-sm font-medium w-12 text-muted-foreground">To:</span>
+              <div className="flex-1">
+                <div className="border border-border/60 rounded-lg p-3 min-h-[42px] flex flex-wrap gap-2 items-center bg-gray-50 dark:bg-gray-800/50 focus-within:ring-2 focus-within:ring-orange-500/20 focus-within:border-orange-500/40 transition-all">
                   {emailChips.map((email, index) => (
                     <span
                       key={index}
-                      className="inline-flex items-center gap-1 px-2 py-1 bg-orange-100 dark:bg-orange-900/30 text-orange-800 dark:text-orange-200 rounded-full text-xs font-medium"
+                      className="inline-flex items-center gap-1 px-3 py-1.5 bg-orange-100 dark:bg-orange-900/30 text-orange-800 dark:text-orange-200 rounded-full text-xs font-medium border border-orange-200 dark:border-orange-700/30"
                     >
                       {email}
                       <button
                         type="button"
                         onClick={() => removeEmailChip(email)}
-                        className="ml-1 text-orange-600 dark:text-orange-400 hover:text-orange-800 dark:hover:text-orange-200 transition-colors"
+                        className="ml-1 text-orange-600 dark:text-orange-400 hover:text-orange-800 dark:hover:text-orange-200 transition-colors hover:bg-orange-200 dark:hover:bg-orange-800/30 rounded-full w-4 h-4 flex items-center justify-center"
                       >
                         ×
                       </button>
@@ -1936,37 +1992,34 @@ function DashboardContent() {
                         setEmailInput('');
                       }
                     }}
-                    placeholder={emailChips.length === 0 ? "Enter email addresses (space or comma to add)" : "Add another email..."}
-                    className="border-0 shadow-none focus-visible:ring-0 p-0 h-auto flex-1 min-w-[200px]"
+                    placeholder={emailChips.length === 0 ? "Enter email address" : "Add another email..."}
+                    className="border-0 shadow-none focus-visible:ring-0 p-0 h-auto flex-1 min-w-[200px] placeholder:text-muted-foreground bg-transparent"
                   />
                 </div>
-                <div className="text-xs text-muted-foreground mt-1">
-                  Press space, comma, or enter to add emails. Backspace to remove.
-                  {emailChips.length > 0 && (
-                    <span className="ml-2 text-orange-600 font-medium">
-                      • {emailChips.length} recipient{emailChips.length !== 1 ? 's' : ''}
-                    </span>
-                  )}
-                </div>
+              </div>
+              <div className="flex items-center gap-4 text-sm text-muted-foreground">
+                <button type="button" className="hover:text-foreground transition-colors px-2 py-1 rounded hover:bg-gray-100 dark:hover:bg-gray-800">Cc</button>
+                <button type="button" className="hover:text-foreground transition-colors px-2 py-1 rounded hover:bg-gray-100 dark:hover:bg-gray-800">Bcc</button>
               </div>
             </div>
-            <div className="grid grid-cols-4 items-center gap-4">
-              <label htmlFor="subject" className="text-right font-medium text-sm">
-                Subject:
-              </label>
-              <div className="col-span-3 flex gap-2">
+
+            {/* Subject field */}
+            <div className="flex items-center gap-4">
+              <span className="text-sm font-medium w-12 text-muted-foreground">Subject:</span>
+              <div className="flex-1 flex items-center gap-2">
                 <Input
-                  id="subject"
                   value={newEmail.subject}
                   onChange={(e) => setNewEmail({ ...newEmail, subject: e.target.value })}
-                  className="flex-1"
+                  className="flex-1 border-border/60 focus:ring-2 focus:ring-orange-500/20 focus:border-orange-500/40 bg-gray-50 dark:bg-gray-800/50"
+                  placeholder="Email subject"
                 />
                 <Button 
-                  variant="outline" 
-                  size="icon" 
+                  variant="ghost" 
+                  size="sm"
                   onClick={() => handleGenerateContent('subject')}
                   disabled={generating !== 'idle'}
-                  title="Rephrase subject with AI"
+                  className="p-2 hover:bg-orange-100 dark:hover:bg-orange-900/30 text-orange-600 dark:text-orange-400 transition-colors"
+                  title="Generate subject with AI"
                 >
                   {generating === 'subject' ? (
                     <span className="animate-spin">⟳</span>
@@ -1976,102 +2029,154 @@ function DashboardContent() {
                 </Button>
               </div>
             </div>
-            <div className="grid grid-cols-4 gap-4">
-              <div className="text-right font-medium text-sm pt-2">
-                Content:
-              </div>
-              <div className="col-span-3 flex flex-col gap-2">
-                <div className="flex justify-between mb-2">
-                  <Button 
-                    variant="outline" 
-                    size="sm" 
-                    onClick={() => handleGenerateContent('content')}
-                    disabled={generating !== 'idle'}
-                    className="h-8"
-                    title="Rewrite/generate email with AI"
-                  >
-                    {generating === 'content' ? (
-                      <span className="animate-spin mr-2">⟳</span>
-                    ) : (
-                      <Sparkles className="h-4 w-4 mr-2" />
-                    )}
-                    AI Generate
-                  </Button>
-                </div>
-                <div className="relative">
-                  <textarea
-                    value={newEmail.content}
-                    onChange={(e) => setNewEmail({ ...newEmail, content: e.target.value })}
-                    className="border border-border rounded-md h-64 p-2 text-sm w-full"
-                    placeholder="Write your email content here..."
-                  />
-                </div>
-                {/* Tone selector outside textbox - bottom right */}
-                <div className="flex justify-end mt-2">
-                  <div className="tone-dropdown-container">
-                    <div className="relative">
-                      <button
-                        type="button"
-                        onClick={() => setShowToneDropdown(!showToneDropdown)}
-                        className="flex items-center gap-1 px-3 py-1.5 text-xs bg-white/90 dark:bg-background/90 border border-border/50 rounded-full shadow-sm hover:shadow-md transition-all duration-200 backdrop-blur-sm"
-                        title="Select email tone"
-                      >
-                        <span className="text-sm">{toneOptions.find(t => t.value === selectedTone)?.emoji}</span>
-                        <span className="text-xs font-medium">{toneOptions.find(t => t.value === selectedTone)?.label.split(' ')[1]}</span>
-                        <span className="text-xs text-muted-foreground ml-1">▼</span>
-                      </button>
-                      {showToneDropdown && (
-                        <div className="absolute bottom-full right-0 mb-1 bg-white dark:bg-background border border-border rounded-lg shadow-lg backdrop-blur-sm z-50 min-w-[160px]">
-                          <div className="p-1">
-                            {toneOptions.map((option) => (
-                              <button
-                                key={option.value}
-                                type="button"
-                                onClick={() => {
-                                  setSelectedTone(option.value);
-                                  setShowToneDropdown(false);
-                                }}
-                                className={`w-full flex items-center gap-2 px-3 py-2 text-sm rounded-md transition-colors ${
-                                  selectedTone === option.value 
-                                    ? 'bg-orange-500/10 text-orange-600 dark:text-orange-400' 
-                                    : 'hover:bg-muted/50'
-                                }`}
-                              >
-                                <span className="text-base">{option.emoji}</span>
-                                <span className="font-medium">{option.label.split(' ')[1]}</span>
-                                {selectedTone === option.value && (
-                                  <span className="ml-auto text-orange-500">✓</span>
-                                )}
-                              </button>
-                            ))}
-                          </div>
+
+            {/* Content area */}
+            <div className="flex-1 relative overflow-hidden">
+              {generatedPreview.isVisible ? (
+                /* Preview Mode */
+                <div className="h-full flex flex-col border border-border/60 rounded-lg overflow-hidden bg-white dark:bg-gray-800">
+                  <div className="flex items-center justify-between p-4 border-b border-border/60 bg-gradient-to-r from-blue-50 to-indigo-50 dark:from-blue-950/20 dark:to-indigo-950/20">
+                    <h4 className="font-medium text-foreground">Generated Content Preview</h4>
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      onClick={rejectGeneratedContent}
+                      className="text-muted-foreground hover:text-foreground hover:bg-white/60 dark:hover:bg-black/20"
+                    >
+                      ✕
+                    </Button>
+                  </div>
+                  
+                  <div className="flex-1 p-4 space-y-4 overflow-y-auto">
+                    {generatedPreview.subject && (
+                      <div>
+                        <label className="text-xs font-medium text-muted-foreground uppercase tracking-wide">Subject:</label>
+                        <div className="mt-2 p-3 bg-gray-50 dark:bg-gray-900/50 rounded-md border border-border/30 text-sm">
+                          {generatedPreview.subject}
                         </div>
-                      )}
-                    </div>
+                      </div>
+                    )}
+                    
+                    {generatedPreview.content && (
+                      <div>
+                        <label className="text-xs font-medium text-muted-foreground uppercase tracking-wide">Content:</label>
+                        <div className="mt-2 p-3 bg-gray-50 dark:bg-gray-900/50 rounded-md border border-border/30 text-sm">
+                          <div className="whitespace-pre-wrap">{generatedPreview.content}</div>
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                  
+                  <div className="flex justify-end gap-3 p-4 border-t border-border/60 bg-gray-50 dark:bg-gray-800/50">
+                    <Button
+                      variant="outline"
+                      onClick={rejectGeneratedContent}
+                      className="text-red-600 border-red-200 hover:bg-red-50 dark:text-red-400 dark:border-red-500/20 dark:hover:bg-red-500/10"
+                    >
+                      ✗ Reject
+                    </Button>
+                    <Button
+                      onClick={acceptGeneratedContent}
+                      className="bg-green-600 hover:bg-green-700 text-white shadow-sm"
+                    >
+                      ✓ Accept
+                    </Button>
                   </div>
                 </div>
+              ) : (
+                /* Normal Edit Mode */
+                <textarea
+                  value={newEmail.content}
+                  onChange={(e) => setNewEmail({ ...newEmail, content: e.target.value })}
+                  className="w-full h-full border border-border/60 rounded-lg p-4 text-sm resize-none focus:outline-none focus:ring-2 focus:ring-orange-500/20 focus:border-orange-500/40 bg-gray-50 dark:bg-gray-800/50 placeholder:text-muted-foreground transition-all"
+                  placeholder="Write your email content here..."
+                />
+              )}
+            </div>
+
+            {/* Footer */}
+            <div className="flex items-center justify-between pt-4 border-t border-border/20">
+              <div className="flex items-center gap-3">
+                <Button
+                  onClick={handleSendEmail}
+                  disabled={sending}
+                  className="bg-orange-600 hover:bg-orange-700 text-white px-6 shadow-sm transition-all hover:shadow-md"
+                >
+                  {sending ? (
+                    <>
+                      <span className="animate-spin mr-2">⟳</span>
+                      Sending...
+                    </>
+                  ) : (() => {
+                    if (emailChips.length > 1) {
+                      return `Send to ${emailChips.length} recipients`;
+                    }
+                    return 'Send';
+                  })()}
+                  <span className="ml-2 text-orange-200">⌘ ↵</span>
+                </Button>
+                
+                <Button variant="outline" size="sm" className="border-border/60 hover:bg-gray-50 dark:hover:bg-gray-800">
+                  + Add
+                </Button>
+
+                {/* Tone Selection */}
+                <div className="relative tone-dropdown-container">
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => setShowToneDropdown(!showToneDropdown)}
+                    className="gap-2 border-border/60 hover:bg-gray-50 dark:hover:bg-gray-800"
+                  >
+                    {toneOptions.find(t => t.value === selectedTone)?.emoji}
+                    <span className="text-xs">{toneOptions.find(t => t.value === selectedTone)?.label.split(' ')[1]}</span>
+                    <span className="text-xs">▼</span>
+                  </Button>
+                  
+                  {showToneDropdown && (
+                    <div className="absolute bottom-full left-0 mb-2 w-48 bg-white dark:bg-gray-800 border border-border rounded-lg shadow-lg z-10 p-1">
+                      <div className="text-xs font-medium text-muted-foreground px-2 py-1 border-b border-border/50 mb-1">
+                        Email Tone
+                      </div>
+                      {toneOptions.map((tone) => (
+                        <button
+                          key={tone.value}
+                          onClick={() => {
+                            setSelectedTone(tone.value);
+                            setShowToneDropdown(false);
+                          }}
+                          className={`w-full text-left px-2 py-1.5 text-xs rounded hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors flex items-center gap-2 ${
+                            selectedTone === tone.value ? 'bg-orange-100 dark:bg-orange-900/30 text-orange-800 dark:text-orange-200' : 'text-foreground'
+                          }`}
+                        >
+                          <span>{tone.emoji}</span>
+                          <span>{tone.label.split(' ')[1]}</span>
+                        </button>
+                      ))}
+                    </div>
+                  )}
+                </div>
+
+                <Button 
+                  onClick={() => handleGenerateContent('content')}
+                  disabled={generating !== 'idle'}
+                  className="bg-gradient-to-r from-purple-600 to-blue-600 hover:from-purple-700 hover:to-blue-700 text-white px-6 shadow-sm transition-all hover:shadow-md"
+                >
+                  {generating === 'content' ? (
+                    <>
+                      <span className="animate-spin mr-2">⟳</span>
+                      Generating...
+                    </>
+                  ) : (
+                    <>
+                      <Sparkles className="h-4 w-4 mr-2" />
+                      Generate
+                    </>
+                  )}
+                </Button>
               </div>
             </div>
           </div>
-          <DialogFooter>
-            <Button type="button" variant="ghost" onClick={() => {
-              setComposing(false);
-              setEmailChips([]);
-              setEmailInput('');
-              setSelectedTone('professional');
-              setShowToneDropdown(false);
-            }}>
-              Discard
-            </Button>
-            <Button type="button" onClick={handleSendEmail} disabled={sending}>
-              {sending ? 'Sending...' : (() => {
-                if (emailChips.length > 1) {
-                  return `Send to ${emailChips.length} recipients`;
-                }
-                return 'Send';
-              })()}
-            </Button>
-          </DialogFooter>
         </DialogContent>
       </Dialog>
 
@@ -2086,12 +2191,17 @@ function DashboardContent() {
 
       {/* TLDR Summary Dialog */}
       <Dialog open={showSummary} onOpenChange={setShowSummary}>
-        <DialogContent className="max-w-2xl">
+        <DialogContent className="max-w-2xl p-6 grid gap-4">
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2">
               <Sparkles className="h-5 w-5 text-orange-500" />
               TLDR Summary
             </DialogTitle>
+            <DialogClose asChild>
+              <Button variant="ghost" size="icon" className="absolute right-4 top-4 h-8 w-8">
+                <X className="h-4 w-4" />
+              </Button>
+            </DialogClose>
           </DialogHeader>
           <div className="py-4">
             {emailSummary ? (
@@ -2125,9 +2235,14 @@ function DashboardContent() {
 
       {/* Delete confirmation dialog */}
       <Dialog open={deleteDialog.isOpen} onOpenChange={() => setDeleteDialog({ ...deleteDialog, isOpen: false })}>
-        <DialogContent>
+        <DialogContent className="p-6 grid gap-4">
           <DialogHeader>
             <DialogTitle>Delete Email</DialogTitle>
+            <DialogClose asChild>
+              <Button variant="ghost" size="icon" className="absolute right-4 top-4 h-8 w-8">
+                <X className="h-4 w-4" />
+              </Button>
+            </DialogClose>
           </DialogHeader>
           <div className="py-4">
             <p className="text-sm text-muted-foreground mb-4">
