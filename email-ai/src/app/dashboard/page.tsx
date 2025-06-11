@@ -973,12 +973,26 @@ function DashboardContent() {
         throw new Error('No attachment data received');
       }
 
-      // Clean the base64 string by removing any whitespace and ensuring it's properly padded
-      const base64Data = responseData.data.replace(/\s/g, '');
+      console.log('Raw attachment data length:', responseData.data.length);
+      console.log('First 100 chars of data:', responseData.data.substring(0, 100));
+
+      // Clean and convert URL-safe base64 to standard base64
+      let base64Data = responseData.data.replace(/\s/g, ''); // Remove whitespace
+      base64Data = base64Data.replace(/-/g, '+').replace(/_/g, '/'); // Convert URL-safe base64 to standard
+      
+      // Add proper padding
       const padding = base64Data.length % 4;
       const paddedBase64 = padding ? base64Data + '='.repeat(4 - padding) : base64Data;
 
+      console.log('Processed base64 length:', paddedBase64.length);
+      console.log('Base64 validation:', /^[A-Za-z0-9+/]*={0,2}$/.test(paddedBase64));
+
       try {
+        // Validate base64 format before attempting to decode
+        if (!/^[A-Za-z0-9+/]*={0,2}$/.test(paddedBase64)) {
+          throw new Error('Invalid base64 format detected');
+        }
+
         // Convert base64 to blob
         const byteCharacters = atob(paddedBase64);
         const byteNumbers = new Array(byteCharacters.length);
@@ -987,6 +1001,8 @@ function DashboardContent() {
         }
         const byteArray = new Uint8Array(byteNumbers);
         const blob = new Blob([byteArray], { type: attachment.mimeType });
+        
+        console.log('Blob created successfully, size:', blob.size);
         
         // Create download link
         const url = window.URL.createObjectURL(blob);
@@ -1001,6 +1017,7 @@ function DashboardContent() {
         toast.success(`Downloaded ${attachment.filename}`);
       } catch (error) {
         console.error('Error processing attachment data:', error);
+        console.error('Base64 data that caused error:', paddedBase64.substring(0, 100));
         toast.error('Failed to process attachment data');
       }
     } catch (error) {
@@ -1021,8 +1038,21 @@ function DashboardContent() {
       const response = await api.get(`/api/emails/attachments/${emailId}/${attachment.id}`);
       const responseData = response.data as { data: string; size: number };
       
+      // Clean and convert URL-safe base64 to standard base64
+      let base64Data = responseData.data.replace(/\s/g, ''); // Remove whitespace
+      base64Data = base64Data.replace(/-/g, '+').replace(/_/g, '/'); // Convert URL-safe base64 to standard
+      
+      // Add proper padding
+      const padding = base64Data.length % 4;
+      const paddedBase64 = padding ? base64Data + '='.repeat(4 - padding) : base64Data;
+      
+      // Validate base64 format before attempting to decode
+      if (!/^[A-Za-z0-9+/]*={0,2}$/.test(paddedBase64)) {
+        throw new Error('Invalid base64 format detected');
+      }
+      
       // Create a blob URL for the image
-      const byteCharacters = atob(responseData.data);
+      const byteCharacters = atob(paddedBase64);
       const byteNumbers = new Array(byteCharacters.length);
       for (let i = 0; i < byteCharacters.length; i++) {
         byteNumbers[i] = byteCharacters.charCodeAt(i);

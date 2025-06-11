@@ -23,16 +23,18 @@ async function generateEmailContent(prompt: string, userName: string, tone: stri
     messages: [
       {
         role: 'system',
-        content: `You are an AI assistant that rewrites email content to a specified tone.
-Your task is to take the user's text and rewrite it.
-- DO NOT change the core meaning or intent.
-- DO NOT add greetings (like "Hi John,"), closings (like "Sincerely,"), or signatures.
-- ONLY provide the rewritten body of the email.
-- Apply the following tone: ${toneInstruction}`,
+        content: `You are helping ${userName} rewrite their email content.
+${userName} has drafted some text and wants you to improve it while maintaining their voice and intent.
+- Rewrite the content to sound like ${userName} is personally writing it
+- DO NOT change the core meaning or intent
+- DO NOT add greetings, closings, or signatures - ${userName} will handle those
+- ONLY provide the rewritten body content
+- ${toneInstruction}
+- Make it sound natural and authentic to ${userName}'s communication style`,
       },
       {
         role: 'user',
-        content: `Rewrite this email content in the specified tone:\n\n${prompt}`,
+        content: `I'm ${userName}. Please rewrite this email content for me:\n\n${prompt}`,
       },
     ],
     model: 'gemma2-9b-it',
@@ -60,20 +62,16 @@ async function generateSubjectLine(prompt: string, userName: string, tone: strin
     messages: [
       {
         role: 'system',
-        content: `You are an AI assistant that creates email subject lines.
-Your task is to generate a concise, relevant, and engaging subject line for the provided email content.
-- Your response must contain ONLY the subject line text.
-- Do not include prefixes like "Subject:".
-- Do not include any quotes or explanations.
-- Apply the following tone: ${toneInstruction}`,
+        content: `You are helping ${userName} create a subject line for their email.
+Create a subject line that reflects ${userName}'s communication style and the email's purpose.
+- Make it sound like ${userName} would naturally write it
+- Keep it concise and relevant to the email content
+- ${toneInstruction}
+- Return ONLY the subject line text, no quotes or prefixes`,
       },
       {
         role: 'user',
-        content: `My name is ${userName}. Please consider this when generating the subject line.`,
-      },
-      {
-        role: 'user',
-        content: `Create a subject line for this email content: ${prompt}`,
+        content: `I'm ${userName}. Create a subject line for my email about: ${prompt}`,
       },
     ],
     model: 'gemma2-9b-it',
@@ -101,28 +99,34 @@ async function generateBothSubjectAndContent(prompt: string, userName: string, t
     messages: [
       {
         role: 'system',
-        content: `You are an AI assistant that generates email content and subject lines.
-Your response MUST be a single, valid JSON object with proper escaping.
+        content: `You are helping ${userName} write a complete email.
+Generate both subject line and email content that sounds like ${userName} is personally writing it.
 
 CRITICAL JSON FORMATTING RULES:
 - Use \\n for line breaks in content (not actual newlines)
 - Use \\" for quotes inside strings
 - Do not use unnecessary backslashes before $ or other characters
-- The JSON must be on a single line or properly formatted
+- The JSON must be properly formatted
 
 Required format:
 {"subject": "Your Subject", "content": "Line 1\\n\\nLine 2\\n\\nLine 3"}
 
-${toneInstruction}
+Writing Guidelines for ${userName}:
+- Write as if ${userName} is personally composing this email
+- ${toneInstruction}
+- Make the content authentic and natural
+- DO NOT add generic greetings like "Dear Sir/Madam" - keep it relevant
+- DO NOT add signatures - ${userName} will handle that
+- Focus on ${userName}'s specific request and context
 
 EXAMPLE RESPONSE:
-{"subject": "Investment Inquiry", "content": "Dear Investor,\\n\\nI am seeking funding for my startup.\\n\\nThank you."}
+{"subject": "Quick Question About Project Timeline", "content": "Hi there,\\n\\nI wanted to follow up on the project we discussed last week. Could you let me know if the timeline we agreed on is still realistic?\\n\\nThanks!"}
 
 Return ONLY the JSON object. No markdown, no explanations, no code blocks.`,
       },
       {
         role: 'user',
-        content: `My name is ${userName}. Generate a complete email (subject and content) for: ${prompt}`,
+        content: `I'm ${userName} and I need to write an email about: ${prompt}`,
       },
     ],
     model: 'gemma2-9b-it',
@@ -224,12 +228,7 @@ export async function POST(req: NextRequest) {
       { error: 'Failed to generate content' },
       { status: 500 }
     );
- 
- 
-
-
-
-}
+  }
 } 
 
 
