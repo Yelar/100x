@@ -7,7 +7,7 @@ import { Button } from "@/components/ui/button";
 import { Avatar, AvatarImage, AvatarFallback } from "@/components/ui/avatar";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Input } from "@/components/ui/input";
-import { Search, Mail, LogOut, Inbox, FileText, Send, Trash, Plus, ChevronLeft, ChevronRight, MoreVertical, Star, Tag, Flag, Archive, Sparkles, Shield, Paperclip, Download, Eye, Trash2, X } from "lucide-react";
+import { Search, Mail, LogOut, Inbox, FileText, Send, Trash, Plus, ChevronLeft, ChevronRight, MoreVertical, Star, Tag, Flag, Archive, Sparkles, Shield, Paperclip, Download, Eye, Trash2, X, Bell } from "lucide-react";
 import {
   Dialog,
   DialogContent,
@@ -80,6 +80,7 @@ const ChatWith100x = lazy(() => import('@/components/chat-with-100x').then(m => 
 const ReplyComposer = lazy(() => import('@/components/reply-composer').then(m => ({ default: m.ReplyComposer })));
 const EmailSummaryDialog = lazy(() => import('@/components/email-summary-dialog').then(m => ({ default: m.EmailSummaryDialog })));
 const FollowUpReminder = lazy(() => import('@/components/follow-up-reminder').then(m => ({ default: m.FollowUpReminder })));
+const MiniReminder = lazy(() => import('@/components/mini-reminder').then(m => ({ default: m.MiniReminder })));
 
 // In-memory cache for emails per folder/query (non-reactive, not persisted)
 const emailCache: Record<string, { emails: Email[]; nextPageToken?: string }> = {};
@@ -216,6 +217,10 @@ function DashboardContent() {
   // New state for attachments
   const [selectedFiles, setSelectedFiles] = useState<File[]>([]);
   const fileInputRef = useRef<HTMLInputElement>(null);
+
+  // New state for reminder system
+  const [isReminderOpen, setIsReminderOpen] = useState(false);
+  const [isMiniReminderVisible, setIsMiniReminderVisible] = useState(false);
 
   const { refs, sizes, onResize } = useEmailPanelLayout();
 
@@ -686,8 +691,27 @@ function DashboardContent() {
     setGeneratedPreview({ isVisible: false });
   };
 
-  const handleReplyComplete = () => {
+  const handleReplyComplete = (repliedToEmailId?: string) => {
     setIsReplying(false);
+    
+    // If we have the replied-to email ID, update its flag from 'to_reply' to 'work'
+    if (repliedToEmailId) {
+      const currentFlags = getFlaggedEmailsLS();
+      if (currentFlags[repliedToEmailId] && currentFlags[repliedToEmailId].flag === 'to_reply') {
+        const updatedFlags = {
+          ...currentFlags,
+          [repliedToEmailId]: {
+            ...currentFlags[repliedToEmailId],
+            flag: 'work', // Mark as work since it's been responded to
+            flaggedAt: Date.now() // Update timestamp to prevent re-flagging
+          }
+        };
+        setFlaggedEmails(updatedFlags);
+        setFlaggedEmailsLS(updatedFlags);
+        console.log(`Marked email ${repliedToEmailId} as 'work' after reply`);
+      }
+    }
+    
     // Optionally refresh the emails list
     fetchEmails(undefined);
   };
@@ -924,23 +948,27 @@ function DashboardContent() {
   }, [emails, handleEmailClick]);
 
   // Handle email click from follow-up reminder
-  const handleEmailClickFromReminder = useCallback((emailId: string) => {
-    // First try to find the email in current emails list
+  const handleEmailClickFromReminder = (emailId: string) => {
+    // Find the email and select it
     const email = emails.find(e => e.id === emailId);
     if (email) {
-      handleEmailClick(email);
-      return;
-    }
-    
-    // If not found, try to navigate by threadId from flagged emails
-    const flaggedEmail = flaggedEmails[emailId];
-    if (flaggedEmail) {
-      // Update URL with threadId and let the email navigation effect handle loading
+      setSelectedEmail(email);
+      
+      // Update URL with threadId
       const params = new URLSearchParams(window.location.search);
-      params.set('threadId', emailId);
+      if (email.threadId) {
+        params.set('threadId', email.threadId);
+      } else {
+        params.delete('threadId');
+      }
       router.replace(`/dashboard?${params.toString()}`, { scroll: false });
+      
+      // Load thread data if needed
+      if (email.threadId && !threadData[email.threadId]) {
+        handleToggleThread(email.threadId);
+      }
     }
-  }, [emails, handleEmailClick, flaggedEmails, router]);
+  };
 
   const formatEmailDate = useCallback((dateStr: string) => {
     const date = new Date(dateStr);
@@ -963,9 +991,23 @@ function DashboardContent() {
     if (!emails.length) return;
     const flaggedLS = getFlaggedEmailsLS();
     setFlaggedEmails(flaggedLS); // Show emails instantly with whatever flags are present
-    // Find up to 20 unflagged emails
-    const toFlag = emails.filter(e => !flaggedLS[e.id]).slice(0, 20).map(e => ({ id: e.id, subject: e.subject, snippet: e.snippet, sender: e.from }));
+    
+    // Find up to 20 unflagged emails, but exclude recently updated ones to prevent overriding manual changes
+    const oneHourAgo = Date.now() - (60 * 60 * 1000);
+    const toFlag = emails.filter(e => {
+      const existingFlag = flaggedLS[e.id];
+      // Skip if: already flagged AND recently updated (within 1 hour)
+      if (existingFlag && existingFlag.flaggedAt > oneHourAgo) {
+        return false;
+      }
+      // Include if: not flagged at all OR flagged but old (allow re-flagging old entries)
+      return !existingFlag || existingFlag.flaggedAt <= oneHourAgo;
+    }).slice(0, 20).map(e => ({ id: e.id, subject: e.subject, snippet: e.snippet, sender: e.from }));
+    
     if (toFlag.length === 0) return;
+    
+    console.log(`Flagging ${toFlag.length} emails (${emails.length - toFlag.length} skipped due to recent updates)`);
+    
     // Make request for only the batch
     fetch('/api/emails/flagged', {
       method: 'POST',
@@ -978,13 +1020,17 @@ function DashboardContent() {
           const now = Date.now();
           const newFlags = { ...getFlaggedEmailsLS() };
           for (const f of data.flagged) {
-            newFlags[f.id] = {
-              flag: f.flag,
-              subject: f.subject,
-              snippet: f.snippet,
-              sender: f.sender,
-              flaggedAt: now,
-            };
+            // Only update if the email wasn't recently manually updated
+            const existing = newFlags[f.id];
+            if (!existing || existing.flaggedAt <= oneHourAgo) {
+              newFlags[f.id] = {
+                flag: f.flag,
+                subject: f.subject,
+                snippet: f.snippet,
+                sender: f.sender,
+                flaggedAt: now,
+              };
+            }
           }
           setFlaggedEmails(newFlags);
           setFlaggedEmailsLS(newFlags);
@@ -1477,8 +1523,8 @@ function DashboardContent() {
 
       <div className="flex flex-1 overflow-hidden">
         {/* Left sidebar (fixed width) */}
-        <div className="w-64 border-r border-border/50 bg-gradient-to-b from-orange-500/5 to-amber-500/5 flex flex-col overflow-hidden">
-          <div className="p-4">
+        <div className="w-64 border-r border-border/50 bg-gradient-to-b from-orange-500/5 to-amber-500/5 flex flex-col overflow-y-auto">
+          <div className="p-4 relative">
             <Button className="rounded-full px-6 py-2 h-12 w-full justify-start font-medium shadow-sm mb-6 bg-gradient-to-r from-orange-500 to-amber-600 hover:from-orange-600 hover:to-amber-700 text-white" onClick={() => setComposing(true)}>
               <Plus className="mr-2 h-5 w-5" />
               Compose
@@ -1582,7 +1628,67 @@ function DashboardContent() {
               <Button variant="ghost" className="w-full justify-start font-medium text-muted-foreground hover:text-orange-600 hover:bg-orange-500/10">
                 <FileText className="mr-2 h-5 w-5" />
                 Drafts
-              </Button>              <div className="space-y-1">
+              </Button>
+
+              {/* Reminder Bell Button */}
+              <div className="relative">
+                <Button 
+                  variant="ghost" 
+                  className={`w-full justify-start font-medium ${isMiniReminderVisible ? 'text-orange-700 dark:text-orange-300 bg-orange-500/10' : 'text-muted-foreground hover:text-orange-600 hover:bg-orange-500/10'}`}
+                  onClick={() => {
+                    if (isMiniReminderVisible) {
+                      setIsMiniReminderVisible(false);
+                    } else {
+                      const totalToReply = Object.values(flaggedEmails).filter(email => email.flag === 'to_reply').length;
+                      if (totalToReply > 0) {
+                        setIsMiniReminderVisible(true);
+                      } else {
+                        setIsReminderOpen(true);
+                      }
+                    }
+                  }}
+                >
+                  <Bell className="mr-2 h-5 w-5" />
+                  Reminders
+                  {(() => {
+                    const totalToReply = Object.values(flaggedEmails).filter(email => email.flag === 'to_reply').length;
+                    const urgentToReply = Object.values(flaggedEmails).filter(email => {
+                      const dayAgo = Date.now() - (24 * 60 * 60 * 1000);
+                      return email.flag === 'to_reply' && email.flaggedAt < dayAgo;
+                    }).length;
+                    
+                    if (totalToReply > 0) {
+                      return (
+                        <div className="ml-auto flex items-center gap-1">
+                          <span className="text-xs text-muted-foreground bg-muted/50 px-2 py-1 rounded-full">
+                            {totalToReply}
+                          </span>
+                          {urgentToReply > 0 && (
+                            <div className="w-2 h-2 bg-red-500 rounded-full animate-pulse"></div>
+                          )}
+                        </div>
+                      );
+                    }
+                    return null;
+                  })()}
+                </Button>
+                
+                {/* Mini Reminder Popup */}
+                <Suspense fallback={<></>}>
+                  <MiniReminder 
+                    flaggedEmails={flaggedEmails}
+                    isVisible={isMiniReminderVisible}
+                    onClose={() => setIsMiniReminderVisible(false)}
+                    onEmailClick={handleEmailClickFromReminder}
+                    onViewAll={() => {
+                      setIsMiniReminderVisible(false);
+                      setIsReminderOpen(true);
+                    }}
+                  />
+                </Suspense>
+              </div>
+
+              <div className="space-y-1">
                 {Object.entries(FLAG_LABELS).map(([flag, label]) => (
                   <Button
                     key={flag}
@@ -2129,7 +2235,7 @@ function DashboardContent() {
                         originalContent={selectedEmail.body.replace(/<[^>]*>/g, '')}
                         originalMessageId={selectedEmail.id}
                         onClose={() => setIsReplying(false)}
-                        onSend={handleReplyComplete}
+                        onSend={() => handleReplyComplete(selectedEmail.id)}
                       />
                     )}
                     </Suspense>
@@ -2171,6 +2277,8 @@ function DashboardContent() {
       <Suspense fallback={<></>}>
         <FollowUpReminder 
           flaggedEmails={flaggedEmails}
+          isOpen={isReminderOpen}
+          onClose={() => setIsReminderOpen(false)}
           onEmailClick={handleEmailClickFromReminder}
         />
       </Suspense>
