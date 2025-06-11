@@ -149,6 +149,12 @@ export default function Dashboard() {
 function DashboardContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
+  
+  // Memoize the cache key generator function to prevent infinite re-renders
+  const getCacheKey = useCallback((folder: string, query: string, starredOnly: boolean) => {
+    return `${folder}_${query}_${starredOnly ? 'starred' : 'all'}`;
+  }, []);
+
   const [userInfo, setUserInfo] = useState<UserInfo | null>(null);
   const [emails, setEmails] = useState<Email[]>([]);
   const [loading, setLoading] = useState(true);
@@ -213,11 +219,28 @@ function DashboardContent() {
   const { refs, sizes, onResize } = useEmailPanelLayout();
 
   const observer = useRef<IntersectionObserver | null>(null);
-  const debouncedSearchRef = useRef(
-    debounce((query: string, callback: (query: string) => void) => {
+  
+  // Create a stable debounced search function
+  const debouncedSearchRef = useRef<ReturnType<typeof debounce> | null>(null);
+  
+  // Initialize debounced function only once
+  useEffect(() => {
+    debouncedSearchRef.current = debounce((query: string, callback: (query: string) => void) => {
       callback(query);
-    }, 800)
-  ).current;
+    }, 800);
+    
+    return () => {
+      debouncedSearchRef.current?.cancel();
+    };
+  }, []);
+
+  // Define handleLogout early so it can be used in useEffect
+  const handleLogout = useCallback(() => {
+    localStorage.removeItem('access_token');
+    localStorage.removeItem('refresh_token');
+    localStorage.removeItem('user_info');
+    router.push('/login');
+  }, [router]);
 
   const toneOptions = [
     { value: 'professional', label: '💼 Professional', emoji: '💼' },
@@ -315,14 +338,18 @@ function DashboardContent() {
     return () => document.removeEventListener('mousedown', handleClickOutside);
   }, [showToneDropdown]);
 
-  // Update URL when folder changes
+  // Update URL when folder changes - stable implementation
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
-    params.set('folder', currentFolder);
-    router.replace(`?${params.toString()}`, { scroll: false });
+    const currentUrlFolder = params.get('folder');
+    
+    if (currentUrlFolder !== currentFolder) {
+      params.set('folder', currentFolder);
+      router.replace(`?${params.toString()}`, { scroll: false });
+    }
   }, [currentFolder, router]);
 
-  // Initialize folder from URL on mount
+  // Initialize folder from URL on mount - only run once
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
     const folder = params.get('folder');
@@ -335,7 +362,7 @@ function DashboardContent() {
     if (view === 'starred') {
       setShowStarredOnly(true);
     }
-  }, []);
+  }, []); // Empty dependency array - only run on mount
 
   // Handle thread expansion/collapse
   const handleToggleThread = useCallback(async (threadId: string) => {
@@ -388,8 +415,18 @@ function DashboardContent() {
   }, []);
 
   const fetchEmails = useCallback(async (pageToken?: string, query?: string) => {
-    const cacheKey = `${currentFolder}:${query || ''}`;
-    if (!pageToken && emailCache[cacheKey]) {
+    const cacheKey = getCacheKey(currentFolder, query || '', showStarredOnly);
+    
+    // If switching folders or star view without pageToken, clear relevant caches
+    if (!pageToken) {
+      // Clear the current cache to ensure fresh data
+      if (emailCache[cacheKey]) {
+        delete emailCache[cacheKey];
+      }
+    }
+    
+    // Check cache only for pagination (when pageToken exists)
+    if (pageToken && emailCache[cacheKey]) {
       setEmails(emailCache[cacheKey].emails);
       setNextPageToken(emailCache[cacheKey].nextPageToken);
       setHasMore(!!emailCache[cacheKey].nextPageToken);
@@ -398,6 +435,7 @@ function DashboardContent() {
       setLoadingMore(false);
       return;
     }
+    
     try {
       if (pageToken) {
         setLoadingMore(true);
@@ -410,9 +448,16 @@ function DashboardContent() {
       params.append('folder', currentFolder);
       const response = await api.get<EmailsResponse>(`/api/emails?${params.toString()}`);
       const { messages, nextPageToken } = response.data;
+      
+      // Filter messages based on starred view if needed
+      let filteredMessages = messages || [];
+      if (showStarredOnly) {
+        filteredMessages = filteredMessages.filter(email => email.starred);
+      }
+      
       if (pageToken) {
         setEmails(prev => {
-          const uniqueMessages = messages.filter(
+          const uniqueMessages = filteredMessages.filter(
             newEmail => !prev.some(existingEmail => existingEmail.id === newEmail.id)
           );
           const updated = [...prev, ...uniqueMessages];
@@ -420,17 +465,22 @@ function DashboardContent() {
           return updated;
         });
       } else {
-        setEmails(messages || []);
-        emailCache[cacheKey] = { emails: messages || [], nextPageToken };
+        setEmails(filteredMessages);
+        emailCache[cacheKey] = { emails: filteredMessages, nextPageToken };
       }
       setNextPageToken(nextPageToken);
       setHasMore(!!nextPageToken);
-      // Prefetch next page in background
-      if (nextPageToken) {
+      
+      // Prefetch next page in background if available
+      if (nextPageToken && !query) {
         api.get<EmailsResponse>(`/api/emails?${params.toString()}&pageToken=${nextPageToken}`)
           .then(res => {
             const { messages: nextMessages, nextPageToken: nextToken } = res.data;
-            emailCache[`${cacheKey}:page:${nextPageToken}`] = { emails: nextMessages, nextPageToken: nextToken };
+            const nextCacheKey = `${cacheKey}:page:${nextPageToken}`;
+            emailCache[nextCacheKey] = { emails: nextMessages, nextPageToken: nextToken };
+          })
+          .catch(() => {
+            // Prefetch failed, ignore silently
           });
       }
     } catch (error) {
@@ -441,7 +491,7 @@ function DashboardContent() {
       setSearchLoading(false);
       setLoadingMore(false);
     }
-  }, [currentFolder]);
+  }, [currentFolder, showStarredOnly, getCacheKey]);
 
   const lastEmailElementRef = useCallback((node: HTMLElement | null) => {
     if (loading || searchLoading) return;
@@ -462,16 +512,12 @@ function DashboardContent() {
     }
     setSearchLoading(true);
     fetchEmails(undefined, query);
-  }, [fetchEmails, setSearchLoading]);
+  }, [fetchEmails]);
 
-  // Cleanup on unmount
+  // Stable initial data fetch effect
   useEffect(() => {
-    return () => {
-      debouncedSearchRef.cancel();
-    };
-  }, [debouncedSearchRef]);
-
-  useEffect(() => {
+    let isMounted = true;
+    
     const fetchData = async () => {
       try {
         const cookies = document.cookie.split(';');
@@ -491,36 +537,41 @@ function DashboardContent() {
           handleLogout();
           return;
         }
-        setUserInfo(JSON.parse(storedUserInfo));
-
-        await fetchEmails(undefined, '');
+        
+        if (isMounted) {
+          setUserInfo(JSON.parse(storedUserInfo));
+          // Call fetchEmails directly instead of relying on dependency
+          fetchEmails(undefined, '');
+        }
         
         // After emails are loaded, check if there's a threadId in URL that needs loading
         const urlThreadId = searchParams.get('threadId');
-        if (urlThreadId) {
+        if (urlThreadId && isMounted) {
           console.log('Page loaded with threadId in URL:', urlThreadId);
           // The URL navigation effect will handle this, but we may need to fetch it if not in list
         }
       } catch (error) {
         console.error('Error fetching data:', error);
-        setLoading(false);
+        if (isMounted) {
+          setLoading(false);
+        }
       }
     };
 
     fetchData();
-  }, [router, fetchEmails, setUserInfo, setLoading, searchParams]);
+    
+    return () => {
+      isMounted = false;
+    };
+  }, [handleLogout, searchParams]); // Remove fetchEmails to prevent infinite loop
 
   const handleSearch = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
-    setSearchQuery(e.target.value);
-    debouncedSearchRef(e.target.value, search);
-  }, [search, debouncedSearchRef]);
-
-  const handleLogout = () => {
-    localStorage.removeItem('access_token');
-    localStorage.removeItem('refresh_token');
-    localStorage.removeItem('user_info');
-    router.push('/login');
-  };
+    const value = e.target.value;
+    setSearchQuery(value);
+    if (debouncedSearchRef.current) {
+      debouncedSearchRef.current(value, search);
+    }
+  }, [search]);
 
   const handleSendEmail = async () => {
     if (emailChips.length === 0 || !newEmail.subject || !newEmail.content) {
@@ -675,53 +726,119 @@ function DashboardContent() {
     }
   };
 
-  // Handle starring/unstarring emails
+  // Enhanced handleStarEmail to properly manage starred emails across folders
   const handleStarEmail = async (emailId: string, currentlyStarred: boolean) => {
     if (starringEmails.has(emailId)) return;
 
     setStarringEmails(prev => new Set(prev).add(emailId));
     
+    // Optimistic update - update UI immediately
+    const newStarredState = !currentlyStarred;
+    
+    // Update the email in the local state immediately
+    setEmails(prevEmails => {
+      const updatedEmails = prevEmails.map(email => 
+        email.id === emailId 
+          ? { ...email, starred: newStarredState }
+          : email
+      );
+      
+      // If we're showing starred only and email is being unstarred, remove it from view
+      if (showStarredOnly && !newStarredState) {
+        return updatedEmails.filter(email => email.id !== emailId);
+      }
+      
+      return updatedEmails;
+    });
+
+    // Update selected email if it's the one being starred
+    if (selectedEmail?.id === emailId) {
+      setSelectedEmail(prev => prev ? { ...prev, starred: newStarredState } : null);
+      
+      // If we're showing starred only and this email is being unstarred, clear selection
+      if (showStarredOnly && !newStarredState) {
+        setSelectedEmail(null);
+        const params = new URLSearchParams(window.location.search);
+        params.delete('threadId');
+        router.replace(`/dashboard?${params.toString()}`, { scroll: false });
+      }
+    }
+
+    // Update thread data if the email is part of a thread
+    if (selectedEmail?.threadId && threadData[selectedEmail.threadId]) {
+      setThreadData(prev => ({
+        ...prev,
+        [selectedEmail.threadId!]: {
+          ...prev[selectedEmail.threadId!],
+          messages: prev[selectedEmail.threadId!].messages.map(msg =>
+            msg.id === emailId ? { ...msg, starred: newStarredState } : msg
+          )
+        }
+      }));
+    }
+
+    // Update cache for current folder/query
+    const cacheKey = getCacheKey(currentFolder, searchQuery, showStarredOnly);
+    if (emailCache[cacheKey]) {
+      emailCache[cacheKey] = {
+        ...emailCache[cacheKey],
+        emails: emailCache[cacheKey].emails.map(email =>
+          email.id === emailId ? { ...email, starred: newStarredState } : email
+        ).filter(email => !showStarredOnly || email.starred) // Remove unstarred emails if showing starred only
+      };
+    }
+    
     try {
       const response = await api.post('/api/emails/star', {
         messageId: emailId,
-        star: !currentlyStarred
+        star: newStarredState
       });
 
       const responseData = response.data as { success: boolean; starred: boolean };
 
       if (responseData.success) {
-        // Update the email in the local state
-        setEmails(prevEmails => 
-          prevEmails.map(email => 
-            email.id === emailId 
-              ? { ...email, starred: !currentlyStarred }
-              : email
-          )
-        );
-
-        // Update selected email if it's the one being starred
-        if (selectedEmail?.id === emailId) {
-          setSelectedEmail(prev => prev ? { ...prev, starred: !currentlyStarred } : null);
-        }
-
-        // Update thread data if the email is part of a thread
-        if (selectedEmail?.threadId && threadData[selectedEmail.threadId]) {
-          setThreadData(prev => ({
-            ...prev,
-            [selectedEmail.threadId!]: {
-              ...prev[selectedEmail.threadId!],
-              messages: prev[selectedEmail.threadId!].messages.map(msg =>
-                msg.id === emailId ? { ...msg, starred: !currentlyStarred } : msg
-              )
-            }
-          }));
-        }
-
         toast.success(currentlyStarred ? 'Email unstarred' : 'Email starred');
+      } else {
+        throw new Error('API call returned unsuccessful');
       }
     } catch (error) {
       console.error('Error starring email:', error);
       toast.error('Failed to update star status');
+      
+      // Revert optimistic update on error
+      setEmails(prevEmails => 
+        prevEmails.map(email => 
+          email.id === emailId 
+            ? { ...email, starred: currentlyStarred }
+            : email
+        )
+      );
+
+      if (selectedEmail?.id === emailId) {
+        setSelectedEmail(prev => prev ? { ...prev, starred: currentlyStarred } : null);
+      }
+
+      if (selectedEmail?.threadId && threadData[selectedEmail.threadId]) {
+        setThreadData(prev => ({
+          ...prev,
+          [selectedEmail.threadId!]: {
+            ...prev[selectedEmail.threadId!],
+            messages: prev[selectedEmail.threadId!].messages.map(msg =>
+              msg.id === emailId ? { ...msg, starred: currentlyStarred } : msg
+            )
+          }
+        }));
+      }
+      
+      // Revert cache
+      if (emailCache[cacheKey]) {
+        emailCache[cacheKey] = {
+          ...emailCache[cacheKey],
+          emails: emailCache[cacheKey].emails.map(email =>
+            email.id === emailId ? { ...email, starred: currentlyStarred } : email
+          )
+        };
+      }
     } finally {
       setStarringEmails(prev => {
         const newSet = new Set(prev);
@@ -1072,11 +1189,52 @@ function DashboardContent() {
     }
   };
 
-  // Handle deleting emails
+  // Enhanced handleDeleteEmail to properly manage emails across folders
   const handleDeleteEmail = async (emailId: string, action: 'trash' | 'permanent' = 'trash') => {
     if (deletingEmails.has(emailId)) return;
 
     setDeletingEmails(prev => new Set(prev).add(emailId));
+    
+    // Store original state for potential revert
+    const originalEmails = emails;
+    const originalSelectedEmail = selectedEmail;
+    const originalThreadData = threadData;
+    
+    // Optimistic update - update UI immediately
+    // Remove the email from the local state immediately
+    setEmails(prevEmails => 
+      prevEmails.filter(email => email.id !== emailId)
+    );
+
+    // Clear selected email if it's the one being deleted
+    if (selectedEmail?.id === emailId) {
+      setSelectedEmail(null);
+      // Clear URL params
+      const params = new URLSearchParams(window.location.search);
+      params.delete('threadId');
+      router.replace(`/dashboard?${params.toString()}`, { scroll: false });
+    }
+
+    // Remove from thread data if present
+    const updatedThreadData = { ...threadData };
+    Object.keys(threadData).forEach(threadId => {
+      if (threadData[threadId].messages.some(msg => msg.id === emailId)) {
+        updatedThreadData[threadId] = {
+          ...threadData[threadId],
+          messages: threadData[threadId].messages.filter(msg => msg.id !== emailId)
+        };
+      }
+    });
+    setThreadData(updatedThreadData);
+
+    // Update cache for current folder/query
+    const cacheKey = getCacheKey(currentFolder, searchQuery, showStarredOnly);
+    if (emailCache[cacheKey]) {
+      emailCache[cacheKey] = {
+        ...emailCache[cacheKey],
+        emails: emailCache[cacheKey].emails.filter(email => email.id !== emailId)
+      };
+    }
     
     try {
       const response = await api.post('/api/emails/delete', {
@@ -1087,42 +1245,40 @@ function DashboardContent() {
       const responseData = response.data as { success: boolean; action: string; messageId: string };
 
       if (responseData.success) {
-        // Remove the email from the local state
-        setEmails(prevEmails => 
-          prevEmails.filter(email => email.id !== emailId)
-        );
-
-        // Clear selected email if it's the one being deleted
-        if (selectedEmail?.id === emailId) {
-          setSelectedEmail(null);
-          // Clear URL params
-          const params = new URLSearchParams(window.location.search);
-          params.delete('threadId');
-          router.replace(`/dashboard?${params.toString()}`, { scroll: false });
-        }
-
-        // Remove from thread data if present
-        Object.keys(threadData).forEach(threadId => {
-          if (threadData[threadId].messages.some(msg => msg.id === emailId)) {
-            setThreadData(prev => ({
-              ...prev,
-              [threadId]: {
-                ...prev[threadId],
-                messages: prev[threadId].messages.filter(msg => msg.id !== emailId)
-              }
-            }));
-          }
-        });
-
         toast.success(
           action === 'permanent' 
             ? 'Email permanently deleted' 
             : 'Email moved to trash'
         );
+        
+        // Cache for other folders will be refreshed when user switches to them
+      } else {
+        throw new Error('API call returned unsuccessful');
       }
     } catch (error) {
       console.error('Error deleting email:', error);
       toast.error('Failed to delete email');
+      
+      // Revert optimistic update on error
+      setEmails(originalEmails);
+      setSelectedEmail(originalSelectedEmail);
+      setThreadData(originalThreadData);
+      
+      // Revert cache
+      const cacheKey = getCacheKey(currentFolder, searchQuery, showStarredOnly);
+      if (emailCache[cacheKey]) {
+        emailCache[cacheKey] = {
+          ...emailCache[cacheKey],
+          emails: originalEmails
+        };
+      }
+      
+      // Restore URL params if needed
+      if (originalSelectedEmail?.threadId) {
+        const params = new URLSearchParams(window.location.search);
+        params.set('threadId', originalSelectedEmail.threadId);
+        router.replace(`/dashboard?${params.toString()}`, { scroll: false });
+      }
     } finally {
       setDeletingEmails(prev => {
         const newSet = new Set(prev);
@@ -1148,11 +1304,38 @@ function DashboardContent() {
     setDeleteDialog({ isOpen: false, emailId: '', emailSubject: '', action: 'trash' });
   };
 
-  // Handle restoring emails from trash
+  // Enhanced handleRestoreEmail to properly manage restoration
   const handleRestoreEmail = async (emailId: string) => {
     if (deletingEmails.has(emailId)) return;
 
     setDeletingEmails(prev => new Set(prev).add(emailId));
+    
+    // Store original state for potential revert
+    const originalEmails = emails;
+    const originalSelectedEmail = selectedEmail;
+    
+    // Optimistic update - remove the email from the trash view immediately
+    setEmails(prevEmails => 
+      prevEmails.filter(email => email.id !== emailId)
+    );
+
+    // Clear selected email if it's the one being restored
+    if (selectedEmail?.id === emailId) {
+      setSelectedEmail(null);
+      // Clear URL params
+      const params = new URLSearchParams(window.location.search);
+      params.delete('threadId');
+      router.replace(`/dashboard?${params.toString()}`, { scroll: false });
+    }
+
+    // Update cache for trash folder
+    const trashCacheKey = getCacheKey('trash', '', false);
+    if (emailCache[trashCacheKey]) {
+      emailCache[trashCacheKey] = {
+        ...emailCache[trashCacheKey],
+        emails: emailCache[trashCacheKey].emails.filter(email => email.id !== emailId)
+      };
+    }
     
     try {
       const response = await api.post('/api/emails/delete', {
@@ -1163,25 +1346,39 @@ function DashboardContent() {
       const responseData = response.data as { success: boolean; action: string; messageId: string };
 
       if (responseData.success) {
-        // Remove the email from the trash view
-        setEmails(prevEmails => 
-          prevEmails.filter(email => email.id !== emailId)
-        );
-
-        // Clear selected email if it's the one being restored
-        if (selectedEmail?.id === emailId) {
-          setSelectedEmail(null);
-          // Clear URL params
-          const params = new URLSearchParams(window.location.search);
-          params.delete('threadId');
-          router.replace(`/dashboard?${params.toString()}`, { scroll: false });
-        }
-
         toast.success('Email restored to inbox');
+        
+        // Clear inbox cache so it will be refreshed next time user visits inbox
+        const inboxCacheKey = getCacheKey('inbox', '', false);
+        if (emailCache[inboxCacheKey]) {
+          delete emailCache[inboxCacheKey];
+        }
+      } else {
+        throw new Error('API call returned unsuccessful');
       }
     } catch (error) {
       console.error('Error restoring email:', error);
       toast.error('Failed to restore email');
+      
+      // Revert optimistic update on error
+      setEmails(originalEmails);
+      setSelectedEmail(originalSelectedEmail);
+      
+      // Revert cache
+      const trashCacheKey = getCacheKey('trash', '', false);
+      if (emailCache[trashCacheKey]) {
+        emailCache[trashCacheKey] = {
+          ...emailCache[trashCacheKey],
+          emails: originalEmails
+        };
+      }
+      
+      // Restore URL params if needed
+      if (originalSelectedEmail?.threadId) {
+        const params = new URLSearchParams(window.location.search);
+        params.set('threadId', originalSelectedEmail.threadId);
+        router.replace(`/dashboard?${params.toString()}`, { scroll: false });
+      }
     } finally {
       setDeletingEmails(prev => {
         const newSet = new Set(prev);
@@ -1208,85 +1405,10 @@ function DashboardContent() {
           </div>
           <Skeleton className="h-8 w-8 rounded-md" />
         </div>
-
-        {/* Main content skeleton */}
-        <div className="flex-1 flex">
-          {/* Left sidebar skeleton */}
-          <div className="w-[20%] border-r border-border/50 bg-gradient-to-b from-orange-500/5 to-amber-500/5">
-            <div className="p-4">
-              <Skeleton className="h-12 w-full rounded-full mb-6" />
-              <div className="space-y-2">
-                {[...Array(5)].map((_, i) => (
-                  <Skeleton key={i} className="h-10 w-full rounded-md" />
-                ))}
-              </div>
-            </div>
-          </div>
-
-          {/* Email list skeleton */}
-          <div className="w-[35%] border-r border-border/50">
-            <div className="h-12 border-b border-border/50 flex items-center px-4">
-              <div className="flex space-x-2">
-                {[...Array(3)].map((_, i) => (
-                  <Skeleton key={i} className="h-8 w-8 rounded-md" />
-                ))}
-              </div>
-              <div className="flex-1" />
-              <div className="flex space-x-2">
-                {[...Array(2)].map((_, i) => (
-                  <Skeleton key={i} className="h-8 w-8 rounded-md" />
-                ))}
-              </div>
-            </div>
-            <div className="p-4 space-y-4">
-              {[...Array(8)].map((_, i) => (
-                <div key={i} className="flex items-center space-x-3">
-                  <Skeleton className="h-6 w-6 rounded-md" />
-                  <div className="flex-1 space-y-2">
-                    <div className="flex justify-between">
-                      <Skeleton className="h-4 w-32" />
-                      <Skeleton className="h-4 w-16" />
-                    </div>
-                    <Skeleton className="h-4 w-full" />
-                    <Skeleton className="h-3 w-3/4" />
-                  </div>
-                </div>
-              ))}
-            </div>
-          </div>
-
-          {/* Email content skeleton */}
-          <div className="flex-1 bg-gradient-to-b from-white/50 to-white/30 dark:from-background/50 dark:to-background/30">
-            <div className="h-12 border-b border-border/50 flex items-center justify-between px-4">
-              <div className="flex space-x-2">
-                {[...Array(3)].map((_, i) => (
-                  <Skeleton key={i} className="h-8 w-8 rounded-md" />
-                ))}
-              </div>
-              <div className="flex space-x-2">
-                {[...Array(2)].map((_, i) => (
-                  <Skeleton key={i} className="h-8 w-8 rounded-md" />
-                ))}
-              </div>
-            </div>
-            <div className="p-6 space-y-6">
-              <div className="space-y-4">
-                <Skeleton className="h-8 w-3/4" />
-                <div className="flex items-center space-x-4">
-                  <Skeleton className="h-10 w-10 rounded-full" />
-                  <div className="space-y-2">
-                    <Skeleton className="h-4 w-48" />
-                    <Skeleton className="h-3 w-32" />
-                  </div>
-                </div>
-              </div>
-              <div className="space-y-3">
-                {[...Array(6)].map((_, i) => (
-                  <Skeleton key={i} className="h-4 w-full" />
-                ))}
-                <Skeleton className="h-4 w-3/4" />
-              </div>
-            </div>
+        <div className="flex-1 flex items-center justify-center">
+          <div className="text-center">
+            <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-orange-500 mx-auto mb-4"></div>
+            <p className="text-muted-foreground">Loading dashboard...</p>
           </div>
         </div>
       </div>
@@ -1302,11 +1424,11 @@ function DashboardContent() {
             <Avatar className="h-8 w-8 ring-2 ring-orange-500/20">
               <AvatarImage src={userInfo?.picture} alt={userInfo?.name} />
               <AvatarFallback className="bg-gradient-to-br from-orange-500 to-amber-600">{userInfo?.name?.[0]}</AvatarFallback>
-            </Avatar>
+              </Avatar>
             <div className="font-medium text-sm truncate">
               {userInfo?.name}
               <div className="text-xs text-orange-600/80 truncate">{userInfo?.email}</div>
-            </div>
+              </div>
           </div>
         </div>
         <div className="flex-1 px-4">
@@ -1322,16 +1444,16 @@ function DashboardContent() {
           </div>
         </div>
         <div className="flex items-center space-x-2">
-          <Button 
-            variant="ghost"
+              <Button 
+                variant="ghost" 
             size="icon"
             className="text-orange-500/80 hover:text-orange-500 hover:bg-orange-500/10"
-            onClick={handleLogout}
-          >
+                onClick={handleLogout}
+              >
             <LogOut className="h-5 w-5" />
-          </Button>
-        </div>
-      </div>
+              </Button>
+            </div>
+          </div>
 
       <div className="flex flex-1 overflow-hidden">
         {/* Left sidebar (fixed width) */}
@@ -1376,6 +1498,8 @@ function DashboardContent() {
                     params.delete('view');
                   }
                   router.replace(`/dashboard?${params.toString()}`, { scroll: false });
+                  // Trigger refresh to show/hide starred emails
+                  fetchEmails(undefined, searchQuery);
                 }}
               >
                 <Star className={`mr-2 h-5 w-5 ${showStarredOnly ? 'fill-current text-amber-500' : ''}`} />
@@ -1948,7 +2072,7 @@ function DashboardContent() {
                                         <Paperclip className="h-3 w-3" />
                                         {threadMsg.attachments.length} attachment{threadMsg.attachments.length > 1 ? 's' : ''}
                                       </div>
-                                      <div className="space-y-1">
+                <div className="space-y-1">
                                         {threadMsg.attachments.map((attachment, attachIndex) => (
                                           <div
                                             key={attachIndex}
@@ -1956,7 +2080,7 @@ function DashboardContent() {
                                           >
                                             <span className="text-sm">
                                               {getFileTypeIcon(attachment.mimeType, attachment.filename)}
-                                            </span>
+                    </span>
                                             <span className="flex-1 truncate font-medium">{attachment.filename}</span>
                                             <span className="text-muted-foreground">{formatFileSize(attachment.size)}</span>
                                             <Button
@@ -1968,9 +2092,9 @@ function DashboardContent() {
                                             >
                                               <Download className="h-3 w-3" />
                                             </Button>
-                                          </div>
+                  </div>
                                         ))}
-                                      </div>
+                </div>
                                     </div>
                                   )}
                                 </div>
@@ -2069,7 +2193,7 @@ function DashboardContent() {
                         className="ml-1 text-orange-600 dark:text-orange-400 hover:text-orange-800 dark:hover:text-orange-200 transition-colors hover:bg-orange-200 dark:hover:bg-orange-800/30 rounded-full w-4 h-4 flex items-center justify-center"
                       >
                         ×
-                      </button>
+              </button>
                     </span>
                   ))}
                   <Input
@@ -2117,9 +2241,9 @@ function DashboardContent() {
                     <Sparkles className="h-4 w-4" />
                   )}
                 </Button>
-              </div>
-            </div>
-
+          </div>
+        </div>
+        
             {/* Content area */}
             <div className="flex-1 relative overflow-hidden">
               {generatedPreview.isVisible ? (
@@ -2139,11 +2263,11 @@ function DashboardContent() {
                   
                   <div className="flex-1 p-4 space-y-4 overflow-y-auto">
                     {generatedPreview.subject && (
-                      <div>
+              <div>
                         <label className="text-xs font-medium text-muted-foreground uppercase tracking-wide">Subject:</label>
                         <div className="mt-2 p-3 bg-gray-50 dark:bg-gray-900/50 rounded-md border border-border/30 text-sm">
                           {generatedPreview.subject}
-                        </div>
+              </div>
                       </div>
                     )}
                     
@@ -2385,13 +2509,13 @@ function DashboardContent() {
                     }}
                   />
                 </div>
-              </div>
-            ) : (
+            </div>
+          ) : (
               <div className="flex items-center justify-center py-8">
                 <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-orange-500"></div>
-              </div>
-            )}
-          </div>
+            </div>
+          )}
+        </div>
           <DialogFooter>
             <Button variant="outline" onClick={() => setShowSummary(false)}>
               Close
@@ -2420,7 +2544,7 @@ function DashboardContent() {
               <p className="text-xs text-muted-foreground mt-1">
                 This action will move the email to trash. You can restore it later if needed.
               </p>
-            </div>
+      </div>
           </div>
           <DialogFooter>
             <Button 
