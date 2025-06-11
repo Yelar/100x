@@ -79,6 +79,7 @@ interface EmailSummary {
 const ChatWith100x = lazy(() => import('@/components/chat-with-100x').then(m => ({ default: m.ChatWith100x })));
 const ReplyComposer = lazy(() => import('@/components/reply-composer').then(m => ({ default: m.ReplyComposer })));
 const EmailSummaryDialog = lazy(() => import('@/components/email-summary-dialog').then(m => ({ default: m.EmailSummaryDialog })));
+const FollowUpReminder = lazy(() => import('@/components/follow-up-reminder').then(m => ({ default: m.FollowUpReminder })));
 
 // In-memory cache for emails per folder/query (non-reactive, not persisted)
 const emailCache: Record<string, { emails: Email[]; nextPageToken?: string }> = {};
@@ -539,7 +540,7 @@ function DashboardContent() {
         }
         
         if (isMounted) {
-          setUserInfo(JSON.parse(storedUserInfo));
+        setUserInfo(JSON.parse(storedUserInfo));
           // Call fetchEmails directly instead of relying on dependency
           fetchEmails(undefined, '');
         }
@@ -553,7 +554,7 @@ function DashboardContent() {
       } catch (error) {
         console.error('Error fetching data:', error);
         if (isMounted) {
-          setLoading(false);
+        setLoading(false);
         }
       }
     };
@@ -921,6 +922,25 @@ function DashboardContent() {
       setIsSummaryDialogOpen(false);
     }
   }, [emails, handleEmailClick]);
+
+  // Handle email click from follow-up reminder
+  const handleEmailClickFromReminder = useCallback((emailId: string) => {
+    // First try to find the email in current emails list
+    const email = emails.find(e => e.id === emailId);
+    if (email) {
+      handleEmailClick(email);
+      return;
+    }
+    
+    // If not found, try to navigate by threadId from flagged emails
+    const flaggedEmail = flaggedEmails[emailId];
+    if (flaggedEmail) {
+      // Update URL with threadId and let the email navigation effect handle loading
+      const params = new URLSearchParams(window.location.search);
+      params.set('threadId', emailId);
+      router.replace(`/dashboard?${params.toString()}`, { scroll: false });
+    }
+  }, [emails, handleEmailClick, flaggedEmails, router]);
 
   const formatEmailDate = useCallback((dateStr: string) => {
     const date = new Date(dateStr);
@@ -2145,6 +2165,14 @@ function DashboardContent() {
 
       <Suspense fallback={<></>}>
         <ChatWith100x onEmailClick={handleEmailClickById} />
+      </Suspense>
+
+      {/* Follow-up reminder component */}
+      <Suspense fallback={<></>}>
+        <FollowUpReminder 
+          flaggedEmails={flaggedEmails}
+          onEmailClick={handleEmailClickFromReminder}
+        />
       </Suspense>
 
       {/* Email compose dialog */}
