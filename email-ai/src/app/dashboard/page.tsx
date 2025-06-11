@@ -1562,12 +1562,7 @@ function DashboardContent() {
               <Button variant="ghost" className="w-full justify-start font-medium text-muted-foreground hover:text-orange-600 hover:bg-orange-500/10">
                 <FileText className="mr-2 h-5 w-5" />
                 Drafts
-              </Button>
-              <Button variant="ghost" className="w-full justify-start font-medium text-muted-foreground hover:text-orange-600 hover:bg-orange-500/10">
-                <Trash className="mr-2 h-5 w-5" />
-                Trash
-              </Button>
-              <div className="space-y-1">
+              </Button>              <div className="space-y-1">
                 {Object.entries(FLAG_LABELS).map(([flag, label]) => (
                   <Button
                     key={flag}
