@@ -2,6 +2,7 @@
 
 import { useEffect } from 'react';
 import { useRouter } from 'next/navigation';
+import Link from 'next/link';
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Mail } from "lucide-react";
@@ -45,29 +46,29 @@ export default function Login() {
     <div className="min-h-screen w-full flex flex-col bg-background text-foreground font-[family-name:var(--font-geist-sans)] relative overflow-hidden">
       {/* Gradient Background */}
       <div className="fixed inset-0 -z-10 bg-background">
-        <div className="absolute inset-0 bg-gradient-to-tr from-orange-100/20 via-transparent to-yellow-100/20 animate-gradient" />
+        <div className="absolute inset-0 bg-gradient-to-tr from-orange-100/20 via-transparent to-yellow-100/20" />
         <div className="absolute top-1/4 left-1/4 w-[500px] h-[500px] bg-orange-200/30 rounded-full blur-3xl -translate-x-1/2 -translate-y-1/2" />
         <div className="absolute bottom-1/4 right-1/4 w-[500px] h-[500px] bg-yellow-200/30 rounded-full blur-3xl translate-x-1/2 translate-y-1/2" />
       </div>
 
       {/* Header */}
       <header className="w-full flex items-center justify-between px-6 py-4 bg-background/80 backdrop-blur-lg border-b">
-        <div className="flex items-center gap-3">
-          <div className="w-8 h-8 rounded-xl bg-gradient-to-tr from-orange-500 to-orange-600 flex items-center justify-center shadow-lg shadow-orange-500/20 animate-subtle-bounce">
+        <Link href="/" className="flex items-center gap-3 hover:opacity-80 transition-opacity duration-200">
+          <div className="w-8 h-8 rounded-xl bg-gradient-to-tr from-orange-500 to-orange-600 flex items-center justify-center shadow-lg shadow-orange-500/20">
             <Mail className="w-5 h-5 text-white" />
           </div>
-          <span className="font-semibold text-lg bg-gradient-to-r from-orange-500 to-orange-600 text-transparent bg-clip-text animate-in fade-in slide-in-from-left duration-700 delay-200">100x Email</span>
-        </div>
+          <span className="font-semibold text-lg bg-gradient-to-r from-orange-500 to-orange-600 text-transparent bg-clip-text">100x Email</span>
+        </Link>
       </header>
 
       {/* Main Content */}
       <main className="flex-1 flex items-center justify-center p-4">
-        <Card className="w-full max-w-md space-y-8 p-8 shadow-xl border-orange-200/50 backdrop-blur-sm bg-background/50 animate-in fade-in slide-in-from-bottom duration-700 delay-300">
+        <Card className="w-full max-w-md space-y-8 p-8 shadow-xl border-orange-200/50 backdrop-blur-sm bg-background/50">
           <div className="space-y-2 text-center">
-            <h1 className="text-3xl font-bold tracking-tight animate-in fade-in slide-in-from-bottom duration-700 delay-500">
+            <h1 className="text-3xl font-bold tracking-tight">
               Welcome back
             </h1>
-            <p className="text-muted-foreground animate-in fade-in slide-in-from-bottom duration-700 delay-700">
+            <p className="text-muted-foreground">
               Sign in to your account to continue
             </p>
           </div>
@@ -75,7 +76,7 @@ export default function Login() {
           <Button
             onClick={handleGoogleLogin}
             size="lg"
-            className="w-full bg-gradient-to-r from-orange-500 to-orange-600 hover:from-orange-600 hover:to-orange-700 shadow-lg shadow-orange-500/20 hover:shadow-xl hover:shadow-orange-500/30 transition-all duration-300 animate-in fade-in slide-in-from-bottom duration-700 delay-900 hover:scale-105"
+            className="w-full bg-gradient-to-r from-orange-500 to-orange-600 hover:from-orange-600 hover:to-orange-700 shadow-lg shadow-orange-500/20 hover:shadow-xl hover:shadow-orange-500/30 transition-all duration-300"
           >
             <svg className="h-5 w-5 mr-2" viewBox="0 0 24 24">
               <path
@@ -89,32 +90,19 @@ export default function Login() {
       </main>
 
       {/* Footer */}
-      <footer className="w-full py-6 bg-background/80 backdrop-blur-lg text-center text-muted-foreground border-t animate-in fade-in slide-in-from-bottom duration-700 delay-1100">
-        <div className="flex items-center justify-center gap-2">
-          <Mail className="w-4 h-4 text-orange-500" />
-          <span className="font-medium">100x Email &copy; 2024</span>
+      <footer className="w-full py-6 bg-background/80 backdrop-blur-lg text-center text-muted-foreground border-t">
+        <div className="flex flex-col items-center justify-center gap-3">
+          <div className="flex items-center gap-2">
+            <Mail className="w-4 h-4 text-orange-500" />
+            <span className="font-medium">100x Email &copy; 2025</span>
+          </div>
+          <div className="flex items-center gap-4 text-sm">
+            <a href="/privacy" className="hover:text-orange-500 transition-colors duration-200">
+              Privacy Policy
+            </a>
+          </div>
         </div>
       </footer>
-
-      {/* Add keyframes for custom animations */}
-      <style jsx global>{`
-        @keyframes gradient {
-          0% { background-position: 0% 50%; }
-          50% { background-position: 100% 50%; }
-          100% { background-position: 0% 50%; }
-        }
-        @keyframes subtle-bounce {
-          0%, 100% { transform: translateY(0); }
-          50% { transform: translateY(-4px); }
-        }
-        .animate-gradient {
-          animation: gradient 15s ease infinite;
-          background-size: 200% 200%;
-        }
-        .animate-subtle-bounce {
-          animation: subtle-bounce 2s ease-in-out infinite;
-        }
-      `}</style>
-    </div>
-  );
+ </div>
+);
 }

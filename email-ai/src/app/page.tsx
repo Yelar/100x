@@ -7,6 +7,7 @@ import { Mail, Bot, Activity } from "lucide-react";
 import Image from "next/image";
 import Link from "next/link";
 import { useEffect, useState, useRef } from "react";
+import { useRouter } from "next/navigation";
 import { DemoChatWith100x } from "@/components/demo-chat-with-100x";
 
 // Mock data for components
@@ -20,6 +21,7 @@ const mockEmail = {
 };
 
 export default function Home() {
+  const router = useRouter();
   const [mounted, setMounted] = useState(false);
   const featuresRef = useRef<HTMLElement>(null);
   const resourcesRef = useRef<HTMLElement>(null);
@@ -31,7 +33,14 @@ export default function Home() {
 
   useEffect(() => {
     setMounted(true);
-  }, []);
+    
+    // Check if user is already logged in and redirect to dashboard
+    const userInfo = localStorage.getItem('user_info');
+    if (userInfo) {
+      router.push('/dashboard');
+      return;
+    }
+  }, [router]);
 
   useEffect(() => {
     const fetchWaitlistCount = async () => {
