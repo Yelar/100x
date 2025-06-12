@@ -22,9 +22,21 @@ interface EmailContent extends EmailContext {
   summary?: string; // Add summary field
 }
 
-// Generate search keywords for the user question using Groq
-async function generateSearchKeywords(userMessage: string, currentDate?: string): Promise<string[]> {
-  if (!userMessage.trim()) {
+// Define proper message type
+interface Message {
+  role: 'user' | 'assistant';
+  content: string;
+}
+
+// Generate search keywords for the user question using Groq with full conversation context
+async function generateSearchKeywords(messages: Message[], currentDate?: string, userName?: string): Promise<string[]> {
+  if (!messages.length) {
+    return [];
+  }
+  
+  // Get the latest user message
+  const latestMessage = messages[messages.length - 1]?.content || '';
+  if (!latestMessage.trim()) {
     return [];
   }
   
@@ -37,41 +49,85 @@ async function generateSearchKeywords(userMessage: string, currentDate?: string)
   const yesterday = formatDate(new Date(now.getTime() - 24 * 60 * 60 * 1000));
   const lastWeekStart = formatDate(new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000));
   const lastMonthStart = formatDate(new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000));
+  const thisYear = now.getFullYear().toString();
+  
+  // Build conversation context
+  const conversationHistory = messages.slice(-6) // Last 6 messages for context
+    .map((msg) => `${msg.role === 'user' ? 'User' : 'Assistant'}: ${msg.content}`)
+    .join('\n');
   
   const prompt = [
     {
       role: 'system',
-      content: `You are an assistant that generates effective Gmail search queries for email search.
-      Given a user's question, generate Gmail search operators and keywords that would find relevant emails.
-      
-      CURRENT DATE CONTEXT:
-      - Today: ${today}
-      - Yesterday: ${yesterday}
-      - Last week started: ${lastWeekStart}
-      - Last month started: ${lastMonthStart}
-      
-      GMAIL SEARCH OPERATORS:
-      - after:YYYY/MM/DD (emails after this date)
-      - before:YYYY/MM/DD (emails before this date)
-      - from:email@domain.com (emails from specific sender)
-      - subject:"text" (emails with text in subject)
-      - has:attachment (emails with attachments)
-      
-      DATE EXAMPLES:
-      - "last week" → after:${lastWeekStart}
-      - "yesterday" → after:${yesterday} before:${today}
-      - "recent" → after:${lastWeekStart}
-      - "this month" → after:${lastMonthStart}
-      
-      Return ONLY a JSON array of search terms/operators, with no other text.`
+      content: `You are an expert Gmail search query generator that creates precise search queries to find relevant emails.
+
+CONTEXT INFORMATION:
+- User: ${userName || 'Unknown user'}
+- Current Date: ${now.toLocaleDateString('en-US', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })}
+- Today: ${today}
+- Yesterday: ${yesterday}
+- Last week started: ${lastWeekStart}
+- Last month started: ${lastMonthStart}
+- This year: ${thisYear}
+
+GMAIL SEARCH OPERATORS (use these precisely):
+- after:YYYY/MM/DD or after:YYYY/M/D (emails after date)
+- before:YYYY/MM/DD or before:YYYY/M/D (emails before date)
+- from:email@domain.com or from:"Name" (from specific sender)
+- to:email@domain.com (to specific recipient)
+- subject:"exact phrase" (exact phrase in subject)
+- has:attachment (emails with attachments)
+- is:unread (unread emails)
+- is:important (important emails)
+- category:primary/social/promotions/updates (Gmail categories)
+- "exact phrase" (exact phrase anywhere in email)
+
+DATE TRANSLATION RULES:
+- "last week" → after:${lastWeekStart}
+- "yesterday" → after:${yesterday} before:${today}
+- "today" → after:${today}
+- "recent" or "recently" → after:${lastWeekStart}
+- "this month" → after:${lastMonthStart}
+- "this year" → after:${thisYear}/01/01
+- "past few days" → after:${formatDate(new Date(now.getTime() - 3 * 24 * 60 * 60 * 1000))}
+
+QUERY ANALYSIS GUIDELINES:
+1. If this is a follow-up question (uses "this", "that", "it", "them"), refer to previous conversation context
+2. For sender queries ("emails from X"), always use from: operator
+3. For date queries, ALWAYS include appropriate after:/before: operators
+4. For subject queries, use subject: operator with quoted phrases
+5. For content queries, use quoted phrases for exact matches
+6. Combine operators intelligently (e.g., from:someone after:date)
+7. Keep keyword count to 3-5 most relevant terms
+
+RESPONSE FORMAT:
+Return ONLY a JSON array of Gmail search terms/operators. Each element should be a complete, valid Gmail search operator or keyword.
+
+EXAMPLES:
+- "emails from john last week" → ["from:john", "after:${lastWeekStart}"]
+- "university updates from yesterday" → ["university updates", "after:${yesterday}", "before:${today}"]
+- "meeting invites with attachments" → ["meeting", "invite", "has:attachment"]
+- "unread emails from stripe" → ["from:stripe", "is:unread"]
+- "interview emails this month" → ["interview", "after:${lastMonthStart}"]`
     },
     {
       role: 'user',
-      content: `User question: "${userMessage}"
-      
-      Generate Gmail search operators and keywords (MAX 5) to find emails related to this question.
-      If the question mentions relative dates, convert them to Gmail after:/before: operators using the current date context.
-      Return as a JSON array of strings only, no other text. Format: ["keyword1", "after:2024/01/01", "subject:meeting"]`
+      content: `CONVERSATION HISTORY:
+${conversationHistory}
+
+CURRENT QUERY: "${latestMessage}"
+
+Based on the full conversation context and the current query, generate 3-5 Gmail search operators/keywords that will find the most relevant emails.
+
+IMPORTANT INSTRUCTIONS:
+1. Consider the conversation history - if this is a follow-up question, maintain context from previous messages
+2. If the query mentions relative dates, convert them to Gmail after:/before: operators using current date context
+3. If asking about specific senders, use from: operator
+4. If asking about email content, include relevant keywords
+5. Always prioritize precision over broad matching
+6. Return ONLY the JSON array, no other text
+
+Format: ["search_term1", "from:sender", "after:2024/01/15"]`
     }
   ];
   
@@ -85,45 +141,65 @@ async function generateSearchKeywords(userMessage: string, currentDate?: string)
       body: JSON.stringify({
         model: 'gemma2-9b-it',
         messages: prompt,
-        temperature: 0.2,
-        max_tokens: 200
+        temperature: 0.1, // Lower temperature for more consistent results
+        max_tokens: 300
       })
     });
     
     if (!response.ok) {
       console.error('Groq API error generating keywords:', await response.text());
-      // Fallback to basic keyword extraction
-      return fallbackGenerateKeywords(userMessage);
+      return fallbackGenerateKeywords(latestMessage);
     }
     
     const result = await response.json();
-    const content = result.choices?.[0]?.message?.content;
-    console.log('[INFO] Generated keywords:', content);
+    const content = result.choices?.[0]?.message?.content?.trim();
+    console.log('[INFO] Generated search query response:', content);
+    
     if (!content) {
-      return fallbackGenerateKeywords(userMessage);
+      return fallbackGenerateKeywords(latestMessage);
     }
     
     try {
-      // Extract JSON array from response
-      const match = content.match(/\[([\s\S]*)\]/);
-      if (match) {
-        const keywords = JSON.parse(match[0]);
-        return Array.isArray(keywords) ? keywords.slice(0, 5) : fallbackGenerateKeywords(userMessage);
+      // Extract JSON array from response - try multiple patterns
+      let keywords: string[] = [];
+      
+      // Try to find JSON array in the response
+      const jsonMatch = content.match(/\[([\s\S]*)\]/);
+      if (jsonMatch) {
+        const parsed = JSON.parse(jsonMatch[0]);
+        if (Array.isArray(parsed)) {
+          keywords = parsed.filter(k => typeof k === 'string' && k.trim().length > 0);
+        }
       }
-      return fallbackGenerateKeywords(userMessage);
+      
+      // If no valid keywords found, try fallback
+      if (keywords.length === 0) {
+        console.warn('No valid keywords extracted from LLM response:', content);
+        return fallbackGenerateKeywords(latestMessage);
+      }
+      
+      // Limit to 5 keywords max and clean them
+      const cleanedKeywords = keywords
+        .slice(0, 5)
+        .map(k => k.trim())
+        .filter(k => k.length > 0);
+      
+      console.log('[INFO] Final search keywords:', cleanedKeywords);
+      return cleanedKeywords;
+      
     } catch (error) {
       console.error('Error parsing keywords response:', error);
-      return fallbackGenerateKeywords(userMessage);
+      return fallbackGenerateKeywords(latestMessage);
     }
   } catch (error) {
     console.error('Error calling Groq for keyword generation:', error);
-    return fallbackGenerateKeywords(userMessage);
+    return fallbackGenerateKeywords(latestMessage);
   }
 }
 
 // Fallback keyword generation
-function fallbackGenerateKeywords(userMessage: string): string[] {
-  const words = userMessage.split(/\s+/);
+function fallbackGenerateKeywords(latestUserMessage: string): string[] {
+  const words = latestUserMessage.split(/\s+/);
   const keywords = words
     .filter(word => word.length > 3 && !['what', 'when', 'where', 'which', 'this', 'that', 'have', 'from'].includes(word.toLowerCase()))
     .slice(0, 3);
@@ -435,70 +511,6 @@ async function summarizeEmailContent(emails: EmailContent[]): Promise<EmailConte
   }
 }
 
-// The main email search tool function that performs the multi-step process
-async function searchEmails(query: string, currentDate?: string): Promise<ToolResult> {
-  console.log(`[INFO] Starting email search for query: "${query}"`);
-  
-  // Step 1: Generate search keywords using the LLM
-  const keywords = await generateSearchKeywords(query, currentDate);
-  console.log(`[INFO] Generated keywords: ${keywords.join(', ')}`);
-  
-  if (keywords.length === 0) {
-    return {
-      relevant_emails: [],
-      full_emails: [],
-      analysis: "No keywords could be generated for the query",
-      answer: "I couldn't understand your question well enough to search for emails."
-    };
-  }
-  
-  // Step 2: Search for emails using the generated keywords
-  const emailsByKeyword: EmailContext[] = [];
-  for (const keyword of keywords) {
-    const emails = await fetchEmailsByKeyword(keyword, 5);
-    emailsByKeyword.push(...emails);
-  }
-  
-  // Remove duplicates based on email ID
-  const uniqueEmails = Array.from(
-    new Map(emailsByKeyword.map(email => [email.id, email])).values()
-  );
-  
-  console.log(`[INFO] Found ${uniqueEmails.length} unique emails across ${keywords.length} keywords`);
-  
-  if (uniqueEmails.length === 0) {
-    return {
-      relevant_emails: [],
-      full_emails: [],
-      analysis: "No emails found for the generated keywords",
-      answer: "I couldn't find any emails related to your question."
-    };
-  }
-  
-  // Step 3: Identify relevant emails using the LLM
-  const relevantEmailIds = await identifyRelevantEmails(uniqueEmails, query);
-
-  const relevantMetadata = uniqueEmails.filter(email => 
-    relevantEmailIds.includes(email.id)
-  );
-  
-  // Step 4: Get detailed content for relevant emails
-  const detailedEmails = await getEmailDetails(relevantEmailIds) || [];
-  
-  // Step 5: Summarize the content of each relevant email
-  const summarizedEmails = await summarizeEmailContent(detailedEmails);
-  
-  // Return the result structure
-  return {
-    relevant_emails: relevantMetadata,
-    full_emails: summarizedEmails,
-    analysis: `Generated keywords: ${keywords.join(', ')}. Found ${uniqueEmails.length} emails, analyzed and identified ${summarizedEmails.length} relevant emails with summaries.`,
-    answer: summarizedEmails.length > 0 
-      ? `Found ${summarizedEmails.length} relevant emails that may address your question.` 
-      : "I couldn't find specific emails that address your question."
-  };
-}
-
 // Update the ToolResult interface to match the return type of searchEmails
 interface ToolResult {
   relevant_emails: EmailContext[];
@@ -536,7 +548,7 @@ export async function POST(req: Request) {
     const lastMonthStart = formatDate(new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000));
     
     // Execute the email search tool
-    const toolResult = await searchEmails(userMessage, currentDate);
+    const toolResult = await searchEmails(messages, currentDate, userName);
     
     // Format the email data with summaries for better readability
     const formattedEmails = toolResult.full_emails.map(email => {
@@ -688,4 +700,69 @@ When the user wants to compose an email, use the email composition format to tri
       }
     );
   }
+}
+
+// The main email search tool function that performs the multi-step process
+async function searchEmails(messages: Message[], currentDate?: string, userName?: string): Promise<ToolResult> {
+  const query = messages[messages.length - 1]?.content || '';
+  console.log(`[INFO] Starting email search for query: "${query}"`);
+  
+  // Step 1: Generate search keywords using the LLM
+  const keywords = await generateSearchKeywords(messages, currentDate, userName);
+  console.log(`[INFO] Generated keywords: ${keywords.join(', ')}`);
+  
+  if (keywords.length === 0) {
+    return {
+      relevant_emails: [],
+      full_emails: [],
+      analysis: "No keywords could be generated for the query",
+      answer: "I couldn't understand your question well enough to search for emails."
+    };
+  }
+  
+  // Step 2: Search for emails using the generated keywords
+  const emailsByKeyword: EmailContext[] = [];
+  for (const keyword of keywords) {
+    const emails = await fetchEmailsByKeyword(keyword, 5);
+    emailsByKeyword.push(...emails);
+  }
+  
+  // Remove duplicates based on email ID
+  const uniqueEmails = Array.from(
+    new Map(emailsByKeyword.map(email => [email.id, email])).values()
+  );
+  
+  console.log(`[INFO] Found ${uniqueEmails.length} unique emails across ${keywords.length} keywords`);
+  
+  if (uniqueEmails.length === 0) {
+    return {
+      relevant_emails: [],
+      full_emails: [],
+      analysis: "No emails found for the generated keywords",
+      answer: "I couldn't find any emails related to your question."
+    };
+  }
+  
+  // Step 3: Identify relevant emails using the LLM
+  const relevantEmailIds = await identifyRelevantEmails(uniqueEmails, query);
+
+  const relevantMetadata = uniqueEmails.filter(email => 
+    relevantEmailIds.includes(email.id)
+  );
+  
+  // Step 4: Get detailed content for relevant emails
+  const detailedEmails = await getEmailDetails(relevantEmailIds) || [];
+  
+  // Step 5: Summarize the content of each relevant email
+  const summarizedEmails = await summarizeEmailContent(detailedEmails);
+  
+  // Return the result structure
+  return {
+    relevant_emails: relevantMetadata,
+    full_emails: summarizedEmails,
+    analysis: `Generated keywords: ${keywords.join(', ')}. Found ${uniqueEmails.length} emails, analyzed and identified ${summarizedEmails.length} relevant emails with summaries.`,
+    answer: summarizedEmails.length > 0 
+      ? `Found ${summarizedEmails.length} relevant emails that may address your question.` 
+      : "I couldn't find specific emails that address your question."
+  };
 } 
