@@ -2613,19 +2613,21 @@ function DashboardContent() {
 
       {/* TLDR Summary Dialog */}
       <Dialog open={showSummary} onOpenChange={setShowSummary}>
-        <DialogContent className="max-w-2xl p-6 grid gap-4">
-          <DialogHeader>
-            <DialogTitle className="flex items-center gap-2">
-              <Sparkles className="h-5 w-5 text-orange-500" />
-              TLDR Summary
-            </DialogTitle>
-            <DialogClose asChild>
-              <Button variant="ghost" size="icon" className="absolute right-4 top-4 h-8 w-8">
-                <X className="h-4 w-4" />
-              </Button>
-            </DialogClose>
-          </DialogHeader>
-          <div className="py-4">
+        <DialogContent className="max-w-2xl max-h-[80vh] flex flex-col p-0">
+          <div className="p-6 pb-0 flex-shrink-0">
+            <DialogHeader>
+              <DialogTitle className="flex items-center gap-2">
+                <Sparkles className="h-5 w-5 text-orange-500" />
+                TLDR Summary
+              </DialogTitle>
+              <DialogClose asChild>
+                <Button variant="ghost" size="icon" className="absolute right-4 top-6 h-8 w-8">
+                  <X className="h-4 w-4" />
+                </Button>
+              </DialogClose>
+            </DialogHeader>
+          </div>
+          <div className="flex-1 min-h-0 overflow-y-auto px-6 py-4">
             {emailSummary ? (
               <div className="prose prose-sm dark:prose-invert max-w-none">
                 <div className="bg-orange-50 dark:bg-orange-950/20 p-6 rounded-lg border border-orange-200 dark:border-orange-800">
@@ -2647,11 +2649,13 @@ function DashboardContent() {
             </div>
           )}
         </div>
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setShowSummary(false)}>
-              Close
-            </Button>
-          </DialogFooter>
+          <div className="px-6 pb-6 pt-0 flex-shrink-0">
+            <DialogFooter>
+              <Button variant="outline" onClick={() => setShowSummary(false)}>
+                Close
+              </Button>
+            </DialogFooter>
+          </div>
         </DialogContent>
       </Dialog>
 

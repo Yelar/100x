@@ -3,12 +3,13 @@
 import { Button } from "@/components/ui/button";
 import { EmailPreviewDialog } from "@/components/email-preview-dialog";
 import { Badge } from "@/components/ui/badge";
-import { Mail, Bot, Activity } from "lucide-react";
+import { Mail, Bot, Activity, Sparkles, X } from "lucide-react";
 import Image from "next/image";
 import Link from "next/link";
 import { useEffect, useState, useRef } from "react";
 import { useRouter } from "next/navigation";
 import { DemoChatWith100x } from "@/components/demo-chat-with-100x";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogClose, DialogFooter } from "@/components/ui/dialog";
 
 // Mock data for components
 const mockEmail = {
@@ -30,6 +31,11 @@ export default function Home() {
   const [waitlistMsg, setWaitlistMsg] = useState('');
   const [waitlistCount, setWaitlistCount] = useState<number | null>(null);
   const [waitlistCountLoading, setWaitlistCountLoading] = useState(true);
+  const [showSummary, setShowSummary] = useState(false);
+  const [emailSummary] = useState('');
+
+  // Fallback for formatTLDRSummary if not defined
+  const formatTLDRSummary = (text: string) => text;
 
   useEffect(() => {
     setMounted(true);
@@ -285,6 +291,54 @@ export default function Home() {
             Get started for free
           </Button>
         </section>
+
+        {/* TLDR Summary Dialog */}
+        <Dialog open={showSummary} onOpenChange={setShowSummary}>
+          <DialogContent className="max-w-2xl max-h-[80vh] flex flex-col p-0">
+            <div className="p-6 pb-0 flex-shrink-0">
+              <DialogHeader>
+                <DialogTitle className="flex items-center gap-2">
+                  <Sparkles className="h-5 w-5 text-orange-500" />
+                  TLDR Summary
+                </DialogTitle>
+                <DialogClose asChild>
+                  <Button variant="ghost" size="icon" className="absolute right-4 top-4 h-8 w-8">
+                    <X className="h-4 w-4" />
+                  </Button>
+                </DialogClose>
+              </DialogHeader>
+            </div>
+            <div className="flex-1 min-h-0 overflow-y-auto px-6 py-4">
+              {emailSummary ? (
+                <div className="prose prose-sm dark:prose-invert max-w-none">
+                  <div className="bg-orange-50 dark:bg-orange-950/20 p-6 rounded-lg border border-orange-200 dark:border-orange-800">
+                    <div 
+                      className="text-foreground leading-relaxed"
+                      style={{ 
+                        whiteSpace: 'pre-wrap',
+                        lineHeight: '1.6'
+                      }}
+                      dangerouslySetInnerHTML={{
+                        __html: formatTLDRSummary(emailSummary)
+                      }}
+                    />
+                  </div>
+                </div>
+              ) : (
+                <div className="flex items-center justify-center py-8">
+                  <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-orange-500"></div>
+                </div>
+              )}
+            </div>
+            <div className="px-6 pb-6 pt-0 flex-shrink-0">
+              <DialogFooter>
+                <Button variant="outline" onClick={() => setShowSummary(false)}>
+                  Close
+                </Button>
+              </DialogFooter>
+            </div>
+          </DialogContent>
+        </Dialog>
       </main>
 
       {/* Footer */}
