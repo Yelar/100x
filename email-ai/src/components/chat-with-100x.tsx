@@ -12,6 +12,12 @@ import { Badge } from "@/components/ui/badge";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { EmailComposeDialog, EmailComposeDialogHandle } from '@/components/email-compose-dialog';
 
+interface UserInfo {
+  name: string;
+  email: string;
+  picture: string;
+}
+
 interface ParsedAIResponse {
   thoughts?: string[];
   answer: string;
@@ -21,9 +27,10 @@ interface ChatWith100xProps {
   isOpen?: boolean;
   onToggle?: () => void;
   onEmailClick?: (emailId: string) => void;
+  userInfo: UserInfo | null;
 }
 
-export function ChatWith100x({ isOpen: propIsOpen, onToggle: propOnToggle, onEmailClick }: ChatWith100xProps) {
+export function ChatWith100x({ isOpen: propIsOpen, onToggle: propOnToggle, onEmailClick, userInfo }: ChatWith100xProps) {
   const [isOpenInternal, setIsOpenInternal] = useState(false);
   const isOpen = propIsOpen ?? isOpenInternal;
   const onToggle = propOnToggle ?? (() => setIsOpenInternal(!isOpenInternal));
@@ -31,6 +38,11 @@ export function ChatWith100x({ isOpen: propIsOpen, onToggle: propOnToggle, onEma
   
   const { messages, input, handleInputChange, handleSubmit, isLoading } = useChat({
     api: '/api/chat',
+    body: {
+      userName: userInfo?.name,
+      userEmail: userInfo?.email,
+      currentDate: new Date().toISOString(),
+    },
     onResponse: (response) => {
       // This is called when the API response starts streaming
       console.log("Response started:", response.status);

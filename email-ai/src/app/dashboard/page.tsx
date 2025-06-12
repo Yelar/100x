@@ -2270,7 +2270,7 @@ function DashboardContent() {
       </div>
 
       <Suspense fallback={<></>}>
-        <ChatWith100x onEmailClick={handleEmailClickById} />
+        <ChatWith100x onEmailClick={handleEmailClickById} userInfo={userInfo} />
       </Suspense>
 
       {/* Follow-up reminder component */}

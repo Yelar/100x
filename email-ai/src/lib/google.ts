@@ -65,30 +65,49 @@ interface Attachment {
   filename: string;
   mimeType: string;
   size: number;
+  data?: string; // base64 encoded data for inline viewing
 }
+
+// interface Email {
+//   id: string;
+//   threadId?: string;
+//   from: string;
+//   subject: string;
+//   date: string;
+//   snippet: string;
+//   body: string;
+//   internalDate?: string;
+//   attachments?: Attachment[];
+//   starred?: boolean;
+// }
+
+// interface EmailThread {
+//   threadId: string;
+//   messages: Email[];
+//   historyId: string;
+//   nextPageToken?: string;
+// }
+
+// interface EmailSummary {
+//   individual_summaries: Array<{
+//     categories: Record<string, string[]>;
+//   }>;
+// }
 
 export const getGmailMessages = async (accessToken: string, options: GetEmailsOptions = {}) => {
   oauth2Client.setCredentials({ access_token: accessToken });
   const gmail = google.gmail({ version: 'v1', auth: oauth2Client });
 
-  let query = '';
-  if (options.folder === 'sent') {
-    query = 'in:sent';
-  } else if (options.folder === 'spam') {
-    query = 'in:spam';
-  } else if (options.folder === 'trash') {
-    query = 'in:trash';
-  } else {
-    query = 'in:inbox';
-  }
+  let query = options.query || '';
 
-  if (options.query) {
-    query += ` ${options.query}`;
+  // Only add folder if it's not already in the query
+  if (options.folder && !query.includes('in:')) {
+    query = `in:${options.folder} ${query}`;
   }
 
   const response = await gmail.users.messages.list({
     userId: 'me',
-    q: query,
+    q: query.trim(),
     maxResults: options.maxResults || 20,
     pageToken: options.pageToken,
   });
@@ -225,6 +244,7 @@ export const getGmailMessages = async (accessToken: string, options: GetEmailsOp
         date: headers.find(h => h.name === 'Date')?.value || 'Unknown',
         snippet: msg.data.snippet || '',
         body: body,
+        internalDate: msg.data.internalDate || '0',
         attachments: attachments.length > 0 ? attachments : undefined,
         starred: msg.data.labelIds?.includes('STARRED') || false
       };
@@ -271,7 +291,8 @@ export const getEmailContent = async (accessToken: string, messageId: string) =>
     subject: headers.find(h => h.name === 'Subject')?.value || 'No Subject',
     date: headers.find(h => h.name === 'Date')?.value || 'Unknown',
     snippet: msg.data.snippet || '',
-    body: body || msg.data.snippet || ''
+    body: body || msg.data.snippet || '',
+    starred: msg.data.labelIds?.includes('STARRED') || false
   };
 };
 
@@ -399,6 +420,7 @@ export const getEmailThread = async (accessToken: string, threadId: string) => {
         snippet: message.snippet || '',
         body: body,
         internalDate: message.internalDate || '0',
+        attachments: (message.payload?.parts || []).some(p => p.filename) ? [] : undefined, // Placeholder
         starred: message.labelIds?.includes('STARRED') || false
       };
     })

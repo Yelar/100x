@@ -23,24 +23,55 @@ interface EmailContent extends EmailContext {
 }
 
 // Generate search keywords for the user question using Groq
-async function generateSearchKeywords(userMessage: string): Promise<string[]> {
+async function generateSearchKeywords(userMessage: string, currentDate?: string): Promise<string[]> {
   if (!userMessage.trim()) {
     return [];
   }
   
+  // Parse the current date for date-aware queries
+  const now = new Date(currentDate || new Date().toISOString());
+  const formatDate = (date: Date) => date.toISOString().split('T')[0]; // YYYY-MM-DD format
+  
+  // Calculate common date ranges
+  const today = formatDate(now);
+  const yesterday = formatDate(new Date(now.getTime() - 24 * 60 * 60 * 1000));
+  const lastWeekStart = formatDate(new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000));
+  const lastMonthStart = formatDate(new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000));
+  
   const prompt = [
     {
       role: 'system',
-      content: `You are an assistant that generates effective search keywords for email search.
-      Given a user's question, extract important keywords that would be most helpful for finding relevant emails.
-      Return ONLY a JSON array of keywords, with no other text.`
+      content: `You are an assistant that generates effective Gmail search queries for email search.
+      Given a user's question, generate Gmail search operators and keywords that would find relevant emails.
+      
+      CURRENT DATE CONTEXT:
+      - Today: ${today}
+      - Yesterday: ${yesterday}
+      - Last week started: ${lastWeekStart}
+      - Last month started: ${lastMonthStart}
+      
+      GMAIL SEARCH OPERATORS:
+      - after:YYYY/MM/DD (emails after this date)
+      - before:YYYY/MM/DD (emails before this date)
+      - from:email@domain.com (emails from specific sender)
+      - subject:"text" (emails with text in subject)
+      - has:attachment (emails with attachments)
+      
+      DATE EXAMPLES:
+      - "last week" → after:${lastWeekStart}
+      - "yesterday" → after:${yesterday} before:${today}
+      - "recent" → after:${lastWeekStart}
+      - "this month" → after:${lastMonthStart}
+      
+      Return ONLY a JSON array of search terms/operators, with no other text.`
     },
     {
       role: 'user',
       content: `User question: "${userMessage}"
       
-      Generate specific search keywords (MAX 10) to find emails related to this question.
-      Return as a JSON array of strings only, no other text. Format: ["keyword1", "keyword2"]`
+      Generate Gmail search operators and keywords (MAX 5) to find emails related to this question.
+      If the question mentions relative dates, convert them to Gmail after:/before: operators using the current date context.
+      Return as a JSON array of strings only, no other text. Format: ["keyword1", "after:2024/01/01", "subject:meeting"]`
     }
   ];
   
@@ -55,16 +86,14 @@ async function generateSearchKeywords(userMessage: string): Promise<string[]> {
         model: 'gemma2-9b-it',
         messages: prompt,
         temperature: 0.2,
-        max_tokens: 100
+        max_tokens: 200
       })
     });
     
     if (!response.ok) {
       console.error('Groq API error generating keywords:', await response.text());
       // Fallback to basic keyword extraction
-      return userMessage.split(/\s+/)
-        .filter(word => word.length > 3 && !['what', 'when', 'where', 'which', 'this', 'that', 'have', 'from'].includes(word.toLowerCase()))
-        .slice(0, 3);
+      return fallbackGenerateKeywords(userMessage);
     }
     
     const result = await response.json();
@@ -79,7 +108,7 @@ async function generateSearchKeywords(userMessage: string): Promise<string[]> {
       const match = content.match(/\[([\s\S]*)\]/);
       if (match) {
         const keywords = JSON.parse(match[0]);
-        return Array.isArray(keywords) ? keywords.slice(0, 3) : fallbackGenerateKeywords(userMessage);
+        return Array.isArray(keywords) ? keywords.slice(0, 5) : fallbackGenerateKeywords(userMessage);
       }
       return fallbackGenerateKeywords(userMessage);
     } catch (error) {
@@ -407,15 +436,26 @@ async function summarizeEmailContent(emails: EmailContent[]): Promise<EmailConte
 }
 
 // The main email search tool function that performs the multi-step process
-async function searchEmails(query: string): Promise<ToolResult> {
-  // Step 1: Generate search keywords
-  const keywords = await generateSearchKeywords(query);
-  console.log("Generated keywords:", keywords);
+async function searchEmails(query: string, currentDate?: string): Promise<ToolResult> {
+  console.log(`[INFO] Starting email search for query: "${query}"`);
   
-  // Step 2: Fetch emails for each keyword
+  // Step 1: Generate search keywords using the LLM
+  const keywords = await generateSearchKeywords(query, currentDate);
+  console.log(`[INFO] Generated keywords: ${keywords.join(', ')}`);
+  
+  if (keywords.length === 0) {
+    return {
+      relevant_emails: [],
+      full_emails: [],
+      analysis: "No keywords could be generated for the query",
+      answer: "I couldn't understand your question well enough to search for emails."
+    };
+  }
+  
+  // Step 2: Search for emails using the generated keywords
   const emailsByKeyword: EmailContext[] = [];
   for (const keyword of keywords) {
-    const emails = await fetchEmailsByKeyword(keyword);
+    const emails = await fetchEmailsByKeyword(keyword, 5);
     emailsByKeyword.push(...emails);
   }
   
@@ -481,12 +521,22 @@ export async function POST(req: Request) {
   }
 
   try {
-    const { messages } = await req.json();
+    const { messages, userName, userEmail, currentDate } = await req.json();
     // Get the user's latest message
     const userMessage = messages[messages.length - 1]?.content || '';
     
+    // Parse the current date for date-aware queries
+    const now = new Date(currentDate || new Date().toISOString());
+    const formatDate = (date: Date) => date.toISOString().split('T')[0]; // YYYY-MM-DD format
+    
+    // Calculate common date ranges for reference
+    const today = formatDate(now);
+    const yesterday = formatDate(new Date(now.getTime() - 24 * 60 * 60 * 1000));
+    const lastWeekStart = formatDate(new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000));
+    const lastMonthStart = formatDate(new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000));
+    
     // Execute the email search tool
-    const toolResult = await searchEmails(userMessage);
+    const toolResult = await searchEmails(userMessage, currentDate);
     
     // Format the email data with summaries for better readability
     const formattedEmails = toolResult.full_emails.map(email => {
@@ -503,7 +553,28 @@ export async function POST(req: Request) {
     // Prepare system message with tool instructions and formatted email data
     const systemMessage = {
       role: 'system',
-      content: `You are an AI assistant for an email client that provides EXTREMELY CONCISE answers.
+      content: `You are an AI assistant for ${userName || 'the user'}'s email client that provides EXTREMELY CONCISE answers.
+
+USER CONTEXT:
+- User Name: ${userName || 'Unknown'}
+- User Email: ${userEmail || 'Unknown'}
+- Current Date: ${currentDate ? new Date(currentDate).toLocaleDateString('en-US', { 
+  weekday: 'long', 
+  year: 'numeric', 
+  month: 'long', 
+  day: 'numeric' 
+}) : 'Unknown'}
+- Today: ${today}
+- Yesterday: ${yesterday}
+- Last Week Started: ${lastWeekStart}
+- Last Month Started: ${lastMonthStart}
+
+DATE AWARENESS:
+When users mention relative dates (e.g., "last week", "yesterday", "this month"), use the current date context to understand what they mean. For searches involving dates, generate appropriate Gmail search queries like:
+- "last week" → after:${lastWeekStart}
+- "yesterday" → after:${yesterday} before:${today}
+- "this month" → after:${lastMonthStart}
+- "recent" → after:${lastWeekStart}
 
 TOOLS AVAILABLE:
 1. search_emails: Search and analyze emails to answer the user query.
@@ -541,7 +612,7 @@ When responding:
 6. Only include information explicitly found in the emails
 7. Do not add unnecessary commentary or explanations
 8. When user wants to compose an email, use the compose_email tool format shown above
-9. MOST IMPORTANTLY, GENERATE CYRILLIC SYMBOLS WHEN ANSWERING ON RUSSIAN CORRECTLY. NO Symbols like Ã ÂŸÃ Â¾Ã, `
+9. MOST IMPORTANTLY, GENERATE CYRILLIC SYMBOLS WHEN ANSWERING ON RUSSIAN CORRECTLY. NO Symbols like Ã ÂŸÃ Â¾Ã`
     };
     
     // Make sure the model is prompted to output JSON
@@ -553,8 +624,7 @@ For regular responses:
 {
   "thoughts": [
     "Generated search keywords to find relevant emails",
-    "Retrieved email metadata matching those 
-  keywords",
+    "Retrieved email metadata matching those keywords",
     "Identified the most relevant emails",
     "Generated ultra-concise summaries of email content",
     "Analyzed email summaries to answer the question"
