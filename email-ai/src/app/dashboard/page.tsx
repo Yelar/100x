@@ -56,6 +56,7 @@ interface EmailThread {
   threadId: string;
   messages: Email[];
   historyId?: string;
+  mainEmail?: Email;  // Add mainEmail property
 }
 
 interface EmailsResponse {
@@ -159,9 +160,9 @@ function DashboardContent() {
 
   const [userInfo, setUserInfo] = useState<UserInfo | null>(null);
   const [emails, setEmails] = useState<Email[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [searchLoading, setSearchLoading] = useState(false);
-  const [loadingMore, setLoadingMore] = useState(false);
+  const [loading, setLoading] = useState(true); // Only for initial load
+  const [searchLoading, setSearchLoading] = useState(false); // For search only
+  const [loadingMore, setLoadingMore] = useState(false); // For infinite scroll
   const [selectedEmail, setSelectedEmail] = useState<Email | null>(null);
   const [searchQuery, setSearchQuery] = useState('');
   const [nextPageToken, setNextPageToken] = useState<string | undefined>();
@@ -405,7 +406,8 @@ function DashboardContent() {
           [threadId]: {
             threadId: threadData.threadId,
             messages: threadData.messages,
-            historyId: threadData.historyId
+            historyId: threadData.historyId,
+            mainEmail: threadData.mainEmail
           }
         }));
         // Set as selected email
@@ -420,14 +422,53 @@ function DashboardContent() {
     return null;
   }, []);
 
+  const fetchEmailThread = useCallback(async (threadId: string) => {
+    if (loadingThreadIds.current.has(threadId)) {
+      return null;
+    }
+
+    loadingThreadIds.current.add(threadId);
+    try {
+      const response = await api.get<EmailThread>(`/api/emails/thread/${threadId}`);
+      const threadData = response.data;
+      
+      if (threadData.mainEmail) {
+        // Add to thread data without triggering loading state
+        setThreadData(prev => ({
+          ...prev,
+          [threadId]: {
+            threadId: threadData.threadId,
+            messages: threadData.messages,
+            historyId: threadData.historyId,
+            mainEmail: threadData.mainEmail
+          }
+        }));
+        return threadData.mainEmail;
+      }
+    } catch (error) {
+      console.error('Error fetching email by threadId:', error);
+    } finally {
+      loadingThreadIds.current.delete(threadId);
+    }
+    return null;
+  }, []);
+
+  const handleEmailClick = useCallback(async (email: Email) => {
+    setSelectedEmail(email);
+    
+    // If thread data is already loaded, don't fetch again
+    if (email.threadId && !threadData[email.threadId]) {
+      fetchEmailThread(email.threadId);
+    }
+  }, [fetchEmailThread, threadData]);
+
   const fetchEmails = useCallback(async (pageToken?: string, query?: string) => {
     try {
       if (pageToken) {
         setLoadingMore(true);
-      } else {
+      } else if (!emails.length) {
+        // Only show loading on initial fetch when no emails exist
         setLoading(true);
-        // Clear emails when fetching new folder/search
-        setEmails([]);
       }
 
       const params = new URLSearchParams();
@@ -439,14 +480,12 @@ function DashboardContent() {
       const response = await api.get<EmailsResponse>(`/api/emails?${params.toString()}`);
       const { messages, nextPageToken: newNextPageToken } = response.data;
       
-      // Filter messages based on starred view if needed
       let filteredMessages = messages || [];
       if (showStarredOnly) {
         filteredMessages = filteredMessages.filter(email => email.starred);
       }
       
       if (pageToken) {
-        // Append new messages for infinite scroll
         setEmails(prev => {
           const uniqueMessages = filteredMessages.filter(
             newEmail => !prev.some(existingEmail => existingEmail.id === newEmail.id)
@@ -454,14 +493,12 @@ function DashboardContent() {
           return [...prev, ...uniqueMessages];
         });
       } else {
-        // Replace emails for new folder/search
         setEmails(filteredMessages);
       }
 
       setNextPageToken(newNextPageToken);
       setHasMore(!!newNextPageToken);
       
-      console.log('Fetched emails:', filteredMessages.length, 'Next token:', newNextPageToken);
     } catch (error) {
       console.error('Error fetching emails:', error);
       if (!pageToken) {
@@ -472,7 +509,7 @@ function DashboardContent() {
       setSearchLoading(false);
       setLoadingMore(false);
     }
-  }, [currentFolder, showStarredOnly]);
+  }, [currentFolder, showStarredOnly, emails.length]);
 
   const lastEmailElementRef = useCallback((node: HTMLElement | null) => {
     if (loading || searchLoading || loadingMore) return;
@@ -879,24 +916,6 @@ function DashboardContent() {
       setIsSummarizing(false);
     }
   };
-
-  const handleEmailClick = useCallback((email: Email) => {
-    // Update URL with threadId only
-    const params = new URLSearchParams(window.location.search);
-    if (email.threadId) {
-      params.set('threadId', email.threadId);
-      // Auto-load thread data if not already loaded
-      if (email.threadId && !threadData[email.threadId]) {
-        handleToggleThread(email.threadId);
-      }
-    } else {
-      params.delete('threadId');
-    }
-    router.replace(`/dashboard?${params.toString()}`, { scroll: false });
-    
-    // Set email immediately - no loading bullshit
-    setSelectedEmail(email);
-  }, [router, threadData, handleToggleThread]);
 
   const handleEmailClickById = useCallback((emailId: string) => {
     console.log('Opening email from chat:', emailId);
@@ -1864,8 +1883,8 @@ function DashboardContent() {
                   </div>
                 ))}
               
-              {/* Loading spinner */}
-              {(loading || searchLoading || loadingMore) && (
+              {/* Loading spinner - only show for initial load or infinite scroll */}
+              {((!emails.length && loading) || loadingMore) && (
                 <div className="p-4 flex justify-center">
                   <div className="w-8 h-8 border-4 border-muted border-t-foreground rounded-full animate-spin"></div>
                 </div>
