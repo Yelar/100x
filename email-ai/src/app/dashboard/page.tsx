@@ -421,39 +421,23 @@ function DashboardContent() {
   }, []);
 
   const fetchEmails = useCallback(async (pageToken?: string, query?: string) => {
-    const cacheKey = getCacheKey(currentFolder, query || '', showStarredOnly);
-    
-    // If switching folders or star view without pageToken, clear relevant caches
-    if (!pageToken) {
-      // Clear the current cache to ensure fresh data
-      if (emailCache[cacheKey]) {
-        delete emailCache[cacheKey];
-      }
-    }
-    
-    // Check cache only for pagination (when pageToken exists)
-    if (pageToken && emailCache[cacheKey]) {
-      setEmails(emailCache[cacheKey].emails);
-      setNextPageToken(emailCache[cacheKey].nextPageToken);
-      setHasMore(!!emailCache[cacheKey].nextPageToken);
-      setLoading(false);
-      setSearchLoading(false);
-      setLoadingMore(false);
-      return;
-    }
-    
     try {
       if (pageToken) {
         setLoadingMore(true);
       } else {
         setLoading(true);
+        // Clear emails when fetching new folder/search
+        setEmails([]);
       }
+
       const params = new URLSearchParams();
       if (pageToken) params.append('pageToken', pageToken);
       if (query) params.append('q', query);
       params.append('folder', currentFolder);
+      
+      console.log('Fetching emails with params:', params.toString());
       const response = await api.get<EmailsResponse>(`/api/emails?${params.toString()}`);
-      const { messages, nextPageToken } = response.data;
+      const { messages, nextPageToken: newNextPageToken } = response.data;
       
       // Filter messages based on starred view if needed
       let filteredMessages = messages || [];
@@ -462,53 +446,46 @@ function DashboardContent() {
       }
       
       if (pageToken) {
+        // Append new messages for infinite scroll
         setEmails(prev => {
           const uniqueMessages = filteredMessages.filter(
             newEmail => !prev.some(existingEmail => existingEmail.id === newEmail.id)
           );
-          const updated = [...prev, ...uniqueMessages];
-          emailCache[cacheKey] = { emails: updated, nextPageToken };
-          return updated;
+          return [...prev, ...uniqueMessages];
         });
       } else {
+        // Replace emails for new folder/search
         setEmails(filteredMessages);
-        emailCache[cacheKey] = { emails: filteredMessages, nextPageToken };
       }
-      setNextPageToken(nextPageToken);
-      setHasMore(!!nextPageToken);
+
+      setNextPageToken(newNextPageToken);
+      setHasMore(!!newNextPageToken);
       
-      // Prefetch next page in background if available
-      if (nextPageToken && !query) {
-        api.get<EmailsResponse>(`/api/emails?${params.toString()}&pageToken=${nextPageToken}`)
-          .then(res => {
-            const { messages: nextMessages, nextPageToken: nextToken } = res.data;
-            const nextCacheKey = `${cacheKey}:page:${nextPageToken}`;
-            emailCache[nextCacheKey] = { emails: nextMessages, nextPageToken: nextToken };
-          })
-          .catch(() => {
-            // Prefetch failed, ignore silently
-          });
-      }
+      console.log('Fetched emails:', filteredMessages.length, 'Next token:', newNextPageToken);
     } catch (error) {
       console.error('Error fetching emails:', error);
-      setEmails([]);
+      if (!pageToken) {
+        setEmails([]);
+      }
     } finally {
       setLoading(false);
       setSearchLoading(false);
       setLoadingMore(false);
     }
-  }, [currentFolder, showStarredOnly, getCacheKey]);
+  }, [currentFolder, showStarredOnly]);
 
   const lastEmailElementRef = useCallback((node: HTMLElement | null) => {
-    if (loading || searchLoading) return;
+    if (loading || searchLoading || loadingMore) return;
     if (observer.current) observer.current.disconnect();
     observer.current = new IntersectionObserver(entries => {
-      if (entries[0].isIntersecting && hasMore) {
+      if (entries[0].isIntersecting && hasMore && nextPageToken) {
+        console.log('Loading more emails with token:', nextPageToken);
+        setLoadingMore(true);
         fetchEmails(nextPageToken);
       }
     });
     if (node) observer.current.observe(node);
-  }, [loading, searchLoading, hasMore, nextPageToken, fetchEmails]);
+  }, [loading, searchLoading, loadingMore, hasMore, nextPageToken, fetchEmails]);
 
   const search = useCallback((query: string) => {
     if (query.trim().length < 2) {
@@ -1454,6 +1431,23 @@ function DashboardContent() {
     }
   };
 
+  // Add ref for thread conversation container
+  const threadConversationRef = useRef<HTMLDivElement>(null);
+
+  // Auto-scroll to bottom of thread conversation when thread or selectedEmail changes
+  useEffect(() => {
+    const threadId = selectedEmail?.threadId;
+    if (threadConversationRef.current && threadId && threadData[threadId]) {
+      threadConversationRef.current.scrollTop = threadConversationRef.current.scrollHeight;
+    }
+  }, [
+    selectedEmail?.threadId,
+    (() => {
+      const threadId = selectedEmail?.threadId;
+      return threadId ? threadData[threadId]?.messages?.length : undefined;
+    })()
+  ]);
+
   if (loading && !searchLoading && emails.length === 0) {
     return (
       <div className="min-h-screen bg-background flex flex-col h-screen overflow-hidden">
@@ -1763,135 +1757,120 @@ function DashboardContent() {
             <div className="flex-1 overflow-y-auto">
               {emails
                 .filter(email => {
-                  // First filter by starred status if showStarredOnly is true
-                  if (showStarredOnly && !email.starred) {
-                    return false;
-                  }
-                  
-                  // Then filter by flag if selectedFlag is set
+                  if (showStarredOnly && !email.starred) return false;
                   if (selectedFlag) {
                     const flag = flaggedEmails[email.id]?.flag;
                     return flag === selectedFlag;
                   }
-                  
                   return true;
                 })
-                .map((email, index) => (
-                  <React.Fragment key={`${currentFolder}-${email.id}`}>
-                <div
-                  key={`${currentFolder}-${email.id}`}
-                  ref={index === emails.length - 1 ? lastEmailElementRef : undefined}
-                      onClick={() => handleEmailClick(email)}
-                      className={`relative flex items-center px-4 py-3 cursor-pointer border-b border-border/50 hover:bg-orange-500/5 ${selectedEmail?.id === email.id ? 'bg-orange-500/10' : ''}`}
-                      style={{ minHeight: '64px' }}
-                    >
-                      {/* Avatar */}
-                      <div className="flex-shrink-0 mr-4">
-                        <Avatar className="h-9 w-9">
-                          <AvatarImage src={undefined} alt={email.from} />
-                          <AvatarFallback className="bg-muted text-foreground font-bold">
-                            {email.from.trim()[0]?.toUpperCase()}
-                          </AvatarFallback>
-                        </Avatar>
-                  </div>
-                      {/* Main content */}
-                  <div className="flex-1 min-w-0">
-                    <div className="flex justify-between items-baseline">
-                          <span className="font-bold text-sm truncate max-w-[180px] text-foreground">
-                        {email.from.split('<')[0] || email.from}
-                          </span>
-                          <div className="flex items-center gap-2">
-                            {email.attachments && email.attachments.length > 0 && (
-                              <span title={`${email.attachments.length} attachment${email.attachments.length > 1 ? 's' : ''}`}>
-                                <Paperclip className="h-3 w-3 text-muted-foreground" />
-                              </span>
-                            )}
-                            <Button
-                              variant="ghost"
-                              size="sm"
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                handleStarEmail(email.id, email.starred || false);
-                              }}
-                              disabled={starringEmails.has(email.id)}
-                              className={`p-1 h-6 w-6 ${
-                                email.starred 
-                                  ? 'text-amber-500 hover:text-amber-600' 
-                                  : 'text-muted-foreground hover:text-amber-500'
-                              }`}
-                              title={email.starred ? 'Unstar email' : 'Star email'}
-                            >
-                              {starringEmails.has(email.id) ? (
-                                <span className="animate-spin text-xs">⟳</span>
-                              ) : (
-                                <Star className={`h-3 w-3 ${email.starred ? 'fill-current' : ''}`} />
-                              )}
-                            </Button>
-                            <Button
-                              variant="ghost"
-                              size="sm"
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                if (currentFolder === 'trash') {
-                                  handleRestoreEmail(email.id);
-                                } else {
-                                  showDeleteConfirmation(email.id, email.subject, 'trash');
-                                }
-                              }}
-                              disabled={deletingEmails.has(email.id)}
-                              className={`p-1 h-6 w-6 ${
-                                currentFolder === 'trash' 
-                                  ? 'text-muted-foreground hover:text-green-500' 
-                                  : 'text-muted-foreground hover:text-red-500'
-                              }`}
-                              title={currentFolder === 'trash' ? 'Restore email' : 'Delete email'}
-                            >
-                              {deletingEmails.has(email.id) ? (
-                                <span className="animate-spin text-xs">⟳</span>
-                              ) : (
-                                currentFolder === 'trash' ? (
-                                  <Archive className="h-3 w-3" />
-                                ) : (
-                                  <Trash2 className="h-3 w-3" />
-                                )
-                              )}
-                            </Button>
-                            <span className="text-xs text-muted-foreground whitespace-nowrap ml-2">
-                        {formatEmailDate(email.date)}
+                .map((email, index, filteredEmails) => (
+                  <div
+                    key={`${currentFolder}-${email.id}`}
+                    ref={index === filteredEmails.length - 1 ? lastEmailElementRef : undefined}
+                    onClick={() => handleEmailClick(email)}
+                    className={`relative flex items-center px-4 py-3 cursor-pointer border-b border-border/50 hover:bg-orange-500/5 ${
+                      selectedEmail?.id === email.id ? 'bg-orange-500/10' : ''
+                    }`}
+                    style={{ minHeight: '64px' }}
+                  >
+                    <div className="flex-shrink-0 mr-4">
+                      <Avatar className="h-9 w-9">
+                        <AvatarImage src={undefined} alt={email.from} />
+                        <AvatarFallback className="bg-muted text-foreground font-bold">
+                          {email.from.trim()[0]?.toUpperCase()}
+                        </AvatarFallback>
+                      </Avatar>
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <div className="flex justify-between items-baseline">
+                        <span className="font-bold text-sm truncate max-w-[180px] text-foreground">
+                          {email.from.split('<')[0] || email.from}
+                        </span>
+                        <div className="flex items-center gap-2">
+                          {email.attachments && email.attachments.length > 0 && (
+                            <span title={`${email.attachments.length} attachment${email.attachments.length > 1 ? 's' : ''}`}>
+                              <Paperclip className="h-3 w-3 text-muted-foreground" />
                             </span>
+                          )}
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              handleStarEmail(email.id, email.starred || false);
+                            }}
+                            disabled={starringEmails.has(email.id)}
+                            className={`p-1 h-6 w-6 ${
+                              email.starred 
+                                ? 'text-amber-500 hover:text-amber-600' 
+                                : 'text-muted-foreground hover:text-amber-500'
+                            }`}
+                            title={email.starred ? 'Unstar email' : 'Star email'}
+                          >
+                            {starringEmails.has(email.id) ? (
+                              <span className="animate-spin text-xs">⟳</span>
+                            ) : (
+                              <Star className={`h-3 w-3 ${email.starred ? 'fill-current' : ''}`} />
+                            )}
+                          </Button>
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              if (currentFolder === 'trash') {
+                                handleRestoreEmail(email.id);
+                              } else {
+                                showDeleteConfirmation(email.id, email.subject, 'trash');
+                              }
+                            }}
+                            disabled={deletingEmails.has(email.id)}
+                            className={`p-1 h-6 w-6 ${
+                              currentFolder === 'trash' 
+                                ? 'text-muted-foreground hover:text-green-500' 
+                                : 'text-muted-foreground hover:text-red-500'
+                            }`}
+                            title={currentFolder === 'trash' ? 'Restore email' : 'Delete email'}
+                          >
+                            {deletingEmails.has(email.id) ? (
+                              <span className="animate-spin text-xs">⟳</span>
+                            ) : (
+                              currentFolder === 'trash' ? (
+                                <Archive className="h-3 w-3" />
+                              ) : (
+                                <Trash2 className="h-3 w-3" />
+                              )
+                            )}
+                          </Button>
+                          <span className="text-xs text-muted-foreground whitespace-nowrap ml-2">
+                            {formatEmailDate(email.date)}
+                          </span>
+                        </div>
+                      </div>
+                      <div className="text-xs text-muted-foreground truncate mt-0.5">
+                        {email.snippet}
                       </div>
                     </div>
-                        <div className="text-xs text-muted-foreground truncate mt-0.5">
-                          {email.snippet}
+                    {flaggedEmails[email.id]?.flag && (
+                      <span
+                        className={`absolute right-4 bottom-2 inline-flex items-center px-2 py-0.5 rounded-full text-xs font-semibold ${FLAG_COLORS[flaggedEmails[email.id].flag]} text-white shadow`}
+                        title={FLAG_LABELS[flaggedEmails[email.id].flag]}
+                        style={{ minWidth: '2.5rem', justifyContent: 'center', textTransform: 'lowercase', pointerEvents: 'none' }}
+                      >
+                        {flaggedEmails[email.id].flag}
+                      </span>
+                    )}
                   </div>
-                </div>
-                      {/* Flag badge in right-bottom corner */}
-                      {flaggedEmails[email.id]?.flag && (
-                        <span
-                          className={`absolute right-4 bottom-2 inline-flex items-center px-2 py-0.5 rounded-full text-xs font-semibold ${FLAG_COLORS[flaggedEmails[email.id].flag]} text-white shadow`}
-                          title={FLAG_LABELS[flaggedEmails[email.id].flag]}
-                          style={{ minWidth: '2.5rem', justifyContent: 'center', textTransform: 'lowercase', pointerEvents: 'none' }}
-                        >
-                          {flaggedEmails[email.id].flag}
-                        </span>
-                      )}
-                    </div>
-                  </React.Fragment>
-              ))}
-              {(loading || searchLoading) && !loadingMore && (
-                <div className="p-4 space-y-4">
-                  {[...Array(6)].map((_, i) => (
-                    <Skeleton key={i} className="h-14 w-full" />
-                  ))}
+                ))}
+              
+              {/* Loading spinner */}
+              {(loading || searchLoading || loadingMore) && (
+                <div className="p-4 flex justify-center">
+                  <div className="w-8 h-8 border-4 border-muted border-t-foreground rounded-full animate-spin"></div>
                 </div>
               )}
-              {loadingMore && (
-                <div className="p-4 space-y-4 animate-in fade-in slide-in-from-bottom-2">
-                  {[...Array(3)].map((_, i) => (
-                    <Skeleton key={i} className="h-14 w-full" />
-                  ))}
-                </div>
-              )}
+
               {!loading && !searchLoading && !loadingMore && emails.length === 0 && (
                 <div className="p-8 text-center text-muted-foreground">
                   <Mail className="h-12 w-12 mx-auto mb-4 opacity-30" />
@@ -2126,12 +2105,15 @@ function DashboardContent() {
                         <Mail className="h-5 w-5" />
                         Conversation ({threadData[selectedEmail.threadId].messages.length} messages)
                       </h3>
-                      <div className="space-y-3">
+                      <div
+                        className="space-y-3 max-h-[400px] overflow-y-auto"
+                        ref={threadConversationRef}
+                      >
                         {threadData[selectedEmail.threadId].messages
                           .sort((a, b) => {
                             const aTime = a.internalDate ? parseInt(a.internalDate) : new Date(a.date).getTime();
                             const bTime = b.internalDate ? parseInt(b.internalDate) : new Date(b.date).getTime();
-                            return aTime - bTime;
+                            return aTime - bTime; // oldest to newest (top to bottom)
                           })
                           .map((threadMsg, messageIndex) => (
                             <div
