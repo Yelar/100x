@@ -453,14 +453,26 @@ function DashboardContent() {
     return null;
   }, []);
 
-  const handleEmailClick = useCallback(async (email: Email) => {
-    setSelectedEmail(email);
-    
-    // If thread data is already loaded, don't fetch again
-    if (email.threadId && !threadData[email.threadId]) {
-      fetchEmailThread(email.threadId);
-    }
-  }, [fetchEmailThread, threadData]);
+  const handleEmailClick = useCallback(
+    async (email: Email) => {
+      setSelectedEmail(email);
+
+      // Update the URL so that the current thread is reflected in the query params
+      const params = new URLSearchParams(window.location.search);
+      if (email.threadId) {
+        params.set('threadId', email.threadId);
+      } else {
+        params.delete('threadId');
+      }
+      router.replace(`/dashboard?${params.toString()}`, { scroll: false });
+
+      // Fetch thread data if we don't have it yet
+      if (email.threadId && !threadData[email.threadId]) {
+        fetchEmailThread(email.threadId);
+      }
+    },
+    [router, fetchEmailThread, threadData]
+  );
 
   const fetchEmails = useCallback(async (pageToken?: string, query?: string) => {
     try {
@@ -586,12 +598,19 @@ function DashboardContent() {
   }, [handleLogout, searchParams]); // Remove fetchEmails to prevent infinite loop
 
   const handleSearch = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
-    const value = e.target.value;
-    setSearchQuery(value);
-    if (debouncedSearchRef.current) {
-      debouncedSearchRef.current(value, search);
-    }
-  }, [search]);
+    // Update the local query state; actual searching happens on Enter key press.
+    setSearchQuery(e.target.value);
+  }, []);
+
+  // Trigger search only when the user presses Enter in the search field
+  const handleSearchKeyDown = useCallback(
+    (e: React.KeyboardEvent<HTMLInputElement>) => {
+      if (e.key === 'Enter') {
+        search(searchQuery);
+      }
+    },
+    [search, searchQuery]
+  );
 
   const handleSendEmail = async () => {
     if (emailChips.length === 0 || !newEmail.subject || !newEmail.content) {
@@ -1520,6 +1539,7 @@ function DashboardContent() {
               placeholder="Search in emails..."
               value={searchQuery}
               onChange={handleSearch}
+              onKeyDown={handleSearchKeyDown}
               className="pl-10 pr-4 py-2 h-10 rounded-full bg-white/5 border-orange-500/20 hover:border-orange-500/30 focus:border-orange-500/50 w-full transition-colors"
             />
           </div>
@@ -1557,7 +1577,7 @@ function DashboardContent() {
                   params.delete('threadId');
                   params.set('folder', 'inbox');
                   router.replace(`/dashboard?${params.toString()}`, { scroll: false });
-                  fetchEmails(undefined, searchQuery);
+                  // fetch will be triggered by folder-change effect
                 }}
               >
                 <Inbox className="mr-2 h-5 w-5" />
@@ -1579,8 +1599,7 @@ function DashboardContent() {
                     params.delete('view');
                   }
                   router.replace(`/dashboard?${params.toString()}`, { scroll: false });
-                  // Trigger refresh to show/hide starred emails
-                  fetchEmails(undefined, searchQuery);
+                  // fetch will be triggered by folder-change effect
                 }}
               >
                 <Star className={`mr-2 h-5 w-5 ${showStarredOnly ? 'fill-current text-amber-500' : ''}`} />
@@ -1598,7 +1617,7 @@ function DashboardContent() {
                   params.delete('threadId');
                   params.set('folder', 'sent');
                   router.replace(`/dashboard?${params.toString()}`, { scroll: false });
-                  fetchEmails(undefined, searchQuery);
+                  // fetch will be triggered by folder-change effect
                 }}
               >
                 <Send className="mr-2 h-5 w-5" />
@@ -1616,7 +1635,7 @@ function DashboardContent() {
                   params.delete('threadId');
                   params.set('folder', 'spam');
                   router.replace(`/dashboard?${params.toString()}`, { scroll: false });
-                  fetchEmails(undefined, searchQuery);
+                  // fetch will be triggered by folder-change effect
                 }}
               >
                 <Shield className="mr-2 h-5 w-5" />
@@ -1634,7 +1653,7 @@ function DashboardContent() {
                   params.delete('threadId');
                   params.set('folder', 'trash');
                   router.replace(`/dashboard?${params.toString()}`, { scroll: false });
-                  fetchEmails(undefined, searchQuery);
+                  // fetch will be triggered by folder-change effect
                 }}
               >
                 <Trash className="mr-2 h-5 w-5" />
@@ -1651,7 +1670,7 @@ function DashboardContent() {
                   params.delete('threadId');
                   params.set('folder', 'drafts');
                   router.replace(`/dashboard?${params.toString()}`, { scroll: false });
-                  fetchEmails(undefined, searchQuery);
+                  // fetch will be triggered by folder-change effect
                 }}
               >
                 <FileText className="mr-2 h-5 w-5" />
@@ -1944,28 +1963,26 @@ function DashboardContent() {
                     <div className="flex items-center justify-between mb-3">
                       <h1 className="text-xl font-bold text-foreground">{selectedEmail.subject}</h1>
                       <div className="flex space-x-2">
-                        {isEmailLong(selectedEmail.body) && (
-                          <Button
-                            variant="outline"
-                            size="sm"
-                            onClick={() => handleGenerateTLDR(selectedEmail)}
-                            disabled={isGeneratingSummary}
-                            className="gap-2"
-                            title="Generate TLDR summary"
-                          >
-                            {isGeneratingSummary ? (
-                              <>
-                                <span className="animate-spin">⟳</span>
-                                Summarizing...
-                              </>
-                            ) : (
-                              <>
-                                <Sparkles className="h-4 w-4" />
-                                TLDR
-                              </>
-                            )}
-                          </Button>
-                        )}
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={() => handleGenerateTLDR(selectedEmail)}
+                          disabled={isGeneratingSummary || !isEmailLong(selectedEmail.body)}
+                          className="gap-2"
+                          title="Generate TLDR summary"
+                        >
+                          {isGeneratingSummary ? (
+                            <>
+                              <span className="animate-spin">⟳</span>
+                              Summarizing...
+                            </>
+                          ) : (
+                            <>
+                              <Sparkles className="h-4 w-4" />
+                              TLDR
+                            </>
+                          )}
+                        </Button>
                         <Button 
                           variant="ghost" 
                           size="icon" 
