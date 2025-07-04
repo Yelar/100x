@@ -1,27 +1,37 @@
-import { useState, forwardRef, useImperativeHandle } from 'react';
-import { Button } from "@/components/ui/button";
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-} from "@/components/ui/dialog";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
-import { Textarea } from "@/components/ui/textarea";
-import { useToast } from "@/components/ui/use-toast";
-import { Loader2 } from "lucide-react";
+import { useState, useImperativeHandle, forwardRef, useEffect, useCallback } from 'react';
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
+import { Textarea } from '@/components/ui/textarea';
+import { Label } from '@/components/ui/label';
+import { Loader2 } from 'lucide-react';
+import { useToast } from '@/components/ui/use-toast';
+import debounce from 'lodash/debounce';
+
+export interface EmailComposeDialogHandle {
+  openDialog: (draftId?: string) => void;
+}
 
 interface EmailComposeDialogProps {
   onEmailSent?: () => void;
-  initialSubject?: string;
-  initialContent?: string;
 }
 
-export interface EmailComposeDialogHandle {
-  openDialog: (subject?: string, content?: string) => void;
+interface DraftHeader {
+  name: string;
+  value: string;
+}
+
+interface DraftPayload {
+  headers: DraftHeader[];
+  body: {
+    data?: string;
+  };
+}
+
+interface DraftMessage {
+  id: string;
+  threadId?: string;
+  payload: DraftPayload;
 }
 
 export const EmailComposeDialog = forwardRef<EmailComposeDialogHandle, EmailComposeDialogProps>(
@@ -31,15 +41,117 @@ export const EmailComposeDialog = forwardRef<EmailComposeDialogHandle, EmailComp
     const [to, setTo] = useState('');
     const [subject, setSubject] = useState('');
     const [content, setContent] = useState('');
+    const [draftId, setDraftId] = useState<string | null>(null);
     const { toast } = useToast();
 
+    const openDialog = async (draftId?: string) => {
+      if (draftId) {
+        try {
+          const response = await fetch(`/api/emails/list?folder=drafts&id=${draftId}`);
+          const data = await response.json();
+          if (!response.ok) {
+            throw new Error(data.error || 'Failed to load draft');
+          }
+          
+          const draft: DraftMessage = data.messages[0];
+          const headers = draft.payload.headers;
+          const to = headers.find(h => h.name.toLowerCase() === 'to')?.value || '';
+          const subject = headers.find(h => h.name.toLowerCase() === 'subject')?.value || '';
+          const content = draft.payload.body.data
+            ? Buffer.from(draft.payload.body.data, 'base64').toString()
+            : '';
+
+          setDraftId(draftId);
+          setTo(to);
+          setSubject(subject);
+          setContent(content);
+        } catch (error) {
+          console.error('Error loading draft:', error);
+          toast({
+            title: "Error",
+            description: "Failed to load draft",
+            variant: "destructive",
+          });
+        }
+      } else {
+        setDraftId(null);
+        setTo('');
+        setSubject('');
+        setContent('');
+      }
+      setOpen(true);
+    };
+
     useImperativeHandle(ref, () => ({
-      openDialog: (subjectVal?: string, contentVal?: string) => {
-        setSubject(subjectVal || '');
-        setContent(contentVal || '');
-        setOpen(true);
-      },
+      openDialog
     }));
+
+    // Add this effect to handle the custom event
+    useEffect(() => {
+      const handleOpenCompose = (event: Event) => {
+        const customEvent = event as CustomEvent<{ draftId: string }>;
+        openDialog(customEvent.detail.draftId);
+      };
+
+      window.addEventListener('open-compose', handleOpenCompose);
+      return () => {
+        window.removeEventListener('open-compose', handleOpenCompose);
+      };
+    }, []);
+
+    // Create a debounced function to save draft
+    const saveDraft = useCallback(
+      debounce(async (to: string, subject: string, content: string, draftId: string | null) => {
+        if (!to && !subject && !content) return;
+
+        try {
+          const endpoint = '/api/emails/send';
+          const method = 'POST';
+          const body = {
+            to,
+            subject,
+            content,
+            mode: 'draft',
+            draftId
+          };
+
+          const response = await fetch(endpoint, {
+            method,
+            headers: {
+              'Content-Type': 'application/json',
+            },
+            body: JSON.stringify(body),
+          });
+
+          const data = await response.json();
+          if (!response.ok) {
+            throw new Error(data.error || 'Failed to save draft');
+          }
+
+          if (!draftId) {
+            setDraftId(data.id);
+          }
+        } catch (error) {
+          console.error('Error saving draft:', error);
+          toast({
+            title: "Error",
+            description: "Failed to save draft",
+            variant: "destructive",
+          });
+        }
+      }, 1000),
+      []
+    );
+
+    // Save draft when content changes
+    useEffect(() => {
+      if (open) {
+        saveDraft(to, subject, content, draftId);
+      }
+      return () => {
+        saveDraft.cancel();
+      };
+    }, [to, subject, content, draftId, open, saveDraft]);
 
     const handleSubmit = async (e: React.FormEvent) => {
       e.preventDefault();
@@ -54,6 +166,7 @@ export const EmailComposeDialog = forwardRef<EmailComposeDialogHandle, EmailComp
             to,
             subject,
             content,
+            draftId
           }),
         });
         const data = await response.json();
@@ -67,6 +180,7 @@ export const EmailComposeDialog = forwardRef<EmailComposeDialogHandle, EmailComp
         setTo('');
         setSubject('');
         setContent('');
+        setDraftId(null);
         setOpen(false);
         onEmailSent?.();
       } catch (error) {
@@ -80,14 +194,28 @@ export const EmailComposeDialog = forwardRef<EmailComposeDialogHandle, EmailComp
       }
     };
 
+    const handleClose = () => {
+      if (!to && !subject && !content) {
+        setOpen(false);
+        return;
+      }
+
+      // Keep the draft when closing
+      setOpen(false);
+      toast({
+        title: "Draft Saved",
+        description: "Your email has been saved as a draft",
+      });
+    };
+
     return (
-      <Dialog open={open} onOpenChange={setOpen}>
+      <Dialog open={open} onOpenChange={handleClose}>
         <DialogContent className="sm:max-w-[525px]">
           <form onSubmit={handleSubmit}>
             <DialogHeader>
               <DialogTitle>New Email</DialogTitle>
               <DialogDescription>
-                Compose and send a new email message.
+                Compose and send a new email message. Drafts are saved automatically.
               </DialogDescription>
             </DialogHeader>
             <div className="grid gap-4 py-4">
@@ -137,7 +265,7 @@ export const EmailComposeDialog = forwardRef<EmailComposeDialogHandle, EmailComp
               <Button
                 type="button"
                 variant="secondary"
-                onClick={() => setOpen(false)}
+                onClick={handleClose}
                 disabled={loading}
               >
                 Cancel

@@ -7,7 +7,10 @@ import { Button } from "@/components/ui/button";
 import { Avatar, AvatarImage, AvatarFallback } from "@/components/ui/avatar";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Input } from "@/components/ui/input";
-import { Search, Mail, LogOut, Inbox, FileText, Send, Trash, Plus, ChevronLeft, ChevronRight, MoreVertical, Star, Tag, Flag, Archive, Sparkles, Shield, Paperclip, Download, Eye, Trash2, X, Bell } from "lucide-react";
+import { format } from 'date-fns';
+import { cn } from '@/lib/utils';
+import { Badge } from "@/components/ui/badge";
+import { Search, Mail, LogOut, Inbox, FileText, Send, Trash, Plus, ChevronLeft, ChevronRight, MoreVertical, Star, Tag, Flag, Archive, Sparkles, Shield, Paperclip, Download, Eye, Trash2, X, Bell, Loader2 } from "lucide-react";w
 import {
   Dialog,
   DialogContent,
@@ -24,6 +27,7 @@ import { ResizableHandleWithReset } from "@/components/ui/resizable-handle-with-
 import { useEmailPanelLayout } from "@/hooks/use-email-panel-layout";
 import { toast } from 'sonner';
 import { processEmailContent } from '@/lib/sanitize-html';
+import { DraftsView } from '@/components/drafts-view';
 
 interface UserInfo {
   email: string;
@@ -43,6 +47,7 @@ interface Email {
   id: string;
   threadId?: string;
   from: string;
+  to?: string;
   subject: string;
   date: string;
   snippet: string;
@@ -50,6 +55,7 @@ interface Email {
   internalDate?: string;
   attachments?: Attachment[];
   starred?: boolean;
+  isDraft?: boolean;
 }
 
 interface EmailThread {
@@ -152,33 +158,16 @@ export default function Dashboard() {
 function DashboardContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
-  
-  // Memoize the cache key generator function to prevent infinite re-renders
-  const getCacheKey = useCallback((folder: string, query: string, starredOnly: boolean) => {
-    return `${folder}_${query}_${starredOnly ? 'starred' : 'all'}`;
-  }, []);
-
-  const [userInfo, setUserInfo] = useState<UserInfo | null>(null);
   const [emails, setEmails] = useState<Email[]>([]);
-  const [loading, setLoading] = useState(true); // Only for initial load
-  const [searchLoading, setSearchLoading] = useState(false); // For search only
-  const [loadingMore, setLoadingMore] = useState(false); // For infinite scroll
   const [selectedEmail, setSelectedEmail] = useState<Email | null>(null);
-  const [searchQuery, setSearchQuery] = useState('');
+  const [loading, setLoading] = useState(true);
+  const [loadingMore, setLoadingMore] = useState(false);
+  const [searchLoading, setSearchLoading] = useState(false);
   const [nextPageToken, setNextPageToken] = useState<string | undefined>();
   const [hasMore, setHasMore] = useState(true);
-  const [composing, setComposing] = useState(false);
-  const [newEmail, setNewEmail] = useState({
-    to: '',
-    subject: '',
-    content: ''
-  });
-  const [emailChips, setEmailChips] = useState<string[]>([]);
-  const [emailInput, setEmailInput] = useState('');
-  const [sending, setSending] = useState(false);
-  const [generating, setGenerating] = useState<'idle' | 'subject' | 'content'>('idle');
-  const [selectedTone, setSelectedTone] = useState('professional');
-  const [showToneDropdown, setShowToneDropdown] = useState(false);
+  const [searchQuery, setSearchQuery] = useState('');
+  const [currentFolder, setCurrentFolder] = useState<'inbox' | 'sent' | 'spam' | 'trash' | 'drafts'>('inbox');
+  const [showStarredOnly, setShowStarredOnly] = useState(false);
   const [selectedFlag, setSelectedFlag] = useState<string | null>(null);
   const [threadData, setThreadData] = useState<Record<string, EmailThread>>({});
   const loadingThreadIds = useRef<Set<string>>(new Set());
@@ -186,13 +175,11 @@ function DashboardContent() {
   const [isSummarizing, setIsSummarizing] = useState(false);
   const [summary, setSummary] = useState<EmailSummary | null>(null);
   const [isSummaryDialogOpen, setIsSummaryDialogOpen] = useState(false);
-  const [currentFolder, setCurrentFolder] = useState<'inbox' | 'sent' | 'spam' | 'trash'>('inbox');
   const [flaggedEmails, setFlaggedEmails] = useState<Record<string, { flag: string, subject: string, snippet: string, sender: string, flaggedAt: number }>>({});
   const [emailSummary, setEmailSummary] = useState<string | null>(null);
   const [isGeneratingSummary, setIsGeneratingSummary] = useState(false);
   const [showSummary, setShowSummary] = useState(false);
   const [starringEmails, setStarringEmails] = useState<Set<string>>(new Set());
-  const [showStarredOnly, setShowStarredOnly] = useState(false);
   const [deletingEmails, setDeletingEmails] = useState<Set<string>>(new Set());
   const [deleteDialog, setDeleteDialog] = useState<{
     isOpen: boolean;
@@ -360,7 +347,7 @@ function DashboardContent() {
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
     const folder = params.get('folder');
-    if (folder === 'sent' || folder === 'inbox' || folder === 'spam' || folder === 'trash') {
+    if (folder === 'sent' || folder === 'inbox' || folder === 'spam' || folder === 'trash' || folder === 'drafts') {
       setCurrentFolder(folder);
     }
     
@@ -453,64 +440,6 @@ function DashboardContent() {
     return null;
   }, []);
 
-  const handleEmailClick = useCallback(async (email: Email) => {
-    setSelectedEmail(email);
-    
-    // If thread data is already loaded, don't fetch again
-    if (email.threadId && !threadData[email.threadId]) {
-      fetchEmailThread(email.threadId);
-    }
-  }, [fetchEmailThread, threadData]);
-
-  const fetchEmails = useCallback(async (pageToken?: string, query?: string) => {
-    try {
-      if (pageToken) {
-        setLoadingMore(true);
-      } else if (!emails.length) {
-        // Only show loading on initial fetch when no emails exist
-        setLoading(true);
-      }
-
-      const params = new URLSearchParams();
-      if (pageToken) params.append('pageToken', pageToken);
-      if (query) params.append('q', query);
-      params.append('folder', currentFolder);
-      
-      console.log('Fetching emails with params:', params.toString());
-      const response = await api.get<EmailsResponse>(`/api/emails?${params.toString()}`);
-      const { messages, nextPageToken: newNextPageToken } = response.data;
-      
-      let filteredMessages = messages || [];
-      if (showStarredOnly) {
-        filteredMessages = filteredMessages.filter(email => email.starred);
-      }
-      
-      if (pageToken) {
-        setEmails(prev => {
-          const uniqueMessages = filteredMessages.filter(
-            newEmail => !prev.some(existingEmail => existingEmail.id === newEmail.id)
-          );
-          return [...prev, ...uniqueMessages];
-        });
-      } else {
-        setEmails(filteredMessages);
-      }
-
-      setNextPageToken(newNextPageToken);
-      setHasMore(!!newNextPageToken);
-      
-    } catch (error) {
-      console.error('Error fetching emails:', error);
-      if (!pageToken) {
-        setEmails([]);
-      }
-    } finally {
-      setLoading(false);
-      setSearchLoading(false);
-      setLoadingMore(false);
-    }
-  }, [currentFolder, showStarredOnly, emails.length]);
-
   const lastEmailElementRef = useCallback((node: HTMLElement | null) => {
     if (loading || searchLoading || loadingMore) return;
     if (observer.current) observer.current.disconnect();
@@ -518,21 +447,21 @@ function DashboardContent() {
       if (entries[0].isIntersecting && hasMore && nextPageToken) {
         console.log('Loading more emails with token:', nextPageToken);
         setLoadingMore(true);
-        fetchEmails(nextPageToken);
+        fetchEmails(folder, searchQuery);
       }
     });
     if (node) observer.current.observe(node);
-  }, [loading, searchLoading, loadingMore, hasMore, nextPageToken, fetchEmails]);
+  }, [loading, searchLoading, loadingMore, hasMore, nextPageToken, fetchEmails, folder, searchQuery]);
 
   const search = useCallback((query: string) => {
     if (query.trim().length < 2) {
       setSearchLoading(true);
-      fetchEmails(undefined);
+      fetchEmails(folder, undefined);
       return;
     }
     setSearchLoading(true);
-    fetchEmails(undefined, query);
-  }, [fetchEmails]);
+    fetchEmails(folder, undefined, query);
+  }, [fetchEmails, folder]);
 
   // Stable initial data fetch effect
   useEffect(() => {
@@ -540,41 +469,47 @@ function DashboardContent() {
     
     const fetchData = async () => {
       try {
-        const cookies = document.cookie.split(';');
-        const userInfoCookie = cookies
-          .find(c => c.trim().startsWith('temp_user_info='))
-          ?.split('=')?.[1];
-
-        if (userInfoCookie) {
-          const userInfo = JSON.parse(decodeURIComponent(userInfoCookie));
-          localStorage.setItem('user_info', JSON.stringify(userInfo));
-          document.cookie = 'temp_user_info=; max-age=0; path=/;';
+        setLoading(true);
+        let url = `/api/emails/list?folder=${currentFolder}`;
+        if (searchQuery) {
+          url += `&q=${encodeURIComponent(searchQuery)}`;
+        }
+        if (nextPageToken) {
+          url += `&pageToken=${nextPageToken}`;
+        }
+        if (showStarredOnly) {
+          url += '&starred=true';
+        }
+        if (selectedFlag) {
+          url += `&flag=${selectedFlag}`;
         }
 
-        const storedUserInfo = localStorage.getItem('user_info');
-        if (!storedUserInfo) {
-          console.log('No user info found, logging out');
-          handleLogout();
+        // Don't fetch if we're in drafts folder since DraftsView handles its own data fetching
+        if (currentFolder === 'drafts') {
+          setLoading(false);
+          setEmails([]);
           return;
         }
-        
-        if (isMounted) {
-        setUserInfo(JSON.parse(storedUserInfo));
-          // Call fetchEmails directly instead of relying on dependency
-          fetchEmails(undefined, '');
-        }
-        
-        // After emails are loaded, check if there's a threadId in URL that needs loading
-        const urlThreadId = searchParams.get('threadId');
-        if (urlThreadId && isMounted) {
-          console.log('Page loaded with threadId in URL:', urlThreadId);
-          // The URL navigation effect will handle this, but we may need to fetch it if not in list
-        }
+
+        const response = await api.get<EmailsResponse>(url);
+        const newEmails = response.data.messages || [];
+
+        setEmails(prev => loadingMore ? [...prev, ...newEmails] : newEmails);
+        setNextPageToken(response.data.nextPageToken);
+        setHasMore(!!response.data.nextPageToken);
       } catch (error) {
-        console.error('Error fetching data:', error);
-        if (isMounted) {
-        setLoading(false);
+        console.error('Error fetching emails:', error);
+        toast({
+          title: "Error",
+          description: "Failed to load emails",
+          variant: "destructive",
+        });
+        if ((error as any)?.response?.status === 401) {
+          handleLogout();
         }
+      } finally {
+        setLoading(false);
+        setLoadingMore(false);
       }
     };
 
@@ -583,7 +518,7 @@ function DashboardContent() {
     return () => {
       isMounted = false;
     };
-  }, [handleLogout, searchParams]); // Remove fetchEmails to prevent infinite loop
+  }, [handleLogout, searchParams, folder, searchQuery, nextPageToken, showStarredOnly, selectedFlag, loadingMore]);
 
   const handleSearch = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
     const value = e.target.value;
@@ -632,7 +567,7 @@ function DashboardContent() {
         setSelectedTone('professional');
         setShowToneDropdown(false);
         // Optionally refresh the sent emails list
-        fetchEmails(undefined);
+        fetchEmails(folder, undefined);
       }
     } catch (error) {
       console.error('Error sending email:', error);
@@ -727,7 +662,7 @@ function DashboardContent() {
     }
     
     // Optionally refresh the emails list
-    fetchEmails(undefined);
+    fetchEmails(folder, undefined);
   };
 
   // Helper function to detect if email is long enough for TLDR
@@ -817,7 +752,7 @@ function DashboardContent() {
     }
 
     // Update cache for current folder/query
-    const cacheKey = getCacheKey(currentFolder, searchQuery, showStarredOnly);
+    const cacheKey = getCacheKey(folder, searchQuery, showStarredOnly);
     if (emailCache[cacheKey]) {
       emailCache[cacheKey] = {
         ...emailCache[cacheKey],
@@ -1290,7 +1225,7 @@ function DashboardContent() {
     setThreadData(updatedThreadData);
 
     // Update cache for current folder/query
-    const cacheKey = getCacheKey(currentFolder, searchQuery, showStarredOnly);
+    const cacheKey = getCacheKey(folder, searchQuery, showStarredOnly);
     if (emailCache[cacheKey]) {
       emailCache[cacheKey] = {
         ...emailCache[cacheKey],
@@ -1327,7 +1262,7 @@ function DashboardContent() {
       setThreadData(originalThreadData);
       
       // Revert cache
-      const cacheKey = getCacheKey(currentFolder, searchQuery, showStarredOnly);
+      const cacheKey = getCacheKey(folder, searchQuery, showStarredOnly);
       if (emailCache[cacheKey]) {
         emailCache[cacheKey] = {
           ...emailCache[cacheKey],
@@ -1467,6 +1402,14 @@ function DashboardContent() {
     })()
   ]);
 
+  // Add this near the other useSearchParams usage
+  const folder = searchParams.get('folder');
+
+  // Add this near the other content rendering logic
+  if (folder === 'drafts') {
+    return <DraftsView />;
+  }
+
   if (loading && !searchLoading && emails.length === 0) {
     return (
       <div className="min-h-screen bg-background flex flex-col h-screen overflow-hidden">
@@ -1493,6 +1436,191 @@ function DashboardContent() {
       </div>
     );
   }
+
+  // Update the email click handler
+  const handleEmailClick = useCallback((email: Email) => {
+    if (currentFolder === 'drafts') {
+      // Open compose dialog with draft content
+      const event = new CustomEvent('open-compose', {
+        detail: { draftId: email.id }
+      });
+      window.dispatchEvent(event);
+      return;
+    }
+
+    setSelectedEmail(email);
+    if (email.threadId) {
+      fetchEmailThread(email.threadId);
+    }
+  }, [currentFolder, fetchEmailThread]);
+
+  // Update the drafts button in the sidebar
+  <Button
+    variant="ghost"
+    className={cn(
+      "w-full justify-start font-medium",
+      currentFolder === 'drafts' ? 'text-orange-700 dark:text-orange-300 bg-orange-500/10' : 'text-muted-foreground hover:text-orange-600 hover:bg-orange-500/10'
+    )}
+    onClick={() => {
+      setCurrentFolder('drafts');
+      setSelectedEmail(null);
+      setSelectedFlag(null);
+      // Reset email list since DraftsView handles its own data
+      setEmails([]);
+      setNextPageToken(undefined);
+      setHasMore(false);
+      const params = new URLSearchParams(window.location.search);
+      params.delete('threadId');
+      params.set('folder', 'drafts');
+      router.replace(`/dashboard?${params.toString()}`, { scroll: false });
+    }}
+  >
+    <FileText className="mr-2 h-5 w-5" />
+    Drafts
+  </Button>
+
+  // Update the email list rendering
+  const renderEmailList = () => {
+    if (loading) {
+      return (
+        <div className="flex items-center justify-center h-full">
+          <div className="text-center">
+            <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-orange-500 mx-auto mb-4"></div>
+            <p className="text-muted-foreground">Loading emails...</p>
+          </div>
+        </div>
+      );
+    }
+
+    if (currentFolder === 'drafts') {
+      return <DraftsView />;
+    }
+
+    if (emails.length === 0) {
+      return (
+        <div className="flex flex-col items-center justify-center h-full text-muted-foreground">
+          <p>No emails found</p>
+        </div>
+      );
+    }
+
+    return (
+      <div className="divide-y">
+        {emails
+          .filter(email => {
+            if (showStarredOnly && !email.starred) return false;
+            if (selectedFlag) {
+              const flag = flaggedEmails[email.id]?.flag;
+              return flag === selectedFlag;
+            }
+            return true;
+          })
+          .map((email, index, filteredEmails) => {
+            const isDraft = currentFolder === 'drafts';
+            const headers = isDraft && email.payload?.headers ? email.payload.headers : [];
+            const to = isDraft ? headers.find((h: any) => h.name.toLowerCase() === 'to')?.value || '' : '';
+            const subject = isDraft 
+              ? headers.find((h: any) => h.name.toLowerCase() === 'subject')?.value || '(No subject)'
+              : email.subject;
+            const snippet = isDraft && email.payload?.body?.data
+              ? Buffer.from(email.payload.body.data, 'base64').toString().substring(0, 100) + '...'
+              : email.snippet;
+
+            return (
+              <div
+                key={`${currentFolder}-${email.id}`}
+                ref={index === filteredEmails.length - 1 ? lastEmailElementRef : undefined}
+                onClick={() => handleEmailClick(email)}
+                className={`relative flex items-center px-4 py-3 cursor-pointer border-b border-border/50 hover:bg-orange-500/5 ${
+                  selectedEmail?.id === email.id ? 'bg-orange-500/10' : ''
+                }`}
+                style={{ minHeight: '64px' }}
+              >
+                <div className="flex-shrink-0 mr-4">
+                  <Avatar className="h-9 w-9">
+                    <AvatarImage src={undefined} alt={isDraft ? 'Draft' : email.from} />
+                    <AvatarFallback className="bg-muted text-foreground font-bold">
+                      {isDraft ? 'D' : email.from.trim()[0]?.toUpperCase()}
+                    </AvatarFallback>
+                  </Avatar>
+                </div>
+                <div className="flex-1 min-w-0">
+                  <div className="flex justify-between items-baseline">
+                    <div className="flex items-center gap-2">
+                      {isDraft && (
+                        <Badge variant="outline" className="text-xs">Draft</Badge>
+                      )}
+                      <span className="font-bold text-sm truncate max-w-[180px] text-foreground">
+                        {isDraft ? subject : email.from.split('<')[0] || email.from}
+                      </span>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      {email.attachments?.length > 0 && (
+                        <span title={`${email.attachments.length} attachment${email.attachments.length > 1 ? 's' : ''}`}>
+                          <Paperclip className="h-3 w-3 text-muted-foreground" />
+                        </span>
+                      )}
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          handleStarEmail(email.id, email.starred || false);
+                        }}
+                        disabled={starringEmails.has(email.id)}
+                        className={`p-1 h-6 w-6 ${
+                          email.starred 
+                            ? 'text-amber-500 hover:text-amber-600' 
+                            : 'text-muted-foreground hover:text-amber-500'
+                        }`}
+                        title={email.starred ? 'Unstar email' : 'Star email'}
+                      >
+                        {starringEmails.has(email.id) ? (
+                          <span className="animate-spin text-xs">⟳</span>
+                        ) : (
+                          <Star className={`h-3 w-3 ${email.starred ? 'fill-current' : ''}`} />
+                        )}
+                      </Button>
+                      <span className="text-xs text-muted-foreground whitespace-nowrap ml-2">
+                        {formatEmailDate(email.date)}
+                      </span>
+                    </div>
+                  </div>
+                  <div className="text-xs text-muted-foreground truncate mt-0.5">
+                    {isDraft ? `To: ${to}` : snippet}
+                  </div>
+                </div>
+                {flaggedEmails[email.id]?.flag && (
+                  <span
+                    className={`absolute right-4 bottom-2 inline-flex items-center px-2 py-0.5 rounded-full text-xs font-semibold ${FLAG_COLORS[flaggedEmails[email.id].flag]} text-white shadow`}
+                    title={FLAG_LABELS[flaggedEmails[email.id].flag]}
+                    style={{ minWidth: '2.5rem', justifyContent: 'center', textTransform: 'lowercase', pointerEvents: 'none' }}
+                  >
+                    {flaggedEmails[email.id].flag}
+                  </span>
+                )}
+              </div>
+            );
+          })}
+      </div>
+    );
+  };
+
+  useEffect(() => {
+    const handleOpenCompose = (event: CustomEvent<{ draftId: string }>) => {
+      const draftId = event.detail.draftId;
+      // Trigger compose dialog with draft content
+      setIsReplying(true);
+      setSelectedEmail(null); // Clear any selected email
+      // The ReplyComposer component will handle loading the draft content
+    };
+
+    window.addEventListener('open-compose', handleOpenCompose as EventListener);
+
+    return () => {
+      window.removeEventListener('open-compose', handleOpenCompose as EventListener);
+    };
+  }, []);
 
   return (
     <div className="min-h-screen bg-background flex flex-col h-screen overflow-hidden">
@@ -1555,7 +1683,7 @@ function DashboardContent() {
                   params.delete('threadId');
                   params.set('folder', 'inbox');
                   router.replace(`/dashboard?${params.toString()}`, { scroll: false });
-                  fetchEmails(undefined, searchQuery);
+                  fetchEmails(folder, searchQuery);
                 }}
               >
                 <Inbox className="mr-2 h-5 w-5" />
@@ -1578,7 +1706,7 @@ function DashboardContent() {
                   }
                   router.replace(`/dashboard?${params.toString()}`, { scroll: false });
                   // Trigger refresh to show/hide starred emails
-                  fetchEmails(undefined, searchQuery);
+                  fetchEmails(folder, searchQuery);
                 }}
               >
                 <Star className={`mr-2 h-5 w-5 ${showStarredOnly ? 'fill-current text-amber-500' : ''}`} />
@@ -1596,7 +1724,7 @@ function DashboardContent() {
                   params.delete('threadId');
                   params.set('folder', 'sent');
                   router.replace(`/dashboard?${params.toString()}`, { scroll: false });
-                  fetchEmails(undefined, searchQuery);
+                  fetchEmails(folder, searchQuery);
                 }}
               >
                 <Send className="mr-2 h-5 w-5" />
@@ -1614,7 +1742,7 @@ function DashboardContent() {
                   params.delete('threadId');
                   params.set('folder', 'spam');
                   router.replace(`/dashboard?${params.toString()}`, { scroll: false });
-                  fetchEmails(undefined, searchQuery);
+                  fetchEmails(folder, searchQuery);
                 }}
               >
                 <Shield className="mr-2 h-5 w-5" />
@@ -1632,13 +1760,29 @@ function DashboardContent() {
                   params.delete('threadId');
                   params.set('folder', 'trash');
                   router.replace(`/dashboard?${params.toString()}`, { scroll: false });
-                  fetchEmails(undefined, searchQuery);
+                  fetchEmails(folder, searchQuery);
                 }}
               >
                 <Trash className="mr-2 h-5 w-5" />
                 Trash
               </Button>
-              <Button variant="ghost" className="w-full justify-start font-medium text-muted-foreground hover:text-orange-600 hover:bg-orange-500/10">
+              <Button
+                variant="ghost"
+                className={cn(
+                  "w-full justify-start",
+                  currentFolder === 'drafts' ? "bg-muted" : "text-muted-foreground hover:text-orange-600 hover:bg-orange-500/10"
+                )}
+                onClick={() => {
+                  setCurrentFolder('drafts');
+                  setSelectedEmail(null);
+                  setSelectedFlag(null);
+                  const params = new URLSearchParams(window.location.search);
+                  params.delete('threadId');
+                  params.set('folder', 'drafts');
+                  router.replace(`/dashboard?${params.toString()}`, { scroll: false });
+                  fetchEmails(undefined, searchQuery);
+                }}
+              >
                 <FileText className="mr-2 h-5 w-5" />
                 Drafts
               </Button>
@@ -1767,135 +1911,14 @@ function DashboardContent() {
               <Button variant="ghost" size="icon" disabled={!nextPageToken} className="text-orange-500/80 hover:text-orange-500 hover:bg-orange-500/10">
                 <ChevronLeft className="h-5 w-5" />
               </Button>
-              <Button variant="ghost" size="icon" disabled={!nextPageToken} className="text-orange-500/80 hover:text-orange-500 hover:bg-orange-500/10" onClick={() => fetchEmails(nextPageToken)}>
+              <Button variant="ghost" size="icon" disabled={!nextPageToken} className="text-orange-500/80 hover:text-orange-500 hover:bg-orange-500/10" onClick={() => fetchEmails(folder, nextPageToken)}>
                 <ChevronRight className="h-5 w-5" />
               </Button>
             </div>
 
             {/* Scrollable email list */}
             <div className="flex-1 overflow-y-auto">
-              {emails
-                .filter(email => {
-                  if (showStarredOnly && !email.starred) return false;
-                  if (selectedFlag) {
-                    const flag = flaggedEmails[email.id]?.flag;
-                    return flag === selectedFlag;
-                  }
-                  return true;
-                })
-                .map((email, index, filteredEmails) => (
-                  <div
-                    key={`${currentFolder}-${email.id}`}
-                    ref={index === filteredEmails.length - 1 ? lastEmailElementRef : undefined}
-                    onClick={() => handleEmailClick(email)}
-                    className={`relative flex items-center px-4 py-3 cursor-pointer border-b border-border/50 hover:bg-orange-500/5 ${
-                      selectedEmail?.id === email.id ? 'bg-orange-500/10' : ''
-                    }`}
-                    style={{ minHeight: '64px' }}
-                  >
-                    <div className="flex-shrink-0 mr-4">
-                      <Avatar className="h-9 w-9">
-                        <AvatarImage src={undefined} alt={email.from} />
-                        <AvatarFallback className="bg-muted text-foreground font-bold">
-                          {email.from.trim()[0]?.toUpperCase()}
-                        </AvatarFallback>
-                      </Avatar>
-                    </div>
-                    <div className="flex-1 min-w-0">
-                      <div className="flex justify-between items-baseline">
-                        <span className="font-bold text-sm truncate max-w-[180px] text-foreground">
-                          {email.from.split('<')[0] || email.from}
-                        </span>
-                        <div className="flex items-center gap-2">
-                          {email.attachments && email.attachments.length > 0 && (
-                            <span title={`${email.attachments.length} attachment${email.attachments.length > 1 ? 's' : ''}`}>
-                              <Paperclip className="h-3 w-3 text-muted-foreground" />
-                            </span>
-                          )}
-                          <Button
-                            variant="ghost"
-                            size="sm"
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              handleStarEmail(email.id, email.starred || false);
-                            }}
-                            disabled={starringEmails.has(email.id)}
-                            className={`p-1 h-6 w-6 ${
-                              email.starred 
-                                ? 'text-amber-500 hover:text-amber-600' 
-                                : 'text-muted-foreground hover:text-amber-500'
-                            }`}
-                            title={email.starred ? 'Unstar email' : 'Star email'}
-                          >
-                            {starringEmails.has(email.id) ? (
-                              <span className="animate-spin text-xs">⟳</span>
-                            ) : (
-                              <Star className={`h-3 w-3 ${email.starred ? 'fill-current' : ''}`} />
-                            )}
-                          </Button>
-                          <Button
-                            variant="ghost"
-                            size="sm"
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              if (currentFolder === 'trash') {
-                                handleRestoreEmail(email.id);
-                              } else {
-                                showDeleteConfirmation(email.id, email.subject, 'trash');
-                              }
-                            }}
-                            disabled={deletingEmails.has(email.id)}
-                            className={`p-1 h-6 w-6 ${
-                              currentFolder === 'trash' 
-                                ? 'text-muted-foreground hover:text-green-500' 
-                                : 'text-muted-foreground hover:text-red-500'
-                            }`}
-                            title={currentFolder === 'trash' ? 'Restore email' : 'Delete email'}
-                          >
-                            {deletingEmails.has(email.id) ? (
-                              <span className="animate-spin text-xs">⟳</span>
-                            ) : (
-                              currentFolder === 'trash' ? (
-                                <Archive className="h-3 w-3" />
-                              ) : (
-                                <Trash2 className="h-3 w-3" />
-                              )
-                            )}
-                          </Button>
-                          <span className="text-xs text-muted-foreground whitespace-nowrap ml-2">
-                            {formatEmailDate(email.date)}
-                          </span>
-                        </div>
-                      </div>
-                      <div className="text-xs text-muted-foreground truncate mt-0.5">
-                        {email.snippet}
-                      </div>
-                    </div>
-                    {flaggedEmails[email.id]?.flag && (
-                      <span
-                        className={`absolute right-4 bottom-2 inline-flex items-center px-2 py-0.5 rounded-full text-xs font-semibold ${FLAG_COLORS[flaggedEmails[email.id].flag]} text-white shadow`}
-                        title={FLAG_LABELS[flaggedEmails[email.id].flag]}
-                        style={{ minWidth: '2.5rem', justifyContent: 'center', textTransform: 'lowercase', pointerEvents: 'none' }}
-                      >
-                        {flaggedEmails[email.id].flag}
-                      </span>
-                    )}
-                  </div>
-                ))}
-              
-              {/* Loading spinner - only show for initial load or infinite scroll */}
-              {((!emails.length && loading) || loadingMore) && (
-                <div className="p-4 flex justify-center">
-                  <div className="w-8 h-8 border-4 border-muted border-t-foreground rounded-full animate-spin"></div>
-                </div>
-              )}
-
-              {!loading && !searchLoading && !loadingMore && emails.length === 0 && (
-                <div className="p-8 text-center text-muted-foreground">
-                  <Mail className="h-12 w-12 mx-auto mb-4 opacity-30" />
-                  <p>{searchQuery ? 'No emails found matching your search' : 'No emails found'}</p>
-                </div>
-              )}
+              {renderEmailList()}
             </div>
           </ResizablePanel>
           
