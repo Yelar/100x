@@ -1,10 +1,9 @@
 import { google } from 'googleapis';
 import { getAccessToken } from '@/lib/auth';
-import { NextRequest } from 'next/server';
 import { OAuth2Client } from 'google-auth-library';
 
 export async function GET(
-  req: NextRequest,
+  req: Request,
   { params }: { params: { id: string } }
 ) {
   try {
@@ -19,7 +18,7 @@ export async function GET(
     
     const draft = await gmail.users.drafts.get({
       userId: 'me',
-      id: params.id,
+      id: params.id as string,
       format: 'full'
     });
 
