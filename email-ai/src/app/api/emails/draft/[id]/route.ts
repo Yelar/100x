@@ -3,8 +3,8 @@ import { getAccessToken } from '@/lib/auth';
 import { OAuth2Client } from 'google-auth-library';
 
 export async function GET(
-  req: Request,
-  { params }: { params: { id: string } }
+  request: Request,
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
     const accessToken = await getAccessToken();
@@ -16,9 +16,11 @@ export async function GET(
     auth.setCredentials({ access_token: accessToken });
     const gmail = google.gmail({ version: 'v1', auth });
     
+    const { id } = await params;
+
     const draft = await gmail.users.drafts.get({
       userId: 'me',
-      id: params.id as string,
+      id: id as string,
       format: 'full'
     });
 
