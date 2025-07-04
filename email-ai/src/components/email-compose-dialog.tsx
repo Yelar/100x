@@ -9,7 +9,14 @@ import { useToast } from '@/components/ui/use-toast';
 import debounce from 'lodash/debounce';
 
 export interface EmailComposeDialogHandle {
-  openDialog: (draftId?: string) => void;
+  /**
+   * Open the compose dialog.
+   *
+   * Usage patterns:
+   * 1. `openDialog(draftId)` – pass a Gmail draft ID to load an existing draft.
+   * 2. `openDialog(undefined, content)` – open a new compose window pre-filled with subject + content.
+   */
+  openDialog: (arg1?: string, arg2?: string) => void;
 }
 
 interface EmailComposeDialogProps {
@@ -44,8 +51,10 @@ export const EmailComposeDialog = forwardRef<EmailComposeDialogHandle, EmailComp
     const [draftId, setDraftId] = useState<string | null>(null);
     const { toast } = useToast();
 
-    const openDialog = async (draftId?: string) => {
-      if (draftId) {
+    const openDialog = async (arg1?: string, arg2?: string) => {
+      // Case 1: open existing draft by ID
+      if (arg1 && !arg2) {
+        const draftId = arg1;
         try {
           const response = await fetch(`/api/emails/list?folder=drafts&id=${draftId}`);
           const data = await response.json();
@@ -73,11 +82,12 @@ export const EmailComposeDialog = forwardRef<EmailComposeDialogHandle, EmailComp
             variant: "destructive",
           });
         }
-      } else {
+      } else if (arg1 && arg2) {
+        // Case 2: open a new draft pre-filled with subject and content
         setDraftId(null);
         setTo('');
-        setSubject('');
-        setContent('');
+        setSubject(arg1);
+        setContent(arg2);
       }
       setOpen(true);
     };
