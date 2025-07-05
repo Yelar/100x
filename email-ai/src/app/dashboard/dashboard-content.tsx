@@ -18,7 +18,6 @@ import {
 } from "@/components/ui/dialog";
 import { VisuallyHidden } from "@/components/ui/visually-hidden";
 import api from '@/lib/axios';
-import debounce from 'lodash/debounce';
 import { ResizablePanelGroup, ResizablePanel } from "@/components/ui/resizable";
 import { ResizableHandleWithReset } from "@/components/ui/resizable-handle-with-reset";
 import { useEmailPanelLayout } from "@/hooks/use-email-panel-layout";
@@ -26,6 +25,7 @@ import { toast } from 'sonner';
 import { processEmailContent } from '@/lib/sanitize-html';
 import { useEmails } from './hooks/useEmails';
 import { FLAG_LABELS, FLAG_COLORS, getFlaggedEmailsLS, setFlaggedEmailsLS } from './utils/flags';
+import { formatEmailDate, formatTLDRSummary, formatFileSize, getFileTypeIcon, isEmailLong } from '@/lib/email-utils';
 
 interface UserInfo {
   email: string; 
@@ -88,38 +88,9 @@ const MiniReminder = lazy(() => import('@/components/mini-reminder').then(m => (
 // In-memory cache for emails per folder/query (non-reactive, not persisted)
 const emailCache: Record<string, { emails: Email[]; nextPageToken?: string }> = {};
 
-export default function Dashboard() {
-  return (
-    <Suspense fallback={
-      <div className="min-h-screen bg-background flex flex-col h-screen overflow-hidden">
-        {/* Loading skeleton */}
-        <div className="h-16 border-b border-border/50 flex items-center px-4 bg-gradient-to-r from-orange-500/10 to-amber-500/10 backdrop-blur-xl flex-none">
-          <div className="flex items-center space-x-4 w-64">
-            <Skeleton className="h-8 w-8 rounded-full" />
-            <div className="space-y-1">
-              <Skeleton className="h-4 w-24" />
-              <Skeleton className="h-3 w-32" />
-            </div>
-          </div>
-          <div className="flex-1 px-4">
-            <Skeleton className="h-10 w-full max-w-xl mx-auto rounded-full" />
-          </div>
-          <Skeleton className="h-8 w-8 rounded-md" />
-        </div>
-        <div className="flex-1 flex items-center justify-center">
-          <div className="text-center">
-            <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-orange-500 mx-auto mb-4"></div>
-            <p className="text-muted-foreground">Loading dashboard...</p>
-          </div>
-        </div>
-      </div>
-    }>
-      <DashboardContent />
-    </Suspense>
-  );
-}
 
-function DashboardContent() {
+
+export default function DashboardContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
   
@@ -139,7 +110,7 @@ function DashboardContent() {
   const [selectedEmail, setSelectedEmail] = useState<Email | null>(null);
   const [searchQuery, setSearchQuery] = useState('');
   const [nextPageToken, setNextPageToken] = useState<string | undefined>();
-  const [hasMore, setHasMore] = useState(true);
+  const [hasMore, setHasMore] = useState(true); 
   const [composing, setComposing] = useState(false);
   const [newEmail, setNewEmail] = useState({
     to: '',
@@ -200,20 +171,6 @@ function DashboardContent() {
 
   const observer = useRef<IntersectionObserver | null>(null);
   
-  // Create a stable debounced search function
-  const debouncedSearchRef = useRef<ReturnType<typeof debounce> | null>(null);
-  
-  // Initialize debounced function only once
-  useEffect(() => {
-    debouncedSearchRef.current = debounce((query: string, callback: (query: string) => void) => {
-      callback(query);
-    }, 800);
-    
-    return () => {
-      debouncedSearchRef.current?.cancel();
-    };
-  }, []);
-
   // Define handleLogout early so it can be used in useEffect
   const handleLogout = useCallback(() => {
     localStorage.removeItem('access_token');
@@ -738,12 +695,6 @@ function DashboardContent() {
     fetchEmails(undefined);
   };
 
-  // Helper function to detect if email is long enough for TLDR
-  const isEmailLong = (emailBody: string) => {
-    const textContent = emailBody.replace(/<[^>]*>/g, '').trim();
-    return textContent.length > 1000; // More than 1000 characters
-  };
-
   // Generate TLDR summary for email
   const handleGenerateTLDR = async (email: Email) => {
     if (isGeneratingSummary) return;
@@ -974,75 +925,6 @@ function DashboardContent() {
     }
   };
 
-  const formatEmailDate = useCallback((dateStr: string) => {
-    const date = new Date(dateStr);
-    const today = new Date();
-    const yesterday = new Date(today);
-    yesterday.setDate(yesterday.getDate() - 1);
-    if (date.toDateString() === today.toDateString()) {
-      return date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
-    } else if (date.toDateString() === yesterday.toDateString()) {
-      return 'Yesterday';
-    } else if (date.getFullYear() === today.getFullYear()) {
-      return date.toLocaleDateString([], { month: 'short', day: 'numeric' });
-    } else {
-      return date.toLocaleDateString([], { year: 'numeric', month: 'short', day: 'numeric' });
-    }
-  }, []);
-
-  // Fetch flags after emails are loaded (optimized: flag up to 20 unflagged emails per load, update UI as results come in)
-  useEffect(() => {
-    if (!emails.length) return;
-    const flaggedLS = getFlaggedEmailsLS();
-    setFlaggedEmails(flaggedLS); // Show emails instantly with whatever flags are present
-    
-    // Find up to 20 unflagged emails, but exclude recently updated ones to prevent overriding manual changes
-    const oneHourAgo = Date.now() - (60 * 60 * 1000);
-    const toFlag = emails.filter(e => {
-      const existingFlag = flaggedLS[e.id];
-      // Skip if: already flagged AND recently updated (within 1 hour)
-      if (existingFlag && existingFlag.flaggedAt > oneHourAgo) {
-        return false;
-      }
-      // Include if: not flagged at all OR flagged but old (allow re-flagging old entries)
-      return !existingFlag || existingFlag.flaggedAt <= oneHourAgo;
-    }).slice(0, 20).map(e => ({ id: e.id, subject: e.subject, snippet: e.snippet, sender: e.from }));
-    
-    if (toFlag.length === 0) return;
-    
-    console.log(`Flagging ${toFlag.length} emails (${emails.length - toFlag.length} skipped due to recent updates)`);
-    
-    // Make request for only the batch
-    fetch('/api/emails/flagged', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ emails: toFlag }),
-    })
-      .then(res => res.json())
-      .then(data => {
-        if (data.flagged) {
-          const now = Date.now();
-          const newFlags = { ...getFlaggedEmailsLS() };
-          for (const f of data.flagged) {
-            // Only update if the email wasn't recently manually updated
-            const existing = newFlags[f.id];
-            if (!existing || existing.flaggedAt <= oneHourAgo) {
-              newFlags[f.id] = {
-                flag: f.flag,
-                subject: f.subject,
-                snippet: f.snippet,
-                sender: f.sender,
-                flaggedAt: now,
-              };
-            }
-          }
-          setFlaggedEmails(newFlags);
-          setFlaggedEmailsLS(newFlags);
-        }
-      })
-      .catch(() => setFlaggedEmails(getFlaggedEmailsLS()));
-  }, [emails]);
-
   // Handle URL-based email/thread navigation
   useEffect(() => {
     const urlThreadId = searchParams.get('threadId');
@@ -1094,60 +976,6 @@ function DashboardContent() {
     setEmailSummary(null);
     setShowSummary(false);
   }, [selectedEmail?.id]);
-
-  // Helper function to format TLDR summary
-  const formatTLDRSummary = (text: string) => {
-    return text
-      .replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>') // Bold text
-      .split('\n')
-      .map(line => {
-        if (line.trim().startsWith('* ')) {
-          return `<li>${line.trim().substring(2)}</li>`;
-        } else if (line.trim().match(/^ {2,}\+ /)) {
-          return `<li class="ml-4">${line.trim().substring(2)}</li>`;
-        } else if (line.trim() === '') {
-          return '<br>';
-        } else {
-          return line;
-        }
-      })
-      .join('<br>')
-      .replace(/(<li>.*?<\/li>(?:<br><li>.*?<\/li>)*)/g, '<ul class="list-disc list-inside space-y-1 ml-4">$1</ul>')
-      .replace(/(<li class="ml-4">.*?<\/li>(?:<br><li class="ml-4">.*?<\/li>)*)/g, '<ul class="list-disc list-inside space-y-1 ml-8">$1</ul>')
-      .replace(/<br><br>/g, '<div class="my-2"></div>');
-  };
-
-  // Helper function to format file size
-  const formatFileSize = (bytes: number) => {
-    if (bytes === 0) return '0 Bytes';
-    const k = 1024;
-    const sizes = ['Bytes', 'KB', 'MB', 'GB'];
-    const i = Math.floor(Math.log(bytes) / Math.log(k));
-    return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
-  };
-
-  // Helper function to get file type icon
-  const getFileTypeIcon = (mimeType: string, filename: string) => {
-    if (mimeType.startsWith('image/')) {
-      return '🖼️';
-    } else if (mimeType.includes('pdf')) {
-      return '📄';
-    } else if (mimeType.includes('word') || filename.endsWith('.doc') || filename.endsWith('.docx')) {
-      return '📝';
-    } else if (mimeType.includes('excel') || filename.endsWith('.xls') || filename.endsWith('.xlsx')) {
-      return '📊';
-    } else if (mimeType.includes('powerpoint') || filename.endsWith('.ppt') || filename.endsWith('.pptx')) {
-      return '📊';
-    } else if (mimeType.includes('zip') || mimeType.includes('rar') || mimeType.includes('archive')) {
-      return '🗄️';
-    } else if (mimeType.startsWith('audio/')) {
-      return '🎵';
-    } else if (mimeType.startsWith('video/')) {
-      return '🎬';
-    } else {
-      return '📎';
-    }
-  };
 
   // Handle attachment download
   const handleAttachmentDownload = async (attachment: Attachment, emailId: string) => {
@@ -1477,6 +1305,61 @@ function DashboardContent() {
 
   // folder param handled but not needed directly here
 
+  // Memoised sanitized HTML of the selected email to avoid re-running the
+  // expensive sanitizer on every render.
+  const sanitizedSelectedEmailBody = React.useMemo(() => {
+    if (!selectedEmail) return '';
+    return processEmailContent(selectedEmail.body);
+  }, [selectedEmail?.id, selectedEmail?.body]);
+
+  // Fetch flags after emails are loaded (optimized: flag up to 20 unflagged emails per load, update UI as results come in)
+  useEffect(() => {
+    if (!emails.length) return;
+
+    const flaggedLS = getFlaggedEmailsLS();
+    setFlaggedEmails(flaggedLS);
+
+    const oneHourAgo = Date.now() - 60 * 60 * 1000;
+    const toFlag = emails
+      .filter(e => {
+        const existingFlag = flaggedLS[e.id];
+        if (existingFlag && existingFlag.flaggedAt > oneHourAgo) return false;
+        return !existingFlag || existingFlag.flaggedAt <= oneHourAgo;
+      })
+      .slice(0, 20)
+      .map(e => ({ id: e.id, subject: e.subject, snippet: e.snippet, sender: e.from }));
+
+    if (toFlag.length === 0) return;
+
+    fetch('/api/emails/flagged', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ emails: toFlag }),
+    })
+      .then(res => res.json())
+      .then(data => {
+        if (data.flagged) {
+          const now = Date.now();
+          const newFlags: typeof flaggedLS = { ...getFlaggedEmailsLS() };
+          for (const f of data.flagged) {
+            const existing = newFlags[f.id];
+            if (!existing || existing.flaggedAt <= oneHourAgo) {
+              newFlags[f.id] = {
+                flag: f.flag,
+                subject: f.subject,
+                snippet: f.snippet,
+                sender: f.sender,
+                flaggedAt: now,
+              };
+            }
+          }
+          setFlaggedEmails(newFlags);
+          setFlaggedEmailsLS(newFlags);
+        }
+      })
+      .catch(() => setFlaggedEmails(getFlaggedEmailsLS()));
+  }, [emails]);
+
   if (loading && !searchLoading && emails.length === 0) {
     return (
       <div className="min-h-screen bg-background flex flex-col h-screen overflow-hidden">
@@ -1549,7 +1432,7 @@ function DashboardContent() {
         {/* Left sidebar (fixed width) */}
         <div className="w-64 border-r border-border/50 bg-gradient-to-b from-orange-500/5 to-amber-500/5 flex flex-col overflow-y-auto">
           <div className="p-4 relative">
-            <Button className="rounded-full px-6 py-2 h-12 w-full justify-start font-medium shadow-sm mb-6 bg-gradient-to-r from-orange-500 to-amber-600 hover:from-orange-600 hover:to-amber-700 text-white" onClick={() => setComposing(true)}>
+            <Button className="rounded-full px-6 py-2 h-12 w-full justify-center font-medium shadow-sm mb-6 bg-gradient-to-r from-orange-500 to-amber-600 hover:from-orange-600 hover:to-amber-700 text-white" onClick={() => setComposing(true)}>
               <Plus className="mr-2 h-5 w-5" />
               Compose
             </Button>
@@ -2069,11 +1952,7 @@ function DashboardContent() {
                           borderRadius: '8px'
                         }}
                       >
-                        <div 
-                          dangerouslySetInnerHTML={{ 
-                            __html: processEmailContent(selectedEmail.body)
-                          }} 
-                        />
+                        <div dangerouslySetInnerHTML={{ __html: sanitizedSelectedEmailBody }} />
                       </div>
                     </div>
                   </div>
