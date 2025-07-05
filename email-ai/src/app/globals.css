@@ -599,9 +599,8 @@
   font-size: 14px;
   line-height: 1.6;
   
-  /* Always use light background for email readability */
-  background: #ffffff;
-  color: #000000;
+  /* Use theme colors */
+  @apply bg-background text-foreground;
   
   /* Theme-aware border only */
   @apply border border-border;
@@ -626,6 +625,7 @@
 .email-content-safe-display * {
   max-width: 100%;
   box-sizing: border-box;
+  @apply text-foreground;
 }
 
 /* Ensure responsive images */

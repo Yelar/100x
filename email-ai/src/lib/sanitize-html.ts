@@ -117,21 +117,19 @@ export function processEmailContent(emailBody: string): string {
   // Try to detect if the email is plain text
   const isPlainText = !emailBody.includes('<') || !emailBody.includes('>');
   
-  // Format plain text emails
+  // Format plain text emails with dark theme support
   if (isPlainText) {
     const formattedContent = emailBody
       .split('\n')
-      .map(line => line.trim() ? `<p>${escapeHtml(line)}</p>` : '<br>')
+      .map(line => line.trim() ? `<p class="text-foreground">${escapeHtml(line)}</p>` : '<br>')
       .join('');
 
-    return `<div class="email-content-safe-display">${formattedContent}</div>`;
+    return `<div class="email-content-safe-display bg-background">${formattedContent}</div>`;
   }
 
-  // Sanitize the HTML content first
+  // For HTML emails, use the raw content container to preserve original styling
   const sanitizedHtml = sanitizeHtml(emailBody);
-  
-  // Use safe display container that preserves content
-  return `<div class="email-content-safe-display">${sanitizedHtml}</div>`;
+  return `<div class="email-content-raw">${sanitizedHtml}</div>`;
 }
 
 /**
