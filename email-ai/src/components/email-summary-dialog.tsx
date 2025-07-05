@@ -1,8 +1,9 @@
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { Dialog, DialogContent, DialogTitle } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Badge } from "@/components/ui/badge";
 import { Mail, AlertCircle, CheckCircle2, Clock, ArrowUpRight } from "lucide-react";
+import { VisuallyHidden } from '@/components/ui/visually-hidden';
 
 interface EmailSummary {
   individual_summaries: Array<{
@@ -23,6 +24,25 @@ interface EmailSummaryDialogProps {
   onEmailClick: (emailId: string) => void;
 }
 
+// quick helper to pick the summary id most similar to a sentence
+function pickClosestSummary(sentence: string, summaries: EmailSummary["individual_summaries"]): string | null {
+  const words = sentence.toLowerCase().split(/\W+/).filter(w => w.length > 3);
+  let bestId: string | null = null;
+  let bestScore = 0;
+  for (const s of summaries) {
+    const sumWords = s.summary.toLowerCase();
+    let score = 0;
+    words.forEach(w => {
+      if (sumWords.includes(w)) score += 1;
+    });
+    if (score > bestScore) {
+      bestScore = score;
+      bestId = s.id;
+    }
+  }
+  return bestScore > 0 ? bestId : summaries[0]?.id ?? null;
+}
+
 export function EmailSummaryDialog({ 
   isOpen, 
   onOpenChange, 
@@ -33,13 +53,13 @@ export function EmailSummaryDialog({
 
   return (
     <Dialog open={isOpen} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-3xl max-h-[90vh]">
-        <DialogHeader>
+      <DialogContent className="max-w-3xl max-h-[90vh] p-6">
+        <VisuallyHidden>
           <DialogTitle>Email Summary</DialogTitle>
-        </DialogHeader>
-        
-        <ScrollArea className="h-[calc(90vh-8rem)] pr-4">
+        </VisuallyHidden>
+        <ScrollArea className="h-[calc(90vh-4rem)] pr-4">
           <div className="space-y-6">
+            <h2 className="text-xl font-semibold mb-2">Email Summary</h2>
             {/* Overall Summary */}
             <div className="space-y-2">
               <h3 className="text-lg font-semibold">Overall Summary</h3>
@@ -54,12 +74,24 @@ export function EmailSummaryDialog({
                   Immediate Actions
                 </h3>
                 <ul className="space-y-2">
-                  {summary.immediate_actions.map((action, index) => (
-                    <li key={index} className="flex items-start gap-2">
-                      <CheckCircle2 className="h-5 w-5 text-green-500 mt-0.5" />
-                      <span>{action}</span>
-                    </li>
-                  ))}
+                  {summary.immediate_actions.map((action, index) => {
+                    const matchedId = pickClosestSummary(action, summary.individual_summaries);
+                    return (
+                      <li key={index} className="flex items-start gap-2">
+                        <CheckCircle2 className="h-5 w-5 text-green-500 mt-0.5" />
+                        {matchedId ? (
+                          <button
+                            onClick={() => onEmailClick(matchedId)}
+                            className="text-left underline text-orange-600 hover:text-orange-700 cursor-pointer"
+                          >
+                            {action}
+                          </button>
+                        ) : (
+                          <span className="opacity-70">{action}</span>
+                        )}
+                      </li>
+                    );
+                  })}
                 </ul>
               </div>
             )}
@@ -72,12 +104,24 @@ export function EmailSummaryDialog({
                   Important Updates
                 </h3>
                 <ul className="space-y-2">
-                  {summary.important_updates.map((update, index) => (
-                    <li key={index} className="flex items-start gap-2">
-                      <ArrowUpRight className="h-5 w-5 text-blue-500 mt-0.5" />
-                      <span>{update}</span>
-                    </li>
-                  ))}
+                  {summary.important_updates.map((update, index) => {
+                    const matchedId = pickClosestSummary(update, summary.individual_summaries);
+                    return (
+                      <li key={index} className="flex items-start gap-2">
+                        <ArrowUpRight className="h-5 w-5 text-blue-500 mt-0.5" />
+                        {matchedId ? (
+                          <button
+                            onClick={() => onEmailClick(matchedId)}
+                            className="text-left underline text-orange-600 hover:text-orange-700 cursor-pointer"
+                          >
+                            {update}
+                          </button>
+                        ) : (
+                          <span className="opacity-70">{update}</span>
+                        )}
+                      </li>
+                    );
+                  })}
                 </ul>
               </div>
             )}

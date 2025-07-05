@@ -7,7 +7,7 @@ import { Button } from "@/components/ui/button";
 import { Avatar, AvatarImage, AvatarFallback } from "@/components/ui/avatar";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Input } from "@/components/ui/input";
-import { Search, Mail, LogOut, Inbox, FileText, Send, Trash, Plus, ChevronLeft, ChevronRight, MoreVertical, Star, Tag, Flag, Archive, Sparkles, Shield, Paperclip, Download, Eye, Trash2, X, Bell } from "lucide-react";
+import { Mail, Trash, ChevronLeft, ChevronRight, MoreVertical, Star, Tag, Flag, Archive, Sparkles, Paperclip, Download, Eye, Trash2, X } from "lucide-react";
 import {
   Dialog,
   DialogContent,
@@ -26,6 +26,9 @@ import { processEmailContent } from '@/lib/sanitize-html';
 import { useEmails } from './hooks/useEmails';
 import { FLAG_LABELS, FLAG_COLORS, getFlaggedEmailsLS, setFlaggedEmailsLS } from './utils/flags';
 import { formatEmailDate, formatTLDRSummary, formatFileSize, getFileTypeIcon, isEmailLong } from '@/lib/email-utils';
+import Header from './components/Header';
+import Sidebar from './components/Sidebar';
+import type { Folder } from './components/Sidebar';
 
 interface UserInfo {
   email: string; 
@@ -83,7 +86,6 @@ const ChatWith100x = lazy(() => import('@/components/chat-with-100x').then(m => 
 const ReplyComposer = lazy(() => import('@/components/reply-composer').then(m => ({ default: m.ReplyComposer })));
 const EmailSummaryDialog = lazy(() => import('@/components/email-summary-dialog').then(m => ({ default: m.EmailSummaryDialog })));
 const FollowUpReminder = lazy(() => import('@/components/follow-up-reminder').then(m => ({ default: m.FollowUpReminder })));
-const MiniReminder = lazy(() => import('@/components/mini-reminder').then(m => ({ default: m.MiniReminder })));
 
 // In-memory cache for emails per folder/query (non-reactive, not persisted)
 const emailCache: Record<string, { emails: Email[]; nextPageToken?: string }> = {};
@@ -1389,245 +1391,52 @@ export default function DashboardContent() {
 
   return (
     <div className="min-h-screen bg-background flex flex-col h-screen overflow-hidden">
-      {/* Header */}
-      <div className="h-16 border-b border-border/50 flex items-center px-4 bg-gradient-to-r from-orange-500/10 to-amber-500/10 backdrop-blur-xl flex-none">
-        <div className="flex items-center space-x-4 w-64">
-          <div className="flex items-center space-x-2">
-            <Avatar className="h-8 w-8 ring-2 ring-orange-500/20">
-              <AvatarImage src={userInfo?.picture} alt={userInfo?.name} />
-              <AvatarFallback className="bg-gradient-to-br from-orange-500 to-amber-600">{userInfo?.name?.[0]}</AvatarFallback>
-              </Avatar>
-            <div className="font-medium text-sm truncate">
-              {userInfo?.name}
-              <div className="text-xs text-orange-600/80 truncate">{userInfo?.email}</div>
-              </div>
-          </div>
-        </div>
-        <div className="flex-1 px-4">
-          <div className="relative w-full max-w-xl mx-auto">
-            <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-orange-500/50" />
-            <Input
-              type="text"
-              placeholder="Search in emails..."
-              value={searchQuery}
-              onChange={handleSearch}
-              onKeyDown={handleSearchKeyDown}
-              className="pl-10 pr-4 py-2 h-10 rounded-full bg-white/5 border-orange-500/20 hover:border-orange-500/30 focus:border-orange-500/50 w-full transition-colors"
-            />
-          </div>
-        </div>
-        <div className="flex items-center space-x-2">
-              <Button 
-                variant="ghost" 
-            size="icon"
-            className="text-orange-500/80 hover:text-orange-500 hover:bg-orange-500/10"
-                onClick={handleLogout}
-              >
-            <LogOut className="h-5 w-5" />
-              </Button>
-            </div>
-          </div>
+      <Header
+        userInfo={userInfo}
+        searchQuery={searchQuery}
+        onSearchChange={handleSearch}
+        onSearchKeyDown={handleSearchKeyDown}
+        onLogout={handleLogout}
+      />
 
       <div className="flex flex-1 overflow-hidden">
-        {/* Left sidebar (fixed width) */}
-        <div className="w-64 border-r border-border/50 bg-gradient-to-b from-orange-500/5 to-amber-500/5 flex flex-col overflow-y-auto">
-          <div className="p-4 relative">
-            <Button className="rounded-full px-6 py-2 h-12 w-full justify-center font-medium shadow-sm mb-6 bg-gradient-to-r from-orange-500 to-amber-600 hover:from-orange-600 hover:to-amber-700 text-white" onClick={() => setComposing(true)}>
-              <Plus className="mr-2 h-5 w-5" />
-              Compose
-            </Button>
-            <div className="space-y-1">
-              <Button 
-                variant="ghost" 
-                className={`w-full justify-start font-medium ${currentFolder === 'inbox' ? 'text-orange-700 dark:text-orange-300 bg-orange-500/10' : 'text-muted-foreground hover:text-orange-600 hover:bg-orange-500/10'}`}
-                onClick={() => {
-                  setCurrentFolder('inbox');
-                  setSelectedEmail(null); // Clear selected email when switching folders
-                  setSelectedFlag(null); // Clear flag filter when switching to inbox
-                  // Clear email/thread URL params when switching folders
-                  const params = new URLSearchParams(window.location.search);
-                  params.delete('threadId');
-                  params.set('folder', 'inbox');
-                  router.replace(`/dashboard?${params.toString()}`, { scroll: false });
-                  // fetch will be triggered by folder-change effect
-                }}
-              >
-                <Inbox className="mr-2 h-5 w-5" />
-                Inbox
-              </Button>
-              <Button 
-                variant="ghost" 
-                className={`w-full justify-start font-medium ${showStarredOnly ? 'text-orange-700 dark:text-orange-300 bg-orange-500/10' : 'text-muted-foreground hover:text-orange-600 hover:bg-orange-500/10'}`}
-                onClick={() => {
-                  setShowStarredOnly(!showStarredOnly);
-                  setSelectedEmail(null);
-                  setSelectedFlag(null);
-                  // Clear email/thread URL params when switching to starred view
-                  const params = new URLSearchParams(window.location.search);
-                  params.delete('threadId');
-                  if (!showStarredOnly) {
-                    params.set('view', 'starred');
-                  } else {
-                    params.delete('view');
-                  }
-                  router.replace(`/dashboard?${params.toString()}`, { scroll: false });
-                  // fetch will be triggered by folder-change effect
-                }}
-              >
-                <Star className={`mr-2 h-5 w-5 ${showStarredOnly ? 'fill-current text-amber-500' : ''}`} />
-                Starred
-              </Button>
-              <Button 
-                variant="ghost" 
-                className={`w-full justify-start font-medium ${currentFolder === 'sent' ? 'text-orange-700 dark:text-orange-300 bg-orange-500/10' : 'text-muted-foreground hover:text-orange-600 hover:bg-orange-500/10'}`}
-                onClick={() => {
-                  setCurrentFolder('sent');
-                  setSelectedEmail(null); // Clear selected email when switching folders
-                  setSelectedFlag(null); // Clear flag filter when switching to sent
-                  // Clear email/thread URL params when switching folders
-                  const params = new URLSearchParams(window.location.search);
-                  params.delete('threadId');
-                  params.set('folder', 'sent');
-                  router.replace(`/dashboard?${params.toString()}`, { scroll: false });
-                  // fetch will be triggered by folder-change effect
-                }}
-              >
-                <Send className="mr-2 h-5 w-5" />
-                Sent
-              </Button>
-              <Button 
-                variant="ghost" 
-                className={`w-full justify-start font-medium ${currentFolder === 'spam' ? 'text-orange-700 dark:text-orange-300 bg-orange-500/10' : 'text-muted-foreground hover:text-orange-600 hover:bg-orange-500/10'}`}
-                onClick={() => {
-                  setCurrentFolder('spam');
-                  setSelectedEmail(null); // Clear selected email when switching folders
-                  setSelectedFlag(null); // Clear flag filter when switching to spam
-                  // Clear email/thread URL params when switching folders
-                  const params = new URLSearchParams(window.location.search);
-                  params.delete('threadId');
-                  params.set('folder', 'spam');
-                  router.replace(`/dashboard?${params.toString()}`, { scroll: false });
-                  // fetch will be triggered by folder-change effect
-                }}
-              >
-                <Shield className="mr-2 h-5 w-5" />
-                Spam
-              </Button>
-              <Button 
-                variant="ghost" 
-                className={`w-full justify-start font-medium ${currentFolder === 'trash' ? 'text-orange-700 dark:text-orange-300 bg-orange-500/10' : 'text-muted-foreground hover:text-orange-600 hover:bg-orange-500/10'}`}
-                onClick={() => {
-                  setCurrentFolder('trash');
-                  setSelectedEmail(null); // Clear selected email when switching folders
-                  setSelectedFlag(null); // Clear flag filter when switching to trash
-                  // Clear email/thread URL params when switching folders
-                  const params = new URLSearchParams(window.location.search);
-                  params.delete('threadId');
-                  params.set('folder', 'trash');
-                  router.replace(`/dashboard?${params.toString()}`, { scroll: false });
-                  // fetch will be triggered by folder-change effect
-                }}
-              >
-                <Trash className="mr-2 h-5 w-5" />
-                Trash
-              </Button>
-              <Button 
-                variant="ghost" 
-                className={`w-full justify-start font-medium ${currentFolder === 'drafts' ? 'text-orange-700 dark:text-orange-300 bg-orange-500/10' : 'text-muted-foreground hover:text-orange-600 hover:bg-orange-500/10'}`}
-                onClick={() => {
-                  setCurrentFolder('drafts');
-                  setSelectedEmail(null);
-                  setSelectedFlag(null);
-                  const params = new URLSearchParams(window.location.search);
-                  params.delete('threadId');
-                  params.set('folder', 'drafts');
-                  router.replace(`/dashboard?${params.toString()}`, { scroll: false });
-                  // fetch will be triggered by folder-change effect
-                }}
-              >
-                <FileText className="mr-2 h-5 w-5" />
-                Drafts
-              </Button>
+        <Sidebar
+          currentFolder={currentFolder as Folder}
+          onFolderChange={(folder) => {
+            setCurrentFolder(folder);
+            setSelectedEmail(null);
+            setSelectedFlag(null);
 
-              {/* Reminder Bell Button */}
-              <div className="relative">
-                <Button 
-                  variant="ghost" 
-                  className={`w-full justify-start font-medium ${isMiniReminderVisible ? 'text-orange-700 dark:text-orange-300 bg-orange-500/10' : 'text-muted-foreground hover:text-orange-600 hover:bg-orange-500/10'}`}
-                  onClick={() => {
-                    if (isMiniReminderVisible) {
-                      setIsMiniReminderVisible(false);
-                    } else {
-                      const totalToReply = Object.values(flaggedEmails).filter(email => email.flag === 'to_reply').length;
-                      if (totalToReply > 0) {
-                        setIsMiniReminderVisible(true);
-                      } else {
-                        setIsReminderOpen(true);
-                      }
-                    }
-                  }}
-                >
-                  <Bell className="mr-2 h-5 w-5" />
-                  Reminders
-                  {(() => {
-                    const totalToReply = Object.values(flaggedEmails).filter(email => email.flag === 'to_reply').length;
-                    const urgentToReply = Object.values(flaggedEmails).filter(email => {
-                      const dayAgo = Date.now() - (24 * 60 * 60 * 1000);
-                      return email.flag === 'to_reply' && email.flaggedAt < dayAgo;
-                    }).length;
-                    
-                    if (totalToReply > 0) {
-                      return (
-                        <div className="ml-auto flex items-center gap-1">
-                          <span className="text-xs text-muted-foreground bg-muted/50 px-2 py-1 rounded-full">
-                            {totalToReply}
-                          </span>
-                          {urgentToReply > 0 && (
-                            <div className="w-2 h-2 bg-red-500 rounded-full animate-pulse"></div>
-                          )}
-                        </div>
-                      );
-                    }
-                    return null;
-                  })()}
-                </Button>
-                
-                {/* Mini Reminder Popup */}
-                <Suspense fallback={<></>}>
-                  <MiniReminder 
-                    flaggedEmails={flaggedEmails}
-                    isVisible={isMiniReminderVisible}
-                    onClose={() => setIsMiniReminderVisible(false)}
-                    onEmailClick={handleEmailClickFromReminder}
-                    onViewAll={() => {
-                      setIsMiniReminderVisible(false);
-                      setIsReminderOpen(true);
-                    }}
-                  />
-                </Suspense>
-              </div>
+            const params = new URLSearchParams(window.location.search);
+            params.delete('threadId');
+            params.set('folder', folder);
+            router.replace(`/dashboard?${params.toString()}`, { scroll: false });
+          }}
+          showStarredOnly={showStarredOnly}
+          onToggleStarred={() => {
+            setShowStarredOnly(!showStarredOnly);
+            setSelectedEmail(null);
+            setSelectedFlag(null);
+            const params = new URLSearchParams(window.location.search);
+            params.delete('threadId');
+            if (!showStarredOnly) params.set('view', 'starred');
+            else params.delete('view');
+            router.replace(`/dashboard?${params.toString()}`, { scroll: false });
+          }}
+          selectedFlag={selectedFlag}
+          onSelectFlag={(flag) => {
+            setSelectedFlag(flag);
+            setSelectedEmail(null);
+          }}
+          flaggedEmails={flaggedEmails}
+          onCompose={() => setComposing(true)}
+          onReminderClick={() => {
+            // open reminder logic
+            if (isMiniReminderVisible) setIsMiniReminderVisible(false);
+            else setIsReminderOpen(true);
+          }}
+        />
 
-              <div className="space-y-1">
-                {Object.entries(FLAG_LABELS).map(([flag, label]) => (
-                  <Button
-                    key={flag}
-                    variant="ghost"
-                    className={`w-full justify-start font-medium flex items-center gap-2 ${selectedFlag === flag ? 'text-orange-700 dark:text-orange-300 bg-orange-500/10' : 'text-muted-foreground hover:text-orange-600 hover:bg-orange-500/10'}`}
-                    onClick={() => {
-                      setSelectedFlag(flag === selectedFlag ? null : flag);
-                      setSelectedEmail(null);
-                    }}
-                  >
-                    <span className={`inline-block w-3 h-3 rounded-full ${FLAG_COLORS[flag]}`}></span>
-                    {label}
-                    <span className="ml-auto text-xs text-muted-foreground">{Object.values(flaggedEmails).filter(f => f.flag === flag).length}</span>
-                  </Button>
-                ))}
-              </div>
-            </div>
-          </div>
-        </div>
-        
         <ResizablePanelGroup 
           direction="horizontal" 
           className="flex-1"
