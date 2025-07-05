@@ -1,6 +1,7 @@
-import { NextResponse } from 'next/server';
+import { NextRequest, NextResponse } from 'next/server';
 import { cookies } from 'next/headers';
 import { OAuth2Client } from 'google-auth-library';
+import { applyRateLimit } from '@/lib/rate-limit';
 
 const CLIENT_SECRETS_FILE = process.env.GOOGLE_CLIENT_SECRETS || '{}';
 
@@ -26,8 +27,12 @@ const oauth2Client = new OAuth2Client(
   clientSecrets.web?.redirect_uris?.[0]
 );
 
-export async function POST() {
+export async function GET(request: NextRequest) {
   try {
+    // Apply auth rate limiting
+    const rateLimitResponse = await applyRateLimit(request, 'auth');
+    if (rateLimitResponse) return rateLimitResponse;
+
     const cookiesList = await cookies();
     const refreshToken = cookiesList.get('refresh_token')?.value;
 

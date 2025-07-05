@@ -1,9 +1,14 @@
-import { NextResponse } from 'next/server';
+import { NextRequest, NextResponse } from 'next/server';
 import { cookies } from 'next/headers';
 import { deleteEmail, permanentlyDeleteEmail, restoreEmail } from '@/lib/google';
+import { applyRateLimit } from '@/lib/rate-limit';
 
-export async function POST(request: Request) {
+export async function POST(request: NextRequest) {
   try {
+    // Apply email rate limiting
+    const rateLimitResponse = await applyRateLimit(request, 'email');
+    if (rateLimitResponse) return rateLimitResponse;
+
     const cookiesList = await cookies();
     const accessTokenCookie = cookiesList.get('access_token')?.value;
 

@@ -1,6 +1,7 @@
-import { NextResponse } from 'next/server';
+import { NextRequest, NextResponse } from 'next/server';
 import { cookies } from 'next/headers';
 import { getEmailThread } from '@/lib/google';
+import { applyRateLimit } from '@/lib/rate-limit';
 
 interface GmailError {
   response?: {
@@ -10,10 +11,14 @@ interface GmailError {
 }
 
 export async function GET(
-  request: Request,
+  request: NextRequest,
   context: { params: Promise<{ threadId: string }> }
 ) {
   try {
+    // Apply default rate limiting
+    const rateLimitResponse = await applyRateLimit(request);
+    if (rateLimitResponse) return rateLimitResponse;
+
     const { threadId } = await context.params;
     
     const cookiesList = await cookies();

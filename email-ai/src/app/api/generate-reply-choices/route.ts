@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { Groq } from 'groq-sdk';
+import { applyRateLimit } from '@/lib/rate-limit';
 
 const groq = new Groq({
   apiKey: process.env.GROQ_API_KEY || '',
@@ -195,6 +196,10 @@ Please analyze this email and provide appropriate reply options.`,
 
 export async function POST(req: NextRequest) {
   try {
+    // Apply AI rate limiting
+    const rateLimitResponse = await applyRateLimit(req, 'ai');
+    if (rateLimitResponse) return rateLimitResponse;
+
     const { originalSubject, originalContent, recipientEmail } = await req.json();
 
     if (!originalSubject || !originalContent) {

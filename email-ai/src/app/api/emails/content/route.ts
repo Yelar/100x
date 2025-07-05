@@ -1,9 +1,14 @@
-import { NextResponse } from 'next/server';
+import { NextRequest, NextResponse } from 'next/server';
 import { cookies } from 'next/headers';
 import { getBatchEmailContent } from '@/lib/google';
+import { applyRateLimit } from '@/lib/rate-limit';
 
-export async function POST(request: Request) {
+export async function POST(request: NextRequest) {
   try {
+    // Apply default rate limiting
+    const rateLimitResponse = await applyRateLimit(request);
+    if (rateLimitResponse) return rateLimitResponse;
+
     const cookiesList = await cookies();
     const accessTokenCookie = cookiesList.get('access_token')?.value;
 

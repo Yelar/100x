@@ -1,7 +1,8 @@
 import { google } from 'googleapis';
 import { getAccessToken } from '@/lib/auth';
 import { OAuth2Client } from 'google-auth-library';
-import { NextRequest } from 'next/server';
+import { NextRequest, NextResponse } from 'next/server';
+import { applyRateLimit } from '@/lib/rate-limit';
 
 /*
  Route: /api/emails/draft
@@ -10,11 +11,15 @@ import { NextRequest } from 'next/server';
    DELETE   -> deletes a single draft (expects JSON body { draftId: string })
 */
 
-export async function GET() {
+export async function GET(request: NextRequest) {
   try {
+    // Apply email rate limiting
+    const rateLimitResponse = await applyRateLimit(request, 'email');
+    if (rateLimitResponse) return rateLimitResponse;
+
     const accessToken = await getAccessToken();
     if (!accessToken) {
-      return Response.json({ error: 'Not authenticated' }, { status: 401 });
+      return NextResponse.json({ error: 'Not authenticated' }, { status: 401 });
     }
 
     const auth = new OAuth2Client();
@@ -40,24 +45,28 @@ export async function GET() {
       })
     );
 
-    return Response.json({ drafts: draftDetails });
+    return NextResponse.json({ drafts: draftDetails });
   } catch (error) {
     console.error('Error listing drafts:', error);
-    return Response.json({ error: 'Failed to fetch drafts' }, { status: 500 });
+    return NextResponse.json({ error: 'Failed to fetch drafts' }, { status: 500 });
   }
 }
 
-export async function DELETE(req: NextRequest) {
+export async function DELETE(request: NextRequest) {
   try {
-    const { draftId } = await req.json();
+    // Apply email rate limiting
+    const rateLimitResponse = await applyRateLimit(request, 'email');
+    if (rateLimitResponse) return rateLimitResponse;
+
+    const { draftId } = await request.json();
 
     if (!draftId) {
-      return Response.json({ error: 'draftId is required' }, { status: 400 });
+      return NextResponse.json({ error: 'draftId is required' }, { status: 400 });
     }
 
     const accessToken = await getAccessToken();
     if (!accessToken) {
-      return Response.json({ error: 'Not authenticated' }, { status: 401 });
+      return NextResponse.json({ error: 'Not authenticated' }, { status: 401 });
     }
 
     const auth = new OAuth2Client();
@@ -69,9 +78,9 @@ export async function DELETE(req: NextRequest) {
       id: draftId as string,
     });
 
-    return Response.json({ success: true });
+    return NextResponse.json({ success: true });
   } catch (error) {
     console.error('Error deleting draft:', error);
-    return Response.json({ error: 'Failed to delete draft' }, { status: 500 });
+    return NextResponse.json({ error: 'Failed to delete draft' }, { status: 500 });
   }
 } 

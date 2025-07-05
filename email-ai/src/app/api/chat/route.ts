@@ -1,6 +1,8 @@
 import { groq } from '@ai-sdk/groq';
 import { streamText } from 'ai';
 import { cookies } from 'next/headers';
+import { NextRequest, NextResponse } from 'next/server';
+import { applyRateLimit } from '@/lib/rate-limit';
 // import { tools, ToolResult as ImportedToolResult } from '@/lib/tools';
 
 export const maxDuration = 60; // Increased to allow for email content fetching
@@ -519,21 +521,25 @@ interface ToolResult {
   answer: string;
 }
 
-export async function POST(req: Request) {
-  if (!apiKey) {
-    return new Response(
-      JSON.stringify({ error: 'GROQ_API_KEY environment variable not set' }),
-      { 
-        status: 500,
-        headers: {
-          'Content-Type': 'application/json'
-        }
-      }
-    );
-  }
-
+export async function POST(request: NextRequest) {
   try {
-    const { messages, userName, userEmail, currentDate } = await req.json();
+    // Apply AI rate limiting
+    const rateLimitResponse = await applyRateLimit(request, 'ai');
+    if (rateLimitResponse) return rateLimitResponse;
+
+    if (!apiKey) {
+      return new Response(
+        JSON.stringify({ error: 'GROQ_API_KEY environment variable not set' }),
+        { 
+          status: 500,
+          headers: {
+            'Content-Type': 'application/json'
+          }
+        }
+      );
+    }
+
+    const { messages, userName, userEmail, currentDate } = await request.json();
     // Get the user's latest message
     const userMessage = messages[messages.length - 1]?.content || '';
     
@@ -689,16 +695,8 @@ When the user wants to compose an email, use the email composition format to tri
     
     return streamResponse;
   } catch (error) {
-    console.error('Error calling Groq API:', error);
-    return new Response(
-      JSON.stringify({ error: 'Failed to process chat request' }),
-      { 
-        status: 500,
-        headers: {
-          'Content-Type': 'application/json'
-        }
-      }
-    );
+    console.error('Chat error:', error);
+    return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
   }
 }
 

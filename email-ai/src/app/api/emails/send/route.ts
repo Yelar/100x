@@ -1,7 +1,8 @@
 import { google } from 'googleapis';
 import { getAccessToken } from '@/lib/auth';
-import { NextRequest } from 'next/server';
+import { NextRequest, NextResponse } from 'next/server';
 import { OAuth2Client } from 'google-auth-library';
+import { applyRateLimit } from '@/lib/rate-limit';
 
 // Helper function to encode email to base64URL format
 function encodeEmail(to: string, subject: string, content: string) {
@@ -20,6 +21,10 @@ function encodeEmail(to: string, subject: string, content: string) {
 
 export async function POST(req: NextRequest) {
   try {
+    // Apply email rate limiting
+    const rateLimitResponse = await applyRateLimit(req, 'email');
+    if (rateLimitResponse) return rateLimitResponse;
+
     const { to, subject, content, mode, draftId } = await req.json();
     const accessToken = await getAccessToken();
     if (!accessToken) {
@@ -80,7 +85,7 @@ export async function POST(req: NextRequest) {
       return Response.json({ success: true });
     }
   } catch (error) {
-    console.error('Error sending email:', error);
-    return Response.json({ error: 'Failed to send email' }, { status: 500 });
+    console.error('Email sending error:', error);
+    return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
   }
 }

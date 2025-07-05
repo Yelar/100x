@@ -1,8 +1,9 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 import { google } from 'googleapis';
 import { getAccessToken } from '@/lib/auth';
-import { NextRequest } from 'next/server';
+import { NextRequest, NextResponse } from 'next/server';
 import { OAuth2Client } from 'google-auth-library';
+import { applyRateLimit } from '@/lib/rate-limit';
 
 interface Attachment {
   id: string;
@@ -89,18 +90,22 @@ function parseGmailMessage(msg: any): Email {
   };
 }
 
-export async function GET(req: NextRequest) {
+export async function GET(request: NextRequest) {
   try {
+    // Apply default rate limiting
+    const rateLimitResponse = await applyRateLimit(request);
+    if (rateLimitResponse) return rateLimitResponse;
+
     const accessToken = await getAccessToken();
     if (!accessToken) {
-      return Response.json({ error: 'Not authenticated' }, { status: 401 });
+      return NextResponse.json({ error: 'Not authenticated' }, { status: 401 });
     }
 
     const auth = new OAuth2Client();
     auth.setCredentials({ access_token: accessToken });
     const gmail = google.gmail({ version: 'v1', auth });
 
-    const url = new URL(req.url);
+    const url = new URL(request.url);
     const folder = url.searchParams.get('folder');
     const draftId = url.searchParams.get('id');
     const pageToken = url.searchParams.get('pageToken');
@@ -114,7 +119,7 @@ export async function GET(req: NextRequest) {
           id: draftId as string,
           format: 'full'
         });
-        return Response.json({ messages: [parseGmailMessage(draft.data.message)] });
+        return NextResponse.json({ messages: [parseGmailMessage(draft.data.message)] });
       }
 
       // List all drafts
@@ -124,7 +129,7 @@ export async function GET(req: NextRequest) {
       });
 
       if (!draftsList.data.drafts) {
-        return Response.json({ messages: [] });
+        return NextResponse.json({ messages: [] });
       }
 
       // Fetch full content for each draft
@@ -139,7 +144,7 @@ export async function GET(req: NextRequest) {
       const draftsResults = await Promise.all(draftsPromises);
       const messages = draftsResults.map(result => parseGmailMessage(result.data.message));
 
-      return Response.json({
+      return NextResponse.json({
         messages,
         nextPageToken: draftsList.data.nextPageToken
       });
@@ -155,7 +160,7 @@ export async function GET(req: NextRequest) {
     });
 
     if (!response.data.messages) {
-      return Response.json({ messages: [] });
+      return NextResponse.json({ messages: [] });
     }
 
     const messagesPromises = response.data.messages.map(message =>
@@ -169,12 +174,12 @@ export async function GET(req: NextRequest) {
     const messagesResults = await Promise.all(messagesPromises);
     const messages = messagesResults.map(result => parseGmailMessage(result.data));
 
-    return Response.json({
+    return NextResponse.json({
       messages,
       nextPageToken: response.data.nextPageToken
     });
   } catch (error) {
     console.error('Error fetching emails:', error);
-    return Response.json({ error: 'Failed to fetch emails' }, { status: 500 });
+    return NextResponse.json({ error: 'Failed to fetch emails' }, { status: 500 });
   }
 } 
