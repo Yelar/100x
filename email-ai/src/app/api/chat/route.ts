@@ -3,6 +3,8 @@ import { streamText } from 'ai';
 import { cookies } from 'next/headers';
 import { NextRequest, NextResponse } from 'next/server';
 import { applyRateLimit } from '@/lib/rate-limit';
+import connectToDatabase from '@/lib/mongodb';
+import ChatUsage from '@/models/ChatUsage';
 // import { tools, ToolResult as ImportedToolResult } from '@/lib/tools';
 
 export const maxDuration = 60; // Increased to allow for email content fetching
@@ -527,6 +529,35 @@ export async function POST(request: NextRequest) {
     const rateLimitResponse = await applyRateLimit(request, 'ai');
     if (rateLimitResponse) return rateLimitResponse;
 
+    // Parse request body once to extract data
+    const { messages, userName, userEmail, currentDate } = await request.json();
+
+    // Determine user email (required for per-user limits)
+    const cookieStore = await cookies();
+    const email = userEmail || cookieStore.get('user_email')?.value;
+    if (!email) {
+      return NextResponse.json({ error: 'User email is required for chat usage tracking' }, { status: 400 });
+    }
+
+    // Connect to database and enforce daily limit
+    await connectToDatabase();
+    const todayStr = new Date().toISOString().split('T')[0];
+
+    let usage = await ChatUsage.findOne({ userEmail: email, date: todayStr });
+    if (usage && usage.count >= 20) {
+      return NextResponse.json(
+        { error: 'Daily chat limit reached', remaining: 0 },
+        { status: 429 }
+      );
+    }
+
+    if (!usage) {
+      usage = await ChatUsage.create({ userEmail: email, date: todayStr, count: 0 });
+    }
+    usage.count += 1;
+    await usage.save();
+    const remainingChats = Math.max(0, 20 - usage.count);
+
     if (!apiKey) {
       return new Response(
         JSON.stringify({ error: 'GROQ_API_KEY environment variable not set' }),
@@ -539,7 +570,6 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    const { messages, userName, userEmail, currentDate } = await request.json();
     // Get the user's latest message
     const userMessage = messages[messages.length - 1]?.content || '';
     
@@ -692,6 +722,9 @@ When the user wants to compose an email, use the email composition format to tri
     streamResponse.headers.set('Content-Type', 'text/event-stream');
     streamResponse.headers.set('Cache-Control', 'no-cache');
     streamResponse.headers.set('Connection', 'keep-alive');
+    // Chat usage headers
+    streamResponse.headers.set('X-Chat-Limit', '20');
+    streamResponse.headers.set('X-Chat-Remaining', String(remainingChats));
     
     return streamResponse;
   } catch (error) {

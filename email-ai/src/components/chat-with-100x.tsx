@@ -50,6 +50,15 @@ export function ChatWith100x({ isOpen: propIsOpen, onToggle: propOnToggle, onEma
       console.log("Response started:", response.status);
       setIsProcessing(true); // Ensure we show processing indicator
       
+      // Update remaining requests from response header if available
+      const remainingStr = response.headers.get('x-chat-remaining');
+      if (remainingStr) {
+        const num = parseInt(remainingStr, 10);
+        if (!isNaN(num)) {
+          setRequestsRemaining(num);
+        }
+      }
+      
       // Check for error status
       if (!response.ok) {
         response.text().then((text) => {
@@ -75,6 +84,7 @@ export function ChatWith100x({ isOpen: propIsOpen, onToggle: propOnToggle, onEma
   
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const [contextLoaded, setContextLoaded] = useState(false);
+  const [requestsRemaining, setRequestsRemaining] = useState<number | null>(null);
   const [isProcessing, setIsProcessing] = useState(false);
   const [currentThoughts, setCurrentThoughts] = useState<string[]>([]);
   const [currentThoughtIndex, setCurrentThoughtIndex] = useState(0);
@@ -565,6 +575,25 @@ export function ChatWith100x({ isOpen: propIsOpen, onToggle: propOnToggle, onEma
     );
   };
 
+  // Fetch remaining chat requests on mount
+  useEffect(() => {
+    const fetchRemaining = async () => {
+      if (!userInfo?.email) return;
+      try {
+        const res = await fetch(`/api/chat/remaining?email=${encodeURIComponent(userInfo.email)}`);
+        if (res.ok) {
+          const data = await res.json();
+          if (typeof data.remaining === 'number') {
+            setRequestsRemaining(data.remaining);
+          }
+        }
+      } catch (error) {
+        console.error('Failed to fetch remaining chat requests:', error);
+      }
+    };
+    fetchRemaining();
+  }, [userInfo?.email]);
+
   return (
     <div className="fixed bottom-4 right-4 z-50">
       {isOpen ? (
@@ -582,6 +611,20 @@ export function ChatWith100x({ isOpen: propIsOpen, onToggle: propOnToggle, onEma
                 <CardTitle className="text-md">Chat with 100x</CardTitle>
               </div>
               <div className="flex items-center gap-2">
+                {requestsRemaining !== null && (
+                  <TooltipProvider>
+                    <Tooltip>
+                      <TooltipTrigger asChild>
+                        <Badge variant="outline" className="text-xs flex items-center gap-1">
+                          {requestsRemaining} / 20 left
+                        </Badge>
+                      </TooltipTrigger>
+                      <TooltipContent>
+                        <p>Daily chat requests remaining</p>
+                      </TooltipContent>
+                    </Tooltip>
+                  </TooltipProvider>
+                )}
                 {contextLoaded && (
                   <TooltipProvider>
                     <Tooltip>
