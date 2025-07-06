@@ -1,9 +1,11 @@
 'use client';
 import React from 'react';
-import { Search, LogOut } from 'lucide-react';
+import { Search, LogOut, Settings } from 'lucide-react';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
+import { ThemeToggle } from '@/components/theme-toggle';
+import { useRouter } from 'next/navigation';
 
 interface UserInfo {
   name?: string;
@@ -20,6 +22,8 @@ export interface HeaderProps {
 }
 
 export function Header({ userInfo, searchQuery, onSearchChange, onSearchKeyDown, onLogout }: HeaderProps) {
+  const router = useRouter();
+
   return (
     <header className="h-16 flex items-center px-4 border-b border-border/50 bg-gradient-to-r from-orange-500/10 to-amber-500/10 flex-none">
       {/* Avatar + name */}
@@ -54,13 +58,24 @@ export function Header({ userInfo, searchQuery, onSearchChange, onSearchKeyDown,
         </div>
       </div>
 
-      {/* logout */}
+      {/* theme toggle, settings and logout */}
       <div className="flex items-center space-x-2">
+        <ThemeToggle />
+        <Button
+          variant="ghost"
+          size="icon"
+          className="text-orange-500/80 hover:text-orange-500 hover:bg-orange-500/10"
+          onClick={() => router.push('/settings')}
+          title="Settings"
+        >
+          <Settings className="h-5 w-5" />
+        </Button>
         <Button
           variant="ghost"
           size="icon"
           className="text-orange-500/80 hover:text-orange-500 hover:bg-orange-500/10"
           onClick={onLogout}
+          title="Logout"
         >
           <LogOut className="h-5 w-5" />
         </Button>
