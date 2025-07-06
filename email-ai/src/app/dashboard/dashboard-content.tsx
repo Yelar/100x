@@ -1512,6 +1512,30 @@ export default function DashboardContent() {
     return () => clearTimeout(timeout);
   }, [newEmail.content, isAutocompleteEnabled]);
 
+  // Add at the top of the component
+  const [spoilerBlur, setSpoilerBlur] = useState(12); // px
+  const [spoilerAnimating, setSpoilerAnimating] = useState(false);
+
+  useEffect(() => {
+    if (generatedPreview.isVisible) {
+      setSpoilerBlur(12);
+      setSpoilerAnimating(true);
+      const start = Date.now();
+      const duration = 1500; // ms
+      function animate() {
+        const elapsed = Date.now() - start;
+        const progress = Math.min(elapsed / duration, 1);
+        setSpoilerBlur(12 - 12 * progress);
+        if (progress < 1) {
+          requestAnimationFrame(animate);
+        } else {
+          setSpoilerAnimating(false);
+        }
+      }
+      animate();
+    }
+  }, [generatedPreview.isVisible, generatedPreview.subject, generatedPreview.content]);
+
   if (loading && !searchLoading && emails.length === 0) {
     return (
       <div className="min-h-screen bg-background flex flex-col h-screen overflow-hidden">
@@ -2172,15 +2196,15 @@ export default function DashboardContent() {
                   AI Autocomplete
                 </label>
               </div>
-              <DialogClose asChild>
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  className="text-muted-foreground hover:text-foreground hover:bg-black/10 dark:hover:bg-white/10 transition-colors h-5 w-5 p-0"
-                >
-                  <X className="h-4 w-4" />
-                </Button>
-              </DialogClose>
+            <DialogClose asChild>
+              <Button
+                variant="ghost"
+                size="sm"
+                className="text-muted-foreground hover:text-foreground hover:bg-black/10 dark:hover:bg-white/10 transition-colors h-5 w-5 p-0"
+              >
+                <X className="h-4 w-4" />
+              </Button>
+            </DialogClose>
             </div>
           </div>
 
@@ -2257,62 +2281,63 @@ export default function DashboardContent() {
             {/* Content area */}
             <div className="flex-1 relative overflow-hidden">
               {generatedPreview.isVisible ? (
-                /* Preview Mode */
-                <div className="h-full flex flex-col border border-border/60 rounded-lg overflow-hidden bg-white dark:bg-gray-800">
-                  <div className="flex items-center justify-between p-4 border-b border-border/60 bg-gradient-to-r from-blue-50 to-indigo-50 dark:from-blue-950/20 dark:to-indigo-950/20">
-                    <h4 className="font-medium text-foreground">Generated Content Preview</h4>
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      onClick={rejectGeneratedContent}
-                      className="text-muted-foreground hover:text-foreground hover:bg-white/60 dark:hover:bg-black/20"
-                    >
-                      ✕
-                    </Button>
-                  </div>
-                  
-                  <div className="flex-1 p-4 space-y-4 overflow-y-auto">
-                    {generatedPreview.subject && (
-              <div>
-                        <label className="text-xs font-medium text-muted-foreground uppercase tracking-wide">Subject:</label>
-                        <div className="mt-2 p-3 bg-gray-50 dark:bg-gray-900/50 rounded-md border border-border/30 text-sm">
-                          {generatedPreview.subject}
-              </div>
-                      </div>
-                    )}
-                    
-                    {generatedPreview.content && (
-                      <div>
-                        <label className="text-xs font-medium text-muted-foreground uppercase tracking-wide">Content:</label>
-                        <div className="mt-2 p-3 bg-gray-50 dark:bg-gray-900/50 rounded-md border border-border/30 text-sm">
-                          <div className="whitespace-pre-wrap">{generatedPreview.content}</div>
+                <div className="w-full h-full flex flex-col items-end justify-end pr-4 pb-4">
+                  <div className="w-full max-w-sm bg-white dark:bg-gray-800 border border-border/60 rounded-lg shadow-lg" style={{ minHeight: '420px', maxHeight: '70vh' }}>
+                    <div className="flex items-center justify-between p-4 border-b border-border/60 bg-gradient-to-r from-blue-50 to-indigo-50 dark:from-blue-950/20 dark:to-indigo-950/20 rounded-t-lg">
+                      <h4 className="font-medium text-foreground text-base">Generated Content Preview</h4>
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        onClick={rejectGeneratedContent}
+                        className="text-muted-foreground hover:text-foreground hover:bg-white/60 dark:hover:bg-black/20 h-7 w-7 p-0"
+                      >
+                        <span className="sr-only">Close</span>
+                        <X className="h-4 w-4" />
+                      </Button>
+                    </div>
+                    <div className="p-6 space-y-5 overflow-y-auto" style={{ maxHeight: '270px' }}>
+                      {generatedPreview.subject && (
+                        <div>
+                          <label className="text-xs font-medium text-muted-foreground uppercase tracking-wide">Subject:</label>
+                          <div className="mt-1 p-3 bg-gray-50 dark:bg-gray-900/50 rounded border border-border/30 text-base transition-all duration-500" style={{ filter: `blur(${spoilerBlur}px)`, opacity: spoilerAnimating ? 0.7 : 1 }}>
+                            {generatedPreview.subject}
+                          </div>
                         </div>
-                      </div>
-                    )}
-                  </div>
-                  
-                  <div className="flex justify-end gap-3 p-4 border-t border-border/60 bg-gray-50 dark:bg-gray-800/50">
-                    <Button
-                      variant="outline"
-                      onClick={rejectGeneratedContent}
-                      className="text-red-600 border-red-200 hover:bg-red-50 dark:text-red-400 dark:border-red-500/20 dark:hover:bg-red-500/10"
-                    >
-                      ✗ Reject
-                    </Button>
-                    <Button
-                      onClick={acceptGeneratedContent}
-                      className="bg-green-600 hover:bg-green-700 text-white shadow-sm"
-                    >
-                      ✓ Accept
-                    </Button>
+                      )}
+                      {generatedPreview.content && (
+                        <div>
+                          <label className="text-xs font-medium text-muted-foreground uppercase tracking-wide">Content:</label>
+                          <div className="mt-1 p-3 bg-gray-50 dark:bg-gray-900/50 rounded border border-border/30 text-base transition-all duration-500" style={{ filter: `blur(${spoilerBlur}px)`, opacity: spoilerAnimating ? 0.7 : 1 }}>
+                            <div className="whitespace-pre-wrap">{generatedPreview.content}</div>
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                    <div className="flex justify-end gap-2 p-3 border-t border-border/60 bg-gray-50 dark:bg-gray-800/50 rounded-b-lg">
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={rejectGeneratedContent}
+                        className="text-red-600 border-red-200 hover:bg-red-50 dark:text-red-400 dark:border-red-500/20 dark:hover:bg-red-500/10 px-3 py-1 h-8"
+                      >
+                        ✗
+                      </Button>
+                      <Button
+                        size="sm"
+                        onClick={acceptGeneratedContent}
+                        className="bg-green-600 hover:bg-green-700 text-white shadow-sm px-3 py-1 h-8"
+                      >
+                        ✓
+                      </Button>
+                    </div>
                   </div>
                 </div>
               ) : (
                 /* Normal Edit Mode */
                 <div className="relative w-full h-full">
-                  <textarea
-                    value={newEmail.content}
-                    onChange={(e) => setNewEmail({ ...newEmail, content: e.target.value })}
+                <textarea
+                  value={newEmail.content}
+                  onChange={(e) => setNewEmail({ ...newEmail, content: e.target.value })}
                     onKeyDown={(e) => {
                       if (e.key === 'Tab' && autoSuggestion) {
                         e.preventDefault();
@@ -2320,9 +2345,9 @@ export default function DashboardContent() {
                         setAutoSuggestion('');
                       }
                     }}
-                    className="w-full h-full border border-border/60 rounded-lg p-4 text-sm resize-none focus:outline-none focus:ring-2 focus:ring-orange-500/20 focus:border-orange-500/40 bg-gray-50 dark:bg-gray-800/50 placeholder:text-muted-foreground transition-all"
-                    placeholder="Write your email content here..."
-                  />
+                  className="w-full h-full border border-border/60 rounded-lg p-4 text-sm resize-none focus:outline-none focus:ring-2 focus:ring-orange-500/20 focus:border-orange-500/40 bg-gray-50 dark:bg-gray-800/50 placeholder:text-muted-foreground transition-all"
+                  placeholder="Write your email content here..."
+                />
                   {autoSuggestion && (
                     <div className="pointer-events-none absolute top-0 left-0 p-4 whitespace-pre-wrap text-sm text-muted-foreground select-none" style={{ whiteSpace: 'pre-wrap' }}>
                       {/* Render existing content invisibly to align suggestion */}
@@ -2336,7 +2361,7 @@ export default function DashboardContent() {
 
             {/* Footer */}
             <div className="flex items-center justify-between pt-4 border-t border-border/20">
-              <div className="flex items-center gap-3">
+              <div className="flex-1 flex items-center gap-3">
                 <Button
                   onClick={handleSendEmail}
                   disabled={sending}
@@ -2355,7 +2380,6 @@ export default function DashboardContent() {
                   })()}
                   <span className="ml-2 text-orange-200">⌘ ↵</span>
                 </Button>
-                
                 {/* Hidden file input */}
                 <input
                   ref={fileInputRef}
@@ -2365,7 +2389,6 @@ export default function DashboardContent() {
                   className="hidden"
                   accept="*/*"
                 />
-                
                 <Button 
                   variant="outline" 
                   size="sm" 
@@ -2380,8 +2403,9 @@ export default function DashboardContent() {
                     </span>
                   )}
                 </Button>
-
-                {/* Tone Selection */}
+              </div>
+              {/* Tone and Generate controls right-aligned */}
+              <div className="flex items-center gap-2 ml-auto">
                 <div className="relative tone-dropdown-container">
                   <Button
                     variant="outline"
@@ -2393,9 +2417,8 @@ export default function DashboardContent() {
                     <span className="text-xs">{toneOptions.find(t => t.value === selectedTone)?.label.split(' ')[1]}</span>
                     <span className="text-xs">▼</span>
                   </Button>
-                  
                   {showToneDropdown && (
-                    <div className="absolute bottom-full left-0 mb-2 w-48 bg-white dark:bg-gray-800 border border-border rounded-lg shadow-lg z-10 p-1">
+                    <div className="absolute bottom-full right-0 mb-2 w-48 bg-white dark:bg-gray-800 border border-border rounded-lg shadow-lg z-10 p-1">
                       <div className="text-xs font-medium text-muted-foreground px-2 py-1 border-b border-border/50 mb-1">
                         Email Tone
                       </div>
@@ -2417,11 +2440,10 @@ export default function DashboardContent() {
                     </div>
                   )}
                 </div>
-
                 <Button 
                   onClick={() => handleGenerateContent('content')}
                   disabled={generating !== 'idle'}
-                  className="bg-gradient-to-r from-purple-600 to-blue-600 hover:from-purple-700 hover:to-blue-700 text-white px-6 shadow-sm transition-all hover:shadow-md"
+                  className="bg-gradient-to-r from-purple-600 to-blue-600 hover:from-purple-700 hover:to-blue-700 text-white px-4 shadow-sm transition-all hover:shadow-md h-8 text-sm"
                 >
                   {generating === 'content' ? (
                     <>
