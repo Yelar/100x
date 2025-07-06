@@ -25,7 +25,38 @@ export async function POST(req: NextRequest) {
     const rateLimitResponse = await applyRateLimit(req, 'email');
     if (rateLimitResponse) return rateLimitResponse;
 
-    const { to, subject, content, mode, draftId } = await req.json();
+    let to, subject, content, mode, draftId;
+    
+    // Check if the request is FormData or JSON
+    const contentType = req.headers.get('content-type') || '';
+    
+    if (contentType.includes('multipart/form-data')) {
+      // Handle FormData
+      const formData = await req.formData();
+      to = formData.get('to') as string;
+      subject = formData.get('subject') as string;
+      content = formData.get('content') as string;
+      mode = formData.get('mode') as string;
+      draftId = formData.get('draftId') as string;
+      
+      // Handle attachments if present
+      const attachments = formData.getAll('attachments') as File[];
+      if (attachments.length > 0) {
+        // For now, we'll just add attachment info to the content
+        // In a full implementation, you'd want to properly handle file attachments
+        const attachmentInfo = attachments.map(file => `[Attachment: ${file.name} (${file.size} bytes)]`).join('\n');
+        content = content + '\n\n' + attachmentInfo;
+      }
+    } else {
+      // Handle JSON
+      const body = await req.json();
+      to = body.to;
+      subject = body.subject;
+      content = body.content;
+      mode = body.mode;
+      draftId = body.draftId;
+    }
+
     const accessToken = await getAccessToken();
     if (!accessToken) {
       return Response.json({ error: 'Not authenticated' }, { status: 401 });
