@@ -8,13 +8,14 @@ const PROMPT_TEMPLATE = `You are an autocomplete assistant for email composition
 
 User Name: {userName}
 User Email: {userEmail}
+Email Tone: {tone}
 
 Conversation Context (for understanding the email topic):
 {conversationContext}
 
 User's partial sentence: "{textBeforeCursor}"
 
-Continue this sentence naturally:`;
+Continue this sentence naturally in a {tone} tone:`;
 
 function buildPrompt(vars: Record<string,string>): string {
   let prompt = PROMPT_TEMPLATE;
@@ -64,7 +65,7 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Invalid JSON in request body' }, { status: 400 });
     }
 
-    const { sentence, userData, conversationContext } = requestBody;
+    const { sentence, userData, conversationContext, tone } = requestBody;
 
     if (!sentence || typeof sentence !== 'string' || sentence.trim().length === 0) {
       console.log('Invalid sentence:', sentence);
@@ -113,6 +114,7 @@ export async function POST(request: NextRequest) {
               textBeforeCursor: sentence,
               userName: userData?.name || '',
               userEmail: userData?.email || '',
+              tone: tone || 'professional',
               conversationContext: contextString
             })
           },

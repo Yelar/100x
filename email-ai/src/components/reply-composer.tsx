@@ -181,6 +181,7 @@ export function ReplyComposer({
               name: userInfo?.name || '',
               email: userInfo?.email || ''
             },
+            tone: 'professional',
             conversationContext: {
               originalSubject,
               originalContent

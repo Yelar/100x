@@ -1496,6 +1496,7 @@ export default function DashboardContent() {
               name: userInfo?.name || '',
               email: userInfo?.email || ''
             },
+            tone: selectedTone,
             ...(selectedEmail && {
               conversationContext: {
                 threadMessages: selectedEmail.threadId && threadData[selectedEmail.threadId] 
@@ -1587,7 +1588,7 @@ export default function DashboardContent() {
       clearTimeout(timeout);
       controller.abort();
     };
-  }, [newEmail.content, isAutocompleteEnabled, selectedEmail, threadData, autoSuggestion]);
+  }, [newEmail.content, isAutocompleteEnabled, selectedEmail, threadData, autoSuggestion, selectedTone]);
 
   // Add at the top of the component
   const [spoilerBlur, setSpoilerBlur] = useState(12); // px
