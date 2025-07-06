@@ -7,6 +7,7 @@ import { Button } from "@/components/ui/button";
 import { Avatar, AvatarImage, AvatarFallback } from "@/components/ui/avatar";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Input } from "@/components/ui/input";
+import { Switch } from "@/components/ui/switch";
 import { Mail, Trash, ChevronLeft, ChevronRight, MoreVertical, Star, Tag, Flag, Archive, Sparkles, Paperclip, Download, Eye, Trash2, X } from "lucide-react";
 import {
   Dialog,
@@ -21,6 +22,7 @@ import api from '@/lib/axios';
 import { ResizablePanelGroup, ResizablePanel } from "@/components/ui/resizable";
 import { ResizableHandleWithReset } from "@/components/ui/resizable-handle-with-reset";
 import { useEmailPanelLayout } from "@/hooks/use-email-panel-layout";
+import { useAutocompleteSettings } from "@/hooks/use-autocomplete-settings";
 import { toast } from 'sonner';
 import { processEmailContent } from '@/lib/sanitize-html';
 import { useEmails } from './hooks/useEmails';
@@ -170,6 +172,7 @@ export default function DashboardContent() {
   const [isMiniReminderVisible, setIsMiniReminderVisible] = useState(false);
 
   const { refs, sizes, onResize } = useEmailPanelLayout();
+  const { isAutocompleteEnabled, toggleAutocomplete } = useAutocompleteSettings();
 
   const observer = useRef<IntersectionObserver | null>(null);
   
@@ -1444,6 +1447,71 @@ export default function DashboardContent() {
     router.replace(`/dashboard?${params.toString()}`, { scroll: false });
   };
 
+  const [autoSuggestion, setAutoSuggestion] = useState('');
+  const [autoAbortController, setAutoAbortController] = useState<AbortController | null>(null);
+
+  // watch content for autocomplete
+  useEffect(() => {
+    if (!isAutocompleteEnabled) {
+      setAutoSuggestion('');
+      return;
+    }
+    
+    const content = newEmail.content;
+    const lastFragmentMatch = content.match(/[^\.\!?]*$/);
+    const fragment = lastFragmentMatch ? lastFragmentMatch[0].trim() : '';
+    if (fragment.length < 5) {
+      setAutoSuggestion('');
+      return;
+    }
+    const controller = new AbortController();
+    if (autoAbortController) autoAbortController.abort();
+    setAutoAbortController(controller);
+    const timeout = setTimeout(async () => {
+      try {
+        const res = await fetch('/api/autocomplete', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ 
+            sentence: fragment,
+            userData: {
+              name: userInfo?.name || '',
+              email: userInfo?.email || ''
+            }
+          }),
+          signal: controller.signal,
+        });
+        if (res.ok) {
+          const data = await res.json();
+          if (data.completion) {
+            let comp = data.completion as string;
+            // Strip common prefix (case-insensitive) including trailing spaces
+            const fragLower = fragment.toLowerCase();
+            const compLower = comp.toLowerCase();
+            let idx = 0;
+            while (idx < fragLower.length && idx < compLower.length && fragLower[idx] === compLower[idx]) {
+              idx++;
+            }
+            comp = comp.slice(idx);
+            // If user ended without space and suggestion doesn't start with space/punct, prepend a space
+            if (fragment && !/\s$/.test(fragment) && comp && !/^[\s.,;!?)]/.test(comp)) {
+              comp = ' ' + comp;
+            }
+            comp = comp.replace(/^\s+/, ''); // trim leading whitespace after adjustment
+            // limit to 60 chars to avoid long ghost text
+            if (comp.length > 60) comp = comp.slice(0, 60);
+            setAutoSuggestion(comp);
+          } else {
+            setAutoSuggestion('');
+          }
+        }
+      } catch (e: unknown) {
+        if ((e as Error).name !== 'AbortError') console.error(e);
+      }
+    }, 600);
+    return () => clearTimeout(timeout);
+  }, [newEmail.content, isAutocompleteEnabled]);
+
   if (loading && !searchLoading && emails.length === 0) {
     return (
       <div className="min-h-screen bg-background flex flex-col h-screen overflow-hidden">
@@ -2092,15 +2160,27 @@ export default function DashboardContent() {
           {/* Header */}
           <div className="flex items-center justify-between px-3 py-2 border-b border-border/20 flex-none">
             <h2 className="text-base font-medium text-foreground">New Message</h2>
-            <DialogClose asChild>
-              <Button
-                variant="ghost"
-                size="sm"
-                className="text-muted-foreground hover:text-foreground hover:bg-black/10 dark:hover:bg-white/10 transition-colors h-5 w-5 p-0"
-              >
-                <X className="h-4 w-4" />
-              </Button>
-            </DialogClose>
+            <div className="flex items-center gap-4">
+              <div className="flex items-center space-x-2">
+                <Switch
+                  id="autocomplete-dashboard"
+                  checked={isAutocompleteEnabled}
+                  onCheckedChange={toggleAutocomplete}
+                />
+                <label htmlFor="autocomplete-dashboard" className="text-sm text-muted-foreground">
+                  AI Autocomplete
+                </label>
+              </div>
+              <DialogClose asChild>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  className="text-muted-foreground hover:text-foreground hover:bg-black/10 dark:hover:bg-white/10 transition-colors h-5 w-5 p-0"
+                >
+                  <X className="h-4 w-4" />
+                </Button>
+              </DialogClose>
+            </div>
           </div>
 
           {/* Content */}
@@ -2228,12 +2308,28 @@ export default function DashboardContent() {
                 </div>
               ) : (
                 /* Normal Edit Mode */
-                <textarea
-                  value={newEmail.content}
-                  onChange={(e) => setNewEmail({ ...newEmail, content: e.target.value })}
-                  className="w-full h-full border border-border/60 rounded-lg p-4 text-sm resize-none focus:outline-none focus:ring-2 focus:ring-orange-500/20 focus:border-orange-500/40 bg-gray-50 dark:bg-gray-800/50 placeholder:text-muted-foreground transition-all"
-                  placeholder="Write your email content here..."
-                />
+                <div className="relative w-full h-full">
+                  <textarea
+                    value={newEmail.content}
+                    onChange={(e) => setNewEmail({ ...newEmail, content: e.target.value })}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Tab' && autoSuggestion) {
+                        e.preventDefault();
+                        setNewEmail(prev => ({ ...prev, content: prev.content + autoSuggestion }));
+                        setAutoSuggestion('');
+                      }
+                    }}
+                    className="w-full h-full border border-border/60 rounded-lg p-4 text-sm resize-none focus:outline-none focus:ring-2 focus:ring-orange-500/20 focus:border-orange-500/40 bg-gray-50 dark:bg-gray-800/50 placeholder:text-muted-foreground transition-all"
+                    placeholder="Write your email content here..."
+                  />
+                  {autoSuggestion && (
+                    <div className="pointer-events-none absolute top-0 left-0 p-4 whitespace-pre-wrap text-sm text-muted-foreground select-none" style={{ whiteSpace: 'pre-wrap' }}>
+                      {/* Render existing content invisibly to align suggestion */}
+                      <span className="opacity-0">{newEmail.content}</span>
+                      <span className="opacity-60">{autoSuggestion}</span>
+                    </div>
+                  )}
+                </div>
               )}
             </div>
 

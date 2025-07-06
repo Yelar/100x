@@ -2,11 +2,18 @@ import { NextRequest, NextResponse } from 'next/server';
 import { cookies } from 'next/headers';
 import connectToDatabase from '@/lib/mongodb';
 import ChatUsage from '@/models/ChatUsage';
+import { getAccessToken } from '@/lib/auth';
 
 const DAILY_LIMIT = 20;
 
 export async function GET(request: NextRequest) {
   try {
+    // Auth
+    const accessToken = await getAccessToken();
+    if (!accessToken) {
+      return NextResponse.json({ error: 'Not authenticated' }, { status: 401 });
+    }
+
     const url = new URL(request.url);
     const queryEmail = url.searchParams.get('email');
     const cookieStore = await cookies();

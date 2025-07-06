@@ -4,9 +4,11 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
 import { Label } from '@/components/ui/label';
+import { Switch } from '@/components/ui/switch';
 import { Loader2 } from 'lucide-react';
 import { useToast } from '@/components/ui/use-toast';
 import debounce from 'lodash/debounce';
+import { useAutocompleteSettings } from '@/hooks/use-autocomplete-settings';
 
 export interface EmailComposeDialogHandle {
   /**
@@ -50,6 +52,7 @@ export const EmailComposeDialog = forwardRef<EmailComposeDialogHandle, EmailComp
     const [content, setContent] = useState('');
     const [draftId, setDraftId] = useState<string | null>(null);
     const { toast } = useToast();
+    const { isAutocompleteEnabled, toggleAutocomplete } = useAutocompleteSettings();
 
     const openDialog = async (arg1?: string, arg2?: string) => {
       // Case 1: open existing draft by ID
@@ -227,6 +230,16 @@ export const EmailComposeDialog = forwardRef<EmailComposeDialogHandle, EmailComp
               <DialogDescription>
                 Compose and send a new email message. Drafts are saved automatically.
               </DialogDescription>
+              <div className="flex items-center space-x-2 pt-2">
+                <Switch
+                  id="autocomplete"
+                  checked={isAutocompleteEnabled}
+                  onCheckedChange={toggleAutocomplete}
+                />
+                <Label htmlFor="autocomplete" className="text-sm">
+                  AI Autocomplete
+                </Label>
+              </div>
             </DialogHeader>
             <div className="grid gap-4 py-4">
               <div className="grid grid-cols-4 items-center gap-4">
