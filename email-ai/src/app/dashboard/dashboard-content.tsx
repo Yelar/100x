@@ -1743,9 +1743,9 @@ export default function DashboardContent() {
             defaultSize={sizes.emailListSize} 
             minSize={20}
             maxSize={40}
-            className="border-r border-border/50 flex flex-col overflow-hidden bg-gradient-to-b from-white/50 to-white/30 dark:from-background/50 dark:to-background/30"
+            className="border-r border-border/50 flex flex-col overflow-hidden bg-gradient-to-b from-white/50 to-white/30 dark:from-background/50 dark:to-background/30 rounded-r-xl"
           >
-            <div className="flex-none p-2 border-b border-border/50 flex items-center bg-white/50 dark:bg-background/50">
+            <div className="flex-none p-2 border-b border-border/50 flex items-center bg-white/50 dark:bg-background/50 rounded-t-xl">
               <Button 
                 variant="ghost" 
                 className="text-orange-500/80 hover:text-orange-500 hover:bg-orange-500/10 flex items-center gap-1.5"
@@ -1774,7 +1774,7 @@ export default function DashboardContent() {
             </div>
 
             {/* Scrollable email list */}
-            <div className="flex-1 overflow-y-auto">
+            <div className="flex-1 overflow-y-auto p-2">
               {emails
                 .filter(email => {
                   if (showStarredOnly && !email.starred) return false;
@@ -1789,8 +1789,8 @@ export default function DashboardContent() {
                     key={`${currentFolder}-${email.id}`}
                     ref={index === filteredEmails.length - 1 ? lastEmailElementRef : undefined}
                     onClick={() => handleEmailClick(email)}
-                    className={`relative flex items-center px-4 py-3 cursor-pointer border-b border-border/50 hover:bg-orange-500/5 ${
-                      selectedEmail?.id === email.id ? 'bg-orange-500/10' : ''
+                    className={`relative flex items-center px-4 py-3 cursor-pointer rounded-xl hover:bg-orange-500/5 transition-all duration-200 mb-2 ${
+                      selectedEmail?.id === email.id ? 'bg-orange-500/10 shadow-sm' : 'hover:shadow-sm'
                     }`}
                     style={{ minHeight: '64px' }}
                   >
@@ -1913,7 +1913,7 @@ export default function DashboardContent() {
             ref={refs.emailContentRef}
             defaultSize={sizes.emailContentSize} 
             minSize={40}
-            className="flex flex-col overflow-hidden bg-gradient-to-br from-white/50 to-orange-50/30 dark:from-background/50 dark:to-orange-900/5"
+            className="flex flex-col overflow-hidden bg-gradient-to-br from-white/50 to-orange-50/30 dark:from-background/50 dark:to-orange-900/5 rounded-l-xl"
           >
             {selectedEmail ? (
               <div className="flex-1 overflow-y-auto email-content-container">
