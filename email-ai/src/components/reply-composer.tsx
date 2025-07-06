@@ -144,15 +144,32 @@ export function ReplyComposer({
     }
     
     const contentText = content;
+    
+    // Don't generate autocomplete if content is empty
+    if (!contentText || contentText.trim() === '') {
+      setAutoSuggestion('');
+      return;
+    }
+    
     const lastFragmentMatch = contentText.match(/[^\.\!?]*$/);
     const fragment = lastFragmentMatch ? lastFragmentMatch[0].trim() : '';
+    
+    // Clear suggestion if fragment is too short or empty
     if (fragment.length < 5) {
       setAutoSuggestion('');
       return;
     }
+    
+    // Clear suggestion if user just applied the previous suggestion
+    if (autoSuggestion && contentText.endsWith(autoSuggestion)) {
+      setAutoSuggestion('');
+      return;
+    }
+    
     const controller = new AbortController();
     if (autoAbortController) autoAbortController.abort();
     setAutoAbortController(controller);
+    
     const timeout = setTimeout(async () => {
       try {
         const res = await fetch('/api/autocomplete', {
@@ -163,14 +180,52 @@ export function ReplyComposer({
             userData: {
               name: userInfo?.name || '',
               email: userInfo?.email || ''
+            },
+            conversationContext: {
+              originalSubject,
+              originalContent
             }
           }),
           signal: controller.signal,
         });
+        
+        if (res.status === 429) {
+          // Rate limited - clear suggestion and don't retry
+          setAutoSuggestion('');
+          return;
+        }
+        
         if (res.ok) {
           const data = await res.json();
           if (data.completion) {
             let comp = data.completion as string;
+            
+            // Clean up the completion
+            comp = comp.trim();
+            
+            // Filter out responses that start with common response patterns
+            const responsePatterns = [
+              /^(i think|i believe|in my opinion|from my perspective)/i,
+              /^(that's|that is|this is|it is|it's)/i,
+              /^(yes|no|absolutely|definitely|certainly)/i,
+              /^(thank you|thanks|appreciate)/i,
+              /^(regarding|concerning|about)/i,
+              /^(as for|as to|with regard to)/i
+            ];
+            
+            // If the completion looks like a response, try to extract continuation
+            if (responsePatterns.some(pattern => pattern.test(comp))) {
+              // Try to find the actual continuation after response words
+              const continuationMatch = comp.match(/(?:that|this|it|as|regarding|concerning|about|with regard to)\s+(.+)/i);
+              if (continuationMatch) {
+                comp = continuationMatch[1];
+              } else {
+                // If we can't extract continuation, skip this suggestion
+                setAutoSuggestion('');
+                return;
+              }
+            }
+            
             // Strip common prefix (case-insensitive) including trailing spaces
             const fragLower = fragment.toLowerCase();
             const compLower = comp.toLowerCase();
@@ -186,17 +241,32 @@ export function ReplyComposer({
             comp = comp.replace(/^\s+/, ''); // trim leading whitespace after adjustment
             // limit to 60 chars to avoid long ghost text
             if (comp.length > 60) comp = comp.slice(0, 60);
-            setAutoSuggestion(comp);
+            
+            // Only show suggestion if it's substantial and different from current content
+            if (comp.length > 2 && !contentText.endsWith(comp)) {
+              setAutoSuggestion(comp);
+            } else {
+              setAutoSuggestion('');
+            }
           } else {
             setAutoSuggestion('');
           }
+        } else {
+          setAutoSuggestion('');
         }
       } catch (e: unknown) {
-        if ((e as Error).name !== 'AbortError') console.error(e);
+        if ((e as Error).name !== 'AbortError') {
+          console.error('Autocomplete error:', e);
+          setAutoSuggestion('');
+        }
       }
-    }, 600);
-    return () => clearTimeout(timeout);
-  }, [content, isAutocompleteEnabled]);
+    }, 800); // Increased delay to reduce rate limiting
+    
+    return () => {
+      clearTimeout(timeout);
+      controller.abort();
+    };
+  }, [content, isAutocompleteEnabled, autoSuggestion]);
 
   return (
     <div className="space-y-4">
