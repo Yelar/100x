@@ -1,13 +1,20 @@
 import * as React from 'react';
 import { Button } from "@/components/ui/button";
+import { Switch } from "@/components/ui/switch";
+import { Label } from "@/components/ui/label";
 import { Sparkles, X } from "lucide-react";
 import api from '@/lib/axios';
+import { useAutocompleteSettings } from '@/hooks/use-autocomplete-settings';
 
 interface ReplyComposerProps {
   recipientEmail: string;
   originalSubject: string;
   originalContent: string;
   originalMessageId: string;
+  userInfo?: {
+    name: string;
+    email: string;
+  } | null;
   onClose: () => void;
   onSend: () => void;
 }
@@ -24,6 +31,7 @@ export function ReplyComposer({
   originalSubject, 
   originalContent,
   originalMessageId,
+  userInfo,
   onClose, 
   onSend 
 }: ReplyComposerProps) {
@@ -34,6 +42,11 @@ export function ReplyComposer({
   const [generatedChoices, setGeneratedChoices] = React.useState<GeneratedChoice[]>([]);
   const [showChoicesPreview, setShowChoicesPreview] = React.useState(false);
   const [selectedChoice, setSelectedChoice] = React.useState<GeneratedChoice | null>(null);
+  
+  // Autocomplete functionality
+  const { isAutocompleteEnabled, toggleAutocomplete } = useAutocompleteSettings();
+  const [autoSuggestion, setAutoSuggestion] = React.useState('');
+  const [autoAbortController, setAutoAbortController] = React.useState<AbortController | null>(null);
 
   const handleGenerateReply = async () => {
     if (!content.trim()) {
@@ -123,6 +136,68 @@ export function ReplyComposer({
     }
   };
 
+  // Autocomplete effect
+  React.useEffect(() => {
+    if (!isAutocompleteEnabled) {
+      setAutoSuggestion('');
+      return;
+    }
+    
+    const contentText = content;
+    const lastFragmentMatch = contentText.match(/[^\.\!?]*$/);
+    const fragment = lastFragmentMatch ? lastFragmentMatch[0].trim() : '';
+    if (fragment.length < 5) {
+      setAutoSuggestion('');
+      return;
+    }
+    const controller = new AbortController();
+    if (autoAbortController) autoAbortController.abort();
+    setAutoAbortController(controller);
+    const timeout = setTimeout(async () => {
+      try {
+        const res = await fetch('/api/autocomplete', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ 
+            sentence: fragment,
+            userData: {
+              name: userInfo?.name || '',
+              email: userInfo?.email || ''
+            }
+          }),
+          signal: controller.signal,
+        });
+        if (res.ok) {
+          const data = await res.json();
+          if (data.completion) {
+            let comp = data.completion as string;
+            // Strip common prefix (case-insensitive) including trailing spaces
+            const fragLower = fragment.toLowerCase();
+            const compLower = comp.toLowerCase();
+            let idx = 0;
+            while (idx < fragLower.length && idx < compLower.length && fragLower[idx] === compLower[idx]) {
+              idx++;
+            }
+            comp = comp.slice(idx);
+            // If user ended without space and suggestion doesn't start with space/punct, prepend a space
+            if (fragment && !/\s$/.test(fragment) && comp && !/^[\s.,;!?)]/.test(comp)) {
+              comp = ' ' + comp;
+            }
+            comp = comp.replace(/^\s+/, ''); // trim leading whitespace after adjustment
+            // limit to 60 chars to avoid long ghost text
+            if (comp.length > 60) comp = comp.slice(0, 60);
+            setAutoSuggestion(comp);
+          } else {
+            setAutoSuggestion('');
+          }
+        }
+      } catch (e: unknown) {
+        if ((e as Error).name !== 'AbortError') console.error(e);
+      }
+    }, 600);
+    return () => clearTimeout(timeout);
+  }, [content, isAutocompleteEnabled]);
+
   return (
     <div className="space-y-4">
       <div className="bg-card rounded-lg">
@@ -132,6 +207,17 @@ export function ReplyComposer({
               Reply in thread to <span className="font-medium text-foreground">{recipientEmail}</span>
             </div>
             <div className="flex items-center space-x-2">
+              {/* Autocomplete toggle */}
+              <div className="flex items-center space-x-2">
+                <Switch
+                  id="autocomplete-reply"
+                  checked={isAutocompleteEnabled}
+                  onCheckedChange={toggleAutocomplete}
+                />
+                <Label htmlFor="autocomplete-reply" className="text-sm text-muted-foreground">
+                  AI Autocomplete
+                </Label>
+              </div>
               {/* Generate Choices Button - only show when content is empty */}
               {!content.trim() && (
                 <Button
@@ -231,12 +317,28 @@ export function ReplyComposer({
               </div>
             </div>
           ) : (
-            <textarea
-              value={content}
-              onChange={(e) => setContent(e.target.value)}
-              placeholder="Write your reply or generate choices to get started..."
-              className="w-full h-32 p-3 text-sm bg-background border border-input rounded-md focus:outline-none focus:ring-2 focus:ring-ring resize-y min-h-[8rem]"
-            />
+            <div className="relative">
+              <textarea
+                value={content}
+                onChange={(e) => setContent(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === 'Tab' && autoSuggestion) {
+                    e.preventDefault();
+                    setContent(prev => prev + autoSuggestion);
+                    setAutoSuggestion('');
+                  }
+                }}
+                placeholder="Write your reply or generate choices to get started..."
+                className="w-full h-32 p-3 text-sm bg-background border border-input rounded-md focus:outline-none focus:ring-2 focus:ring-ring resize-y min-h-[8rem]"
+              />
+              {autoSuggestion && (
+                <div className="pointer-events-none absolute top-0 left-0 p-3 whitespace-pre-wrap text-sm text-muted-foreground select-none" style={{ whiteSpace: 'pre-wrap' }}>
+                  {/* Render existing content invisibly to align suggestion */}
+                  <span className="opacity-0">{content}</span>
+                  <span className="opacity-60">{autoSuggestion}</span>
+                </div>
+              )}
+            </div>
           )}
 
           <div className="flex justify-end space-x-2">

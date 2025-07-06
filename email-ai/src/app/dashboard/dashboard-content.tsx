@@ -2095,6 +2095,7 @@ export default function DashboardContent() {
                         originalSubject={selectedEmail.subject}
                         originalContent={selectedEmail.body.replace(/<[^>]*>/g, '')}
                         originalMessageId={selectedEmail.id}
+                        userInfo={userInfo}
                         onClose={() => setIsReplying(false)}
                         onSend={() => handleReplyComplete(selectedEmail.id)}
                       />
