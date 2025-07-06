@@ -1465,17 +1465,17 @@ export default function DashboardContent() {
       return;
     }
     
-    const lastFragmentMatch = content.match(/[^\.\!?]*$/);
-    const fragment = lastFragmentMatch ? lastFragmentMatch[0].trim() : '';
+    // Extract the last sentence fragment, preserving all whitespace
+    const lastSentenceMatch = content.match(/[^.!?]*$/);
+    const fragment = lastSentenceMatch ? lastSentenceMatch[0] : '';
     
-    // Clear suggestion if fragment is too short or empty
-    if (fragment.length < 5) {
+    // Check if the fragment has meaningful content (excluding just whitespace)
+    if (fragment.trim().length < 5) {
       setAutoSuggestion('');
       return;
     }
     
     // Clear suggestion if user just applied the previous suggestion
-    // This prevents the same suggestion from showing again
     if (autoSuggestion && content.endsWith(autoSuggestion)) {
       setAutoSuggestion('');
       return;
@@ -1509,7 +1509,6 @@ export default function DashboardContent() {
         });
         
         if (res.status === 429) {
-          // Rate limited - clear suggestion and don't retry
           setAutoSuggestion('');
           return;
         }
@@ -1534,32 +1533,62 @@ export default function DashboardContent() {
             
             // If the completion looks like a response, try to extract continuation
             if (responsePatterns.some(pattern => pattern.test(comp))) {
-              // Try to find the actual continuation after response words
               const continuationMatch = comp.match(/(?:that|this|it|as|regarding|concerning|about|with regard to)\s+(.+)/i);
               if (continuationMatch) {
                 comp = continuationMatch[1];
               } else {
-                // If we can't extract continuation, skip this suggestion
                 setAutoSuggestion('');
                 return;
               }
             }
             
-            // Strip common prefix (case-insensitive) including trailing spaces
-            const fragLower = fragment.toLowerCase();
+            // Get the meaningful part of the fragment (without leading spaces)
+            const fragmentTrimmed = fragment.trim();
+            
+            // Find the longest common prefix between the trimmed fragment and completion
+            const fragLower = fragmentTrimmed.toLowerCase();
             const compLower = comp.toLowerCase();
-            let idx = 0;
-            while (idx < fragLower.length && idx < compLower.length && fragLower[idx] === compLower[idx]) {
-              idx++;
-            }
-            comp = comp.slice(idx);
             
-            // If user ended without space and suggestion doesn't start with space/punct, prepend a space
-            if (fragment && !/\s$/.test(fragment) && comp && !/^[\s.,;!?)]/.test(comp)) {
-              comp = ' ' + comp;
+            let commonPrefixLength = 0;
+            for (let i = 0; i < Math.min(fragLower.length, compLower.length); i++) {
+              if (fragLower[i] === compLower[i]) {
+                commonPrefixLength = i + 1;
+              } else {
+                break;
+              }
             }
             
-            comp = comp.replace(/^\s+/, ''); // trim leading whitespace after adjustment
+            // Remove the common prefix from completion
+            comp = comp.slice(commonPrefixLength);
+            
+            // Handle spacing - only add space after complete words
+            const fragmentEndsWithSpace = /\s$/.test(fragment);
+            const completionStartsWithPunct = /^[.,;!?)]/.test(comp);
+            
+            // Check if we're completing a word vs continuing an incomplete word
+            const fragmentEndsWithCompleteWord = /\w\s*$/.test(fragment) && !/\w$/.test(fragment.trim());
+            const fragmentEndsWithIncompleteWord = /\w$/.test(fragment) && !fragmentEndsWithSpace;
+            
+            // Only add space if:
+            // 1. Fragment ends with space (preserve existing spacing), OR
+            // 2. Fragment ends with complete word and completion doesn't start with punctuation
+            // DON'T add space if we're in the middle of typing a word (incomplete word)
+            if (!completionStartsWithPunct && comp) {
+              if (fragmentEndsWithSpace) {
+                // Already has space, don't add another
+              } else if (fragmentEndsWithCompleteWord) {
+                // Complete word, add space
+                comp = ' ' + comp;
+              } else if (fragmentEndsWithIncompleteWord) {
+                // Incomplete word, don't add space (continue the word)
+              } else {
+                // Default case - add space
+                comp = ' ' + comp;
+              }
+            }
+            
+            // Clean up any excessive whitespace but preserve intentional single spaces
+            comp = comp.replace(/\s+/g, ' '); // Normalize multiple spaces to single space
             
             // limit to 60 chars to avoid long ghost text
             if (comp.length > 60) comp = comp.slice(0, 60);
@@ -1582,7 +1611,7 @@ export default function DashboardContent() {
           setAutoSuggestion('');
         }
       }
-    }, 800); // Increased delay to reduce rate limiting
+    }, 800);
     
     return () => {
       clearTimeout(timeout);
