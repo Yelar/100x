@@ -8,7 +8,20 @@ import { Avatar, AvatarImage, AvatarFallback } from "@/components/ui/avatar";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Input } from "@/components/ui/input";
 import { Switch } from "@/components/ui/switch";
-import { Mail, Trash, ChevronLeft, ChevronRight, MoreVertical, Star, Tag, Flag, Archive, Sparkles, Paperclip, Download, Eye, Trash2, X } from "lucide-react";
+import { 
+  Mail, 
+  Star, 
+  Trash2, 
+  Archive, 
+  Paperclip, 
+  Download, 
+  Eye, 
+  X, 
+  ChevronLeft, 
+  ChevronRight, 
+  Sparkles,
+  Trash
+} from 'lucide-react';
 import {
   Dialog,
   DialogContent,
@@ -1733,15 +1746,6 @@ export default function DashboardContent() {
             className="border-r border-border/50 flex flex-col overflow-hidden bg-gradient-to-b from-white/50 to-white/30 dark:from-background/50 dark:to-background/30"
           >
             <div className="flex-none p-2 border-b border-border/50 flex items-center bg-white/50 dark:bg-background/50">
-              <Button variant="ghost" size="icon" className="text-orange-500/80 hover:text-orange-500 hover:bg-orange-500/10">
-                <Archive className="h-5 w-5" />
-              </Button>
-              <Button variant="ghost" size="icon" className="text-orange-500/80 hover:text-orange-500 hover:bg-orange-500/10">
-                <Flag className="h-5 w-5" />
-              </Button>
-              <Button variant="ghost" size="icon" className="text-orange-500/80 hover:text-orange-500 hover:bg-orange-500/10">
-                <Tag className="h-5 w-5" />
-              </Button>
               <Button 
                 variant="ghost" 
                 className="text-orange-500/80 hover:text-orange-500 hover:bg-orange-500/10 flex items-center gap-1.5"
@@ -1974,9 +1978,6 @@ export default function DashboardContent() {
                             )
                           )}
                         </Button>
-                        <Button variant="ghost" size="icon" className="text-muted-foreground">
-                          <Archive className="h-5 w-5" />
-                        </Button>
                         <Button 
                           variant="ghost" 
                           size="icon" 
@@ -1994,12 +1995,6 @@ export default function DashboardContent() {
                           ) : (
                             <Star className={`h-5 w-5 ${selectedEmail.starred ? 'fill-current' : ''}`} />
                           )}
-                        </Button>
-                        <Button variant="ghost" size="icon" className="text-muted-foreground">
-                          <Flag className="h-5 w-5" />
-                        </Button>
-                        <Button variant="ghost" size="icon" className="text-muted-foreground">
-                          <MoreVertical className="h-5 w-5" />
                         </Button>
                       </div>
                     </div>
@@ -2023,14 +2018,6 @@ export default function DashboardContent() {
                         <div className="text-xs text-muted-foreground">
                           to me • {new Date(selectedEmail.date).toLocaleString()}
                         </div>
-                      </div>
-                      <div className="ml-auto">
-                        <Button variant="ghost" size="icon" className="text-muted-foreground">
-                          <ChevronLeft className="h-5 w-5" />
-                        </Button>
-                        <Button variant="ghost" size="icon" className="text-muted-foreground">
-                          <ChevronRight className="h-5 w-5" />
-                        </Button>
                       </div>
                     </div>
                   </div>
@@ -2239,12 +2226,6 @@ export default function DashboardContent() {
                         onClick={() => setIsReplying(true)}
                       >
                         Reply
-                      </Button>
-                      <Button 
-                        variant="outline" 
-                        className="text-orange-600 border-orange-200 hover:bg-orange-50 dark:text-orange-400 dark:border-orange-500/20 dark:hover:bg-orange-500/10"
-                      >
-                        Forward
                       </Button>
                     </div>
                   </div>
