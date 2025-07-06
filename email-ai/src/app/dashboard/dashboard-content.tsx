@@ -1362,6 +1362,40 @@ export default function DashboardContent() {
       .catch(() => setFlaggedEmails(getFlaggedEmailsLS()));
   }, [emails]);
 
+  const [chatOpen, setChatOpen] = useState(false);
+  const [shortcutsOpen, setShortcutsOpen] = useState(false);
+
+  // Global keyboard shortcuts
+  useEffect(() => {
+    const handler = (e: KeyboardEvent) => {
+      const cmd = e.metaKey || e.ctrlKey;
+      if (!cmd) return;
+      const key = e.key.toLowerCase();
+      // Cmd+N: new compose
+      if (key === 'n') {
+        e.preventDefault();
+        setComposing(prev => !prev);
+      }
+      // Cmd+Shift+B: toggle chat
+      if (key === 'b' && e.shiftKey) {
+        e.preventDefault();
+        setChatOpen(prev => !prev);
+      }
+      // Cmd+/ : open shortcuts  (also Cmd+Shift+/)
+      if (key === '/' && !e.shiftKey) {
+        e.preventDefault();
+        setShortcutsOpen(prev => !prev);
+      }
+      // Cmd+= (Cmd+Plus) : toggle shortcuts
+      if (key === '=' ) {
+        e.preventDefault();
+        setShortcutsOpen(prev => !prev);
+      }
+    };
+    window.addEventListener('keydown', handler);
+    return () => window.removeEventListener('keydown', handler);
+  }, []);
+
   if (loading && !searchLoading && emails.length === 0) {
     return (
       <div className="min-h-screen bg-background flex flex-col h-screen overflow-hidden">
@@ -1435,6 +1469,7 @@ export default function DashboardContent() {
             if (isMiniReminderVisible) setIsMiniReminderVisible(false);
             else setIsReminderOpen(true);
           }}
+          onShowShortcuts={() => setShortcutsOpen(true)}
         />
 
         <ResizablePanelGroup 
@@ -1980,7 +2015,12 @@ export default function DashboardContent() {
       </div>
 
       <Suspense fallback={<></>}>
-        <ChatWith100x onEmailClick={handleEmailClickById} userInfo={userInfo} />
+        <ChatWith100x 
+          isOpen={chatOpen}
+          onToggle={() => setChatOpen(prev => !prev)}
+          onEmailClick={handleEmailClickById} 
+          userInfo={userInfo} 
+        />
       </Suspense>
 
       {/* Follow-up reminder component */}
@@ -2406,6 +2446,25 @@ export default function DashboardContent() {
               <Trash2 className="h-4 w-4 mr-2" />
               Delete
             </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Shortcuts dialog */}
+      <Dialog open={shortcutsOpen} onOpenChange={setShortcutsOpen}>
+        <DialogContent className="max-w-md p-6">
+          <DialogHeader>
+            <DialogTitle>Keyboard Shortcuts</DialogTitle>
+          </DialogHeader>
+          <ul className="space-y-2 text-sm mt-4">
+            <li className="flex justify-between"><span className="font-medium">New Email</span><span className="text-muted-foreground">⌘ N</span></li>
+            <li className="flex justify-between"><span className="font-medium">Toggle Chat</span><span className="text-muted-foreground">⌘ ⇧ B</span></li>
+            <li className="flex justify-between"><span className="font-medium">Show Shortcuts</span><span className="text-muted-foreground">⌘ /</span></li>
+          </ul>
+          <DialogFooter className="pt-4">
+            <DialogClose asChild>
+              <Button variant="outline">Close</Button>
+            </DialogClose>
           </DialogFooter>
         </DialogContent>
       </Dialog>

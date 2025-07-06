@@ -1,6 +1,6 @@
 'use client';
 import React from 'react';
-import { Inbox, Star, Send, Shield, Trash, FileText, Plus, Bell } from 'lucide-react';
+import { Inbox, Star, Send, Shield, Trash, FileText, Plus, Bell, Keyboard } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { FLAG_LABELS, FLAG_COLORS } from '../utils/flags';
 
@@ -16,6 +16,7 @@ interface SidebarProps {
   flaggedEmails: Record<string, { flag: string }>;
   onCompose: () => void;
   onReminderClick: () => void;
+  onShowShortcuts: () => void;
 }
 
 export function Sidebar({
@@ -28,6 +29,7 @@ export function Sidebar({
   flaggedEmails,
   onCompose,
   onReminderClick,
+  onShowShortcuts,
 }: SidebarProps) {
   const folderBtn = (
     icon: React.ReactNode,
@@ -91,6 +93,16 @@ export function Sidebar({
         >
           <Bell className="mr-2 h-5 w-5" />
           Reminders
+        </Button>
+
+        {/* Shortcuts */}
+        <Button
+          variant="ghost"
+          onClick={onShowShortcuts}
+          className="w-full justify-start font-medium text-muted-foreground hover:text-orange-600 hover:bg-orange-500/10"
+        >
+          <Keyboard className="mr-2 h-5 w-5" />
+          Shortcuts
         </Button>
 
         {/* Flag filters */}
