@@ -1391,10 +1391,58 @@ export default function DashboardContent() {
         e.preventDefault();
         setShortcutsOpen(prev => !prev);
       }
+      // Cmd+I : Inbox
+      if (key === 'i' && !e.shiftKey) {
+        e.preventDefault();
+        navigateFolder('inbox');
+      }
+      // Cmd+Shift+S : Sent
+      if (key === 's' && e.shiftKey) {
+        e.preventDefault();
+        navigateFolder('sent');
+      }
+      // Cmd+Shift+T : Trash
+      if (key === 't' && e.shiftKey) {
+        e.preventDefault();
+        navigateFolder('trash');
+      }
+      // Cmd+D : Drafts
+      if (key === 'd' && !e.shiftKey) {
+        e.preventDefault();
+        navigateFolder('drafts');
+      }
+      // Cmd+K or Cmd+F: focus search
+      if ((key === 'k' || key === 'f') && !e.shiftKey) {
+        e.preventDefault();
+        const el = document.getElementById('dashboard-search-input') as HTMLInputElement | null;
+        el?.focus();
+      }
+      // Cmd+Shift+L : TLDR summary of selected email
+      if (key === 'l' && e.shiftKey) {
+        e.preventDefault();
+        if (selectedEmail) {
+          handleGenerateTLDR(selectedEmail);
+        }
+      }
+      // Cmd+Shift+M : Summarize all emails in current view
+      if (key === 'm' && e.shiftKey) {
+        e.preventDefault();
+        handleSummarize();
+      }
     };
     window.addEventListener('keydown', handler);
     return () => window.removeEventListener('keydown', handler);
   }, []);
+
+  const navigateFolder = (folder: 'inbox' | 'sent' | 'trash' | 'drafts') => {
+    setCurrentFolder(folder);
+    setSelectedEmail(null);
+    setSelectedFlag(null);
+    const params = new URLSearchParams(window.location.search);
+    params.delete('threadId');
+    params.set('folder', folder);
+    router.replace(`/dashboard?${params.toString()}`, { scroll: false });
+  };
 
   if (loading && !searchLoading && emails.length === 0) {
     return (
@@ -2459,7 +2507,14 @@ export default function DashboardContent() {
           <ul className="space-y-2 text-sm mt-4">
             <li className="flex justify-between"><span className="font-medium">New Email</span><span className="text-muted-foreground">⌘ N</span></li>
             <li className="flex justify-between"><span className="font-medium">Toggle Chat</span><span className="text-muted-foreground">⌘ ⇧ B</span></li>
-            <li className="flex justify-between"><span className="font-medium">Show Shortcuts</span><span className="text-muted-foreground">⌘ /</span></li>
+            <li className="flex justify-between"><span className="font-medium">Show Shortcuts</span><span className="text-muted-foreground">⌘ /  or  ⌘ +</span></li>
+            <li className="flex justify-between"><span className="font-medium">Inbox</span><span className="text-muted-foreground">⌘ I</span></li>
+            <li className="flex justify-between"><span className="font-medium">Sent</span><span className="text-muted-foreground">⌘ ⇧ S</span></li>
+            <li className="flex justify-between"><span className="font-medium">Trash</span><span className="text-muted-foreground">⌘ ⇧ T</span></li>
+            <li className="flex justify-between"><span className="font-medium">Drafts</span><span className="text-muted-foreground">⌘ D</span></li>
+            <li className="flex justify-between"><span className="font-medium">Focus Search</span><span className="text-muted-foreground">⌘ K  / ⌘ F</span></li>
+            <li className="flex justify-between"><span className="font-medium">TLDR Current Email</span><span className="text-muted-foreground">⌘ ⇧ L</span></li>
+            <li className="flex justify-between"><span className="font-medium">Summarize All Emails</span><span className="text-muted-foreground">⌘ ⇧ M</span></li>
           </ul>
           <DialogFooter className="pt-4">
             <DialogClose asChild>

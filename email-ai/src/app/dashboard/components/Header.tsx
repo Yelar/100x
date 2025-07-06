@@ -49,6 +49,7 @@ export function Header({ userInfo, searchQuery, onSearchChange, onSearchKeyDown,
             onChange={onSearchChange}
             onKeyDown={onSearchKeyDown}
             className="pl-10 pr-4 py-2 h-10 rounded-full bg-white/5 border-orange-500/20 hover:border-orange-500/30 focus:border-orange-500/50 w-full transition-colors"
+            id="dashboard-search-input"
           />
         </div>
       </div>
