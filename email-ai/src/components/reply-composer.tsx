@@ -266,7 +266,7 @@ export function ReplyComposer({
                 // Incomplete word, don't add space (continue the word)
               } else {
                 // Default case - add space
-                comp = ' ' + comp;
+              comp = ' ' + comp;
               }
             }
             
@@ -278,7 +278,7 @@ export function ReplyComposer({
             
             // Only show suggestion if it's substantial and different from current content
             if (comp.length > 2 && !contentText.endsWith(comp)) {
-              setAutoSuggestion(comp);
+            setAutoSuggestion(comp);
             } else {
               setAutoSuggestion('');
             }

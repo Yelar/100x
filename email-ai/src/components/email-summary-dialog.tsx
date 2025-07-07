@@ -53,13 +53,13 @@ export function EmailSummaryDialog({
 
   return (
     <Dialog open={isOpen} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-3xl max-h-[90vh] p-6">
+      <DialogContent className="w-[95vw] max-w-3xl max-h-[90vh] p-4 md:p-6 mx-auto">
         <VisuallyHidden>
           <DialogTitle>Email Summary</DialogTitle>
         </VisuallyHidden>
-        <ScrollArea className="h-[calc(90vh-4rem)] pr-4">
-          <div className="space-y-6">
-            <h2 className="text-xl font-semibold mb-2">Email Summary</h2>
+        <ScrollArea className="h-[calc(90vh-4rem)] pr-2 md:pr-4">
+          <div className="space-y-4 md:space-y-6">
+            <h2 className="text-lg md:text-xl font-semibold mb-2">Email Summary</h2>
             {/* Overall Summary */}
             <div className="space-y-2">
               <h3 className="text-lg font-semibold">Overall Summary</h3>

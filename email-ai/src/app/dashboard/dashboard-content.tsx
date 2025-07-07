@@ -183,6 +183,9 @@ export default function DashboardContent() {
   // New state for reminder system
   const [isReminderOpen, setIsReminderOpen] = useState(false);
   const [isMiniReminderVisible, setIsMiniReminderVisible] = useState(false);
+  const [isSidebarOpen, setIsSidebarOpen] = useState(false);
+  const [isMobileEmailView, setIsMobileEmailView] = useState(false);
+  const [isMobile, setIsMobile] = useState(false);
 
   const { refs, sizes, onResize } = useEmailPanelLayout();
   const { isAutocompleteEnabled, toggleAutocomplete } = useAutocompleteSettings();
@@ -404,6 +407,11 @@ export default function DashboardContent() {
   const handleEmailClick = useCallback(
     async (email: Email) => {
       setSelectedEmail(email);
+
+      // Set mobile view on mobile devices
+      if (isMobile) {
+        setIsMobileEmailView(true);
+      }
 
       // Update the URL so that the current thread is reflected in the query params
       const params = new URLSearchParams(window.location.search);
@@ -896,21 +904,54 @@ export default function DashboardContent() {
 
   const handleEmailClickById = useCallback((emailId: string) => {
     console.log('Opening email from chat:', emailId);
-     
-     // Update URL and let the URL navigation effect handle the rest
-     const params = new URLSearchParams(window.location.search);
-     params.set('threadId', emailId); // Treat emailId as threadId since chat passes threadId
-     const newUrl = `/dashboard?${params.toString()}`;
-     console.log('Calling router.push with:', newUrl);
-     console.log('Current URL before push:', window.location.href);
-     router.push(newUrl);
-     
-     // Check if URL actually changed after a short delay
-     setTimeout(() => {
-       console.log('URL after push:', window.location.href);
-       console.log('SearchParams after push:', searchParams.get('threadId'));
-     }, 100);
-   }, [router, searchParams]);
+    
+    // First try to find the email in the current list
+    const targetEmail = emails.find(email => email.threadId === emailId || email.id === emailId);
+    
+    if (targetEmail) {
+      console.log('Found email in current list, selecting directly:', targetEmail.subject);
+      setSelectedEmail(targetEmail);
+      
+      // Set mobile view on mobile devices
+      if (isMobile) {
+        setIsMobileEmailView(true);
+      }
+      
+      // Update URL
+      const params = new URLSearchParams(window.location.search);
+      if (targetEmail.threadId) {
+        params.set('threadId', targetEmail.threadId);
+      } else {
+        params.delete('threadId');
+      }
+      router.replace(`/dashboard?${params.toString()}`, { scroll: false });
+      
+      // Load thread data if needed
+      if (targetEmail.threadId && !threadData[targetEmail.threadId]) {
+        handleToggleThread(targetEmail.threadId);
+      }
+    } else {
+      console.log('Email not found in current list, fetching by threadId:', emailId);
+      
+      // Set mobile view on mobile devices even if we need to fetch
+      if (isMobile) {
+        setIsMobileEmailView(true);
+      }
+      
+      // Update URL and let the URL navigation effect handle the rest
+      const params = new URLSearchParams(window.location.search);
+      params.set('threadId', emailId); // Treat emailId as threadId since chat passes threadId
+      const newUrl = `/dashboard?${params.toString()}`;
+      console.log('Calling router.push with:', newUrl);
+      router.push(newUrl);
+      
+      // Check if URL actually changed after a short delay
+      setTimeout(() => {
+        console.log('URL after push:', window.location.href);
+        console.log('SearchParams after push:', searchParams.get('threadId'));
+      }, 100);
+    }
+  }, [router, searchParams, emails, isMobile, threadData, handleToggleThread]);
 
   const handleEmailClickFromSummary = useCallback((emailId: string) => {
     const email = emails.find(e => e.id === emailId);
@@ -1596,8 +1637,8 @@ export default function DashboardContent() {
                 // Incomplete word, don't add space (continue the word)
               } else {
                 // Default case - add space
-                comp = ' ' + comp;
-              }
+              comp = ' ' + comp;
+            }
             }
             
             // Clean up any excessive whitespace but preserve intentional single spaces
@@ -1608,10 +1649,10 @@ export default function DashboardContent() {
             
             // Only show suggestion if it's substantial and different from current content
             if (comp.length > 2 && !content.endsWith(comp)) {
-              setAutoSuggestion(comp);
-            } else {
-              setAutoSuggestion('');
-            }
+            setAutoSuggestion(comp);
+          } else {
+            setAutoSuggestion('');
+          }
           } else {
             setAutoSuggestion('');
           }
@@ -1635,6 +1676,55 @@ export default function DashboardContent() {
   // Add at the top of the component
   const [spoilerBlur, setSpoilerBlur] = useState(12); // px
   const [spoilerAnimating, setSpoilerAnimating] = useState(false);
+
+  // Handle sidebar state for mobile/desktop
+  useEffect(() => {
+    const handleResize = () => {
+      const isMobileView = window.innerWidth < 768;
+      setIsMobile(isMobileView);
+      
+      if (isMobileView) {
+        setIsSidebarOpen(false);
+      } else {
+        setIsSidebarOpen(true);
+        // Reset mobile email view when switching to desktop
+        setIsMobileEmailView(false);
+      }
+    };
+
+    // Set initial state
+    handleResize();
+
+    // Add event listener
+    window.addEventListener('resize', handleResize);
+
+    // Cleanup
+    return () => window.removeEventListener('resize', handleResize);
+  }, []);
+
+  // Handle keyboard shortcuts
+  useEffect(() => {
+    const handler = (e: KeyboardEvent) => {
+      // Close sidebar on Escape key (mobile only)
+      if (e.key === 'Escape' && isMobile && isSidebarOpen) {
+        setIsSidebarOpen(false);
+      }
+      // Go back to email list on Escape key when in mobile email view
+      if (e.key === 'Escape' && isMobile && isMobileEmailView) {
+        setIsMobileEmailView(false);
+        setSelectedEmail(null);
+      }
+    };
+
+    window.addEventListener('keydown', handler);
+    return () => window.removeEventListener('keydown', handler);
+  }, [isSidebarOpen, isMobileEmailView, isMobile]);
+
+  // Function to go back to email list on mobile
+  const handleBackToEmailList = () => {
+    setIsMobileEmailView(false);
+    setSelectedEmail(null);
+  };
 
   useEffect(() => {
     if (generatedPreview.isVisible) {
@@ -1691,6 +1781,7 @@ export default function DashboardContent() {
         onSearchChange={handleSearch}
         onSearchKeyDown={handleSearchKeyDown}
         onLogout={handleLogout}
+        onToggleSidebar={() => setIsSidebarOpen(!isSidebarOpen)}
       />
 
       <div className="flex flex-1 overflow-hidden">
@@ -1700,6 +1791,7 @@ export default function DashboardContent() {
             setCurrentFolder(folder);
             setSelectedEmail(null);
             setSelectedFlag(null);
+            setIsMobileEmailView(false);
 
             const params = new URLSearchParams(window.location.search);
             params.delete('threadId');
@@ -1711,6 +1803,7 @@ export default function DashboardContent() {
             setShowStarredOnly(!showStarredOnly);
             setSelectedEmail(null);
             setSelectedFlag(null);
+            setIsMobileEmailView(false);
             const params = new URLSearchParams(window.location.search);
             params.delete('threadId');
             if (!showStarredOnly) params.set('view', 'starred');
@@ -1721,6 +1814,7 @@ export default function DashboardContent() {
           onSelectFlag={(flag) => {
             setSelectedFlag(flag);
             setSelectedEmail(null);
+            setIsMobileEmailView(false);
           }}
           flaggedEmails={flaggedEmails}
           onCompose={() => setComposing(true)}
@@ -1730,13 +1824,374 @@ export default function DashboardContent() {
             else setIsReminderOpen(true);
           }}
           onShowShortcuts={() => setShortcutsOpen(true)}
+          isOpen={isSidebarOpen}
+          onClose={() => setIsSidebarOpen(false)}
         />
 
-        <ResizablePanelGroup 
-          direction="horizontal" 
-          className="flex-1"
-          onLayout={onResize}
-        >
+        {/* Mobile: Show only email list or only email content */}
+        {isMobile ? (
+          <div className="flex-1 flex flex-col overflow-hidden">
+            {/* Mobile: Show email list when not viewing an email */}
+            {!isMobileEmailView && (
+              <div className="flex-1 flex flex-col overflow-hidden bg-gradient-to-b from-white/50 to-white/30 dark:from-background/50 dark:to-background/30 rounded-xl">
+                <div className="flex-none p-2 border-b border-border/50 flex items-center bg-white/50 dark:bg-background/50 rounded-t-xl">
+                  <Button 
+                    variant="ghost" 
+                    className="text-orange-500/80 hover:text-orange-500 hover:bg-orange-500/10 flex items-center gap-1.5"
+                    onClick={handleSummarize}
+                    disabled={isSummarizing || emails.length === 0}
+                  >
+                    {isSummarizing ? (
+                      <>
+                        <span className="animate-spin">⟳</span>
+                        <span>Summarizing...</span>
+                      </>
+                    ) : (
+                      <>
+                        <Sparkles className="h-5 w-5" />
+                        <span>Summarize</span>
+                      </>
+                    )}
+                  </Button>
+                  <div className="flex-1" />
+                  <Button variant="ghost" size="icon" disabled={!nextPageToken} className="text-orange-500/80 hover:text-orange-500 hover:bg-orange-500/10">
+                    <ChevronLeft className="h-5 w-5" />
+                  </Button>
+                  <Button variant="ghost" size="icon" disabled={!nextPageToken} className="text-orange-500/80 hover:text-orange-500 hover:bg-orange-500/10" onClick={() => fetchEmails(nextPageToken)}>
+                    <ChevronRight className="h-5 w-5" />
+                  </Button>
+                </div>
+
+                {/* Scrollable email list */}
+                <div className="flex-1 overflow-y-auto p-2">
+                  {emails
+                    .filter(email => {
+                      if (showStarredOnly && !email.starred) return false;
+                      if (selectedFlag) {
+                        const flag = flaggedEmails[email.id]?.flag;
+                        return flag === selectedFlag;
+                      }
+                      return true;
+                    })
+                    .map((email, index, filteredEmails) => (
+                      <div
+                        key={`${currentFolder}-${email.id}`}
+                        ref={index === filteredEmails.length - 1 ? lastEmailElementRef : undefined}
+                        onClick={() => handleEmailClick(email)}
+                        className={`relative flex items-center px-4 py-3 cursor-pointer rounded-xl hover:bg-orange-500/5 transition-all duration-200 mb-2 ${
+                          selectedEmail?.id === email.id ? 'bg-orange-500/10 shadow-sm' : 'hover:shadow-sm'
+                        }`}
+                        style={{ minHeight: '64px' }}
+                      >
+                        <div className="flex-shrink-0 mr-4">
+                          <Avatar className="h-9 w-9">
+                            <AvatarImage src={undefined} alt={email.from} />
+                            <AvatarFallback className="bg-muted text-foreground font-bold">
+                              {email.from.trim()[0]?.toUpperCase()}
+                            </AvatarFallback>
+                          </Avatar>
+                        </div>
+                        <div className="flex-1 min-w-0">
+                          <div className="flex justify-between items-baseline">
+                            <span className="font-bold text-sm truncate max-w-[180px] text-foreground">
+                              {email.from.split('<')[0] || email.from}
+                            </span>
+                            <div className="flex items-center gap-2">
+                              {email.attachments && email.attachments.length > 0 && (
+                                <span title={`${email.attachments.length} attachment${email.attachments.length > 1 ? 's' : ''}`}>
+                                  <Paperclip className="h-3 w-3 text-muted-foreground" />
+                                </span>
+                              )}
+                              <Button
+                                variant="ghost"
+                                size="sm"
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  handleStarEmail(email.id, email.starred || false);
+                                }}
+                                disabled={starringEmails.has(email.id)}
+                                className={`p-1 h-6 w-6 ${
+                                  email.starred 
+                                    ? 'text-amber-500 hover:text-amber-600' 
+                                    : 'text-muted-foreground hover:text-amber-500'
+                                }`}
+                                title={email.starred ? 'Unstar email' : 'Star email'}
+                              >
+                                {starringEmails.has(email.id) ? (
+                                  <span className="animate-spin text-xs">⟳</span>
+                                ) : (
+                                  <Star className={`h-3 w-3 ${email.starred ? 'fill-current' : ''}`} />
+                                )}
+                              </Button>
+                              <Button
+                                variant="ghost"
+                                size="sm"
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  if (currentFolder === 'trash') {
+                                    handleRestoreEmail(email.id);
+                                  } else {
+                                    showDeleteConfirmation(email.id, email.subject, 'trash');
+                                  }
+                                }}
+                                disabled={deletingEmails.has(email.id)}
+                                className={`p-1 h-6 w-6 ${
+                                  currentFolder === 'trash' 
+                                    ? 'text-muted-foreground hover:text-green-500' 
+                                    : 'text-muted-foreground hover:text-red-500'
+                                }`}
+                                title={currentFolder === 'trash' ? 'Restore email' : 'Delete email'}
+                              >
+                                {deletingEmails.has(email.id) ? (
+                                  <span className="animate-spin text-xs">⟳</span>
+                                ) : (
+                                  currentFolder === 'trash' ? (
+                                    <Archive className="h-3 w-3" />
+                                  ) : (
+                                    <Trash2 className="h-3 w-3" />
+                                  )
+                                )}
+                              </Button>
+                              <span className="text-xs text-muted-foreground whitespace-nowrap ml-2">
+                                {formatEmailDate(email.date)}
+                              </span>
+                            </div>
+                          </div>
+                          <div className="text-xs text-muted-foreground truncate mt-0.5">
+                            {email.snippet}
+                          </div>
+                        </div>
+                        {flaggedEmails[email.id]?.flag && (
+                          <span
+                            className={`absolute right-4 bottom-2 inline-flex items-center px-2 py-0.5 rounded-full text-xs font-semibold ${FLAG_COLORS[flaggedEmails[email.id].flag]} text-white shadow`}
+                            title={FLAG_LABELS[flaggedEmails[email.id].flag]}
+                            style={{ minWidth: '2.5rem', justifyContent: 'center', textTransform: 'lowercase', pointerEvents: 'none' }}
+                          >
+                            {flaggedEmails[email.id].flag}
+                          </span>
+                        )}
+                      </div>
+                    ))}
+                  
+                  {/* Loading spinner - only show for initial load or infinite scroll */}
+                  {((!emails.length && loading) || loadingMore) && (
+                    <div className="p-4 flex justify-center">
+                      <div className="w-8 h-8 border-4 border-muted border-t-foreground rounded-full animate-spin"></div>
+                    </div>
+                  )}
+
+                  {!loading && !searchLoading && !loadingMore && emails.length === 0 && (
+                    <div className="p-8 text-center text-muted-foreground">
+                      <Mail className="h-12 w-12 mx-auto mb-4 opacity-30" />
+                      <p>{searchQuery ? 'No emails found matching your search' : 'No emails found'}</p>
+                    </div>
+                  )}
+                </div>
+              </div>
+            )}
+
+            {/* Mobile: Show email content when viewing an email */}
+            {isMobileEmailView && selectedEmail && (
+              <div className="flex-1 flex flex-col overflow-hidden bg-gradient-to-br from-white/50 to-orange-50/30 dark:from-background/50 dark:to-orange-900/5 rounded-xl">
+                <div className="flex-1 overflow-y-auto email-content-container">
+                  <div className="p-4 md:p-6 max-w-5xl mx-auto">
+                    {/* Mobile back button */}
+                    <div className="flex items-center mb-4">
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        onClick={handleBackToEmailList}
+                        className="text-muted-foreground hover:text-foreground mb-2"
+                      >
+                        <ChevronLeft className="h-4 w-4 mr-2" />
+                        Back to emails
+                      </Button>
+                    </div>
+
+                    <div className="pb-4 mb-4 border-b border-border">
+                      {currentFolder === 'trash' && (
+                        <div className="mb-4 p-3 bg-amber-50 dark:bg-amber-950/20 border border-amber-200 dark:border-amber-800 rounded-lg">
+                          <div className="flex items-center gap-2 text-amber-800 dark:text-amber-200">
+                            <Trash className="h-4 w-4" />
+                            <span className="text-sm font-medium">This email is in trash</span>
+                          </div>
+                        </div>
+                      )}
+                      <div className="flex items-center justify-between mb-3">
+                        <h1 className="text-xl font-bold text-foreground">{selectedEmail.subject}</h1>
+                        <div className="flex space-x-2">
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={() => handleGenerateTLDR(selectedEmail)}
+                            disabled={isGeneratingSummary || !isEmailLong(selectedEmail.body)}
+                            className="gap-2"
+                            title="Generate TLDR summary"
+                          >
+                            {isGeneratingSummary ? (
+                              <>
+                                <span className="animate-spin">⟳</span>
+                                Summarizing...
+                              </>
+                            ) : (
+                              <>
+                                <Sparkles className="h-4 w-4" />
+                                TLDR
+                              </>
+                            )}
+                          </Button>
+                          <Button 
+                            variant="ghost" 
+                            size="icon" 
+                            onClick={() => {
+                              if (currentFolder === 'trash') {
+                                handleRestoreEmail(selectedEmail.id);
+                              } else {
+                                showDeleteConfirmation(selectedEmail.id, selectedEmail.subject, 'trash');
+                              }
+                            }}
+                            disabled={deletingEmails.has(selectedEmail.id)}
+                            className={`${
+                              currentFolder === 'trash' 
+                                ? 'text-muted-foreground hover:text-green-500' 
+                                : 'text-muted-foreground hover:text-red-500'
+                            }`}
+                            title={currentFolder === 'trash' ? 'Restore email' : 'Delete email'}
+                          >
+                            {deletingEmails.has(selectedEmail.id) ? (
+                              <span className="animate-spin">⟳</span>
+                            ) : (
+                              currentFolder === 'trash' ? (
+                                <Archive className="h-5 w-5" />
+                              ) : (
+                                <Trash2 className="h-5 w-5" />
+                              )
+                            )}
+                          </Button>
+                          <Button 
+                            variant="ghost" 
+                            size="icon" 
+                            onClick={() => handleStarEmail(selectedEmail.id, selectedEmail.starred || false)}
+                            disabled={starringEmails.has(selectedEmail.id)}
+                            className={`${
+                              selectedEmail.starred 
+                                ? 'text-amber-500 hover:text-amber-600' 
+                                : 'text-muted-foreground hover:text-amber-500'
+                            }`}
+                            title={selectedEmail.starred ? 'Unstar email' : 'Star email'}
+                          >
+                            {starringEmails.has(selectedEmail.id) ? (
+                              <span className="animate-spin">⟳</span>
+                            ) : (
+                              <Star className={`h-5 w-5 ${selectedEmail.starred ? 'fill-current' : ''}`} />
+                            )}
+                          </Button>
+                        </div>
+                      </div>
+                      <div className="flex items-center mb-3">
+                        <Avatar className="h-10 w-10 mr-3">
+                          <AvatarFallback className="bg-primary/10 text-primary">
+                            {selectedEmail.from.charAt(0).toUpperCase()}
+                          </AvatarFallback>
+                        </Avatar>
+                        <div>
+                          <div className="flex items-center">
+                            <span className="font-medium text-foreground">
+                              {selectedEmail.from.split('<')[0] || selectedEmail.from}
+                            </span>
+                            <span className="text-xs text-muted-foreground ml-2">
+                              {`<${selectedEmail.from.match(/<(.+)>/)
+                                ? selectedEmail.from.match(/<(.+)>/)?.[1]
+                                : selectedEmail.from}>`}
+                            </span>
+                          </div>
+                          <div className="text-xs text-muted-foreground">
+                            to me • {new Date(selectedEmail.date).toLocaleString()}
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                    <div className="prose prose-sm dark:prose-invert max-w-none">
+                      <div className="relative w-full">
+                        <div 
+                          className="email-content-container animate-in fade-in duration-300"
+                          style={{
+                            minHeight: "300px",
+                            borderRadius: '8px'
+                          }}
+                        >
+                          <div dangerouslySetInnerHTML={{ __html: sanitizedSelectedEmailBody }} />
+                        </div>
+                      </div>
+                    </div>
+                    
+                    {/* Attachments section */}
+                    {selectedEmail.attachments && selectedEmail.attachments.length > 0 && (
+                      <div className="mt-6 border-t border-border/50 pt-6">
+                        <h3 className="text-lg font-semibold mb-4 text-foreground flex items-center gap-2">
+                          <Paperclip className="h-5 w-5" />
+                          Attachments ({selectedEmail.attachments.length})
+                        </h3>
+                        <div className="bg-muted/10 rounded-lg border border-border/30 overflow-hidden">
+                          {selectedEmail.attachments.map((attachment, index) => (
+                            <div
+                              key={index}
+                              className={`flex items-center justify-between p-4 hover:bg-muted/20 transition-colors ${
+                                index < selectedEmail.attachments!.length - 1 ? 'border-b border-border/20' : ''
+                              }`}
+                            >
+                              <div className="flex items-center gap-3 flex-1 min-w-0">
+                                <div className="w-10 h-10 rounded-lg bg-primary/10 flex items-center justify-center flex-shrink-0">
+                                  <span className="text-lg">
+                                    {getFileTypeIcon(attachment.mimeType, attachment.filename)}
+                                  </span>
+                                </div>
+                                <div className="flex-1 min-w-0">
+                                  <div className="font-medium text-foreground truncate" title={attachment.filename}>
+                                    {attachment.filename}
+                                  </div>
+                                  <div className="text-xs text-muted-foreground">
+                                    {formatFileSize(attachment.size)}
+                                  </div>
+                                </div>
+                              </div>
+                              <div className="flex gap-2">
+                                <Button
+                                  variant="outline"
+                                  size="sm"
+                                  onClick={() => handleAttachmentPreview(attachment, selectedEmail.id)}
+                                  className="text-xs"
+                                >
+                                  <Eye className="h-3 w-3 mr-1" />
+                                  Preview
+                                </Button>
+                                <Button
+                                  variant="outline"
+                                  size="sm"
+                                  onClick={() => handleAttachmentDownload(attachment, selectedEmail.id)}
+                                  className="text-xs"
+                                >
+                                  <Download className="h-3 w-3 mr-1" />
+                                  Download
+                                </Button>
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                </div>
+              </div>
+            )}
+          </div>
+        ) : (
+          /* Desktop: Show both panels side by side */
+          <ResizablePanelGroup 
+            direction="horizontal" 
+            className="flex-1"
+            onLayout={onResize}
+          >
           {/* Email list */}
           <ResizablePanel 
             ref={refs.emailListRef}
@@ -2241,6 +2696,7 @@ export default function DashboardContent() {
             )}
           </ResizablePanel>
         </ResizablePanelGroup>
+        )}
       </div>
 
       <Suspense fallback={<></>}>
@@ -2492,14 +2948,14 @@ export default function DashboardContent() {
                   )}
                 </Button>
               </div>
-              {/* Tone and Generate controls right-aligned */}
-              <div className="flex items-center gap-2 ml-auto">
+              {/* Tone and Generate controls - stacked on mobile, side by side on desktop */}
+              <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2 ml-auto">
                 <div className="relative tone-dropdown-container">
                   <Button
                     variant="outline"
                     size="sm"
                     onClick={() => setShowToneDropdown(!showToneDropdown)}
-                    className="gap-2 border-border/60 hover:bg-gray-50 dark:hover:bg-gray-800"
+                    className="gap-2 border-border/60 hover:bg-gray-50 dark:hover:bg-gray-800 w-full sm:w-auto"
                   >
                     {toneOptions.find(t => t.value === selectedTone)?.emoji}
                     <span className="text-xs">{toneOptions.find(t => t.value === selectedTone)?.label.split(' ')[1]}</span>
@@ -2531,7 +2987,7 @@ export default function DashboardContent() {
                 <Button 
                   onClick={() => handleGenerateContent('content')}
                   disabled={generating !== 'idle'}
-                  className="bg-gradient-to-r from-purple-600 to-blue-600 hover:from-purple-700 hover:to-blue-700 text-white px-4 shadow-sm transition-all hover:shadow-md h-8 text-sm"
+                  className="bg-gradient-to-r from-purple-600 to-blue-600 hover:from-purple-700 hover:to-blue-700 text-white px-4 shadow-sm transition-all hover:shadow-md h-8 text-sm w-full sm:w-auto"
                 >
                   {generating === 'content' ? (
                     <>

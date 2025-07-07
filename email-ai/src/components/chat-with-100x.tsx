@@ -595,14 +595,14 @@ export function ChatWith100x({ isOpen: propIsOpen, onToggle: propOnToggle, onEma
   }, [userInfo?.email]);
 
   return (
-    <div className="fixed bottom-4 right-4 z-50">
+    <div className="fixed bottom-4 right-4 md:right-4 md:bottom-4 left-4 md:left-auto z-50">
       {isOpen ? (
         <div 
           ref={chatContainerRef}
           onClick={handleChatClick}
           className={`transition-opacity duration-300 ${isFocused ? 'opacity-100' : 'opacity-30 hover:opacity-60'}`}
         >
-          <Card className="w-[400px] flex flex-col shadow-2xl border-orange-200/50 bg-background/95 backdrop-blur-lg animate-in slide-in-from-bottom-2">
+          <Card className="w-full md:w-[400px] flex flex-col shadow-2xl border-orange-200/50 bg-background/95 backdrop-blur-lg animate-in slide-in-from-bottom-2 max-h-[80vh] md:max-h-none">
             <CardHeader 
               className="px-4 py-3 border-b hover:bg-accent/50 transition-colors flex items-center justify-between"
             >
@@ -652,7 +652,7 @@ export function ChatWith100x({ isOpen: propIsOpen, onToggle: propOnToggle, onEma
               </div>
             </CardHeader>
             
-            <div className="h-[500px] flex flex-col">
+            <div className="h-[400px] md:h-[500px] flex flex-col">
               <ScrollArea className="flex-1 p-4">
                 <div className="space-y-4 mb-4">
                   {/* Error message display */}
@@ -806,7 +806,7 @@ export function ChatWith100x({ isOpen: propIsOpen, onToggle: propOnToggle, onEma
         </div>
       ) : (
         <Button
-          className="flex items-center gap-2 bg-gradient-to-r from-orange-500 to-orange-600 hover:from-orange-600 hover:to-orange-700 shadow-lg hover:shadow-xl transition-all duration-300 text-white px-4"
+          className="flex items-center gap-2 bg-gradient-to-r from-orange-500 to-orange-600 hover:from-orange-600 hover:to-orange-700 shadow-lg hover:shadow-xl transition-all duration-300 text-white px-4 w-full md:w-auto justify-center"
           onClick={onToggle}
         >
           <Bot className="h-5 w-5" />
