@@ -27,6 +27,27 @@ const oauth2Client = new OAuth2Client(
   clientSecrets.web?.redirect_uris?.[0]
 );
 
+// Helper function to detect if content contains HTML
+function containsHtml(content: string): boolean {
+  return /<[^>]+>/.test(content);
+}
+
+// Helper function to convert HTML to plain text
+function htmlToPlainText(html: string): string {
+  return html
+    .replace(/<br\s*\/?>/gi, '\n')
+    .replace(/<\/p>/gi, '\n')
+    .replace(/<[^>]*>/g, '')
+    .replace(/&nbsp;/g, ' ')
+    .replace(/&amp;/g, '&')
+    .replace(/&lt;/g, '<')
+    .replace(/&gt;/g, '>')
+    .replace(/&quot;/g, '"')
+    .replace(/&#39;/g, "'")
+    .replace(/\n\n+/g, '\n\n')
+    .trim();
+}
+
 export async function POST(request: Request) {
   try {
     const cookiesList = await cookies();
@@ -87,27 +108,69 @@ export async function POST(request: Request) {
       return subject;
     };
 
-    // Create proper email with base64 encoding for the entire message
-    const rawEmail = [
-      `From: ${userEmail}`,
-      `To: ${to}`,
-      `Subject: ${encodeSubject(subject)}`,
-      `Date: ${new Date().toUTCString()}`,
-      `Message-ID: <reply-${Date.now()}-${Math.random().toString(36).substr(2, 9)}@gmail.com>`,
-      'MIME-Version: 1.0',
-      'Content-Type: text/plain; charset=UTF-8',
-    ];
+    const isHtml = containsHtml(content);
+    let rawEmail: string[];
 
-    // Add threading headers for proper conversation threading
-    if (messageIdHeader) {
-      rawEmail.push(`In-Reply-To: ${messageIdHeader}`);
-    }
-    if (references) {
-      rawEmail.push(`References: ${references}`);
-    }
+    if (isHtml) {
+      // Send as HTML email with multipart content
+      const boundary = `boundary_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+      const plainTextContent = htmlToPlainText(content);
+      
+      rawEmail = [
+        `From: ${userEmail}`,
+        `To: ${to}`,
+        `Subject: ${encodeSubject(subject)}`,
+        `Date: ${new Date().toUTCString()}`,
+        `Message-ID: <reply-${Date.now()}-${Math.random().toString(36).substr(2, 9)}@gmail.com>`,
+        'MIME-Version: 1.0',
+        `Content-Type: multipart/alternative; boundary="${boundary}"`
+      ];
 
-    rawEmail.push(''); // Empty line before content
-    rawEmail.push(content);
+      // Add threading headers for proper conversation threading
+      if (messageIdHeader) {
+        rawEmail.push(`In-Reply-To: ${messageIdHeader}`);
+      }
+      if (references) {
+        rawEmail.push(`References: ${references}`);
+      }
+
+      rawEmail.push(''); // Empty line before content
+      rawEmail.push(`--${boundary}`);
+      rawEmail.push('Content-Type: text/plain; charset=UTF-8');
+      rawEmail.push('Content-Transfer-Encoding: 7bit');
+      rawEmail.push('');
+      rawEmail.push(plainTextContent);
+      rawEmail.push('');
+      rawEmail.push(`--${boundary}`);
+      rawEmail.push('Content-Type: text/html; charset=UTF-8');
+      rawEmail.push('Content-Transfer-Encoding: 7bit');
+      rawEmail.push('');
+      rawEmail.push(content);
+      rawEmail.push('');
+      rawEmail.push(`--${boundary}--`);
+    } else {
+      // Create proper email with plain text
+      rawEmail = [
+        `From: ${userEmail}`,
+        `To: ${to}`,
+        `Subject: ${encodeSubject(subject)}`,
+        `Date: ${new Date().toUTCString()}`,
+        `Message-ID: <reply-${Date.now()}-${Math.random().toString(36).substr(2, 9)}@gmail.com>`,
+        'MIME-Version: 1.0',
+        'Content-Type: text/plain; charset=UTF-8',
+      ];
+
+      // Add threading headers for proper conversation threading
+      if (messageIdHeader) {
+        rawEmail.push(`In-Reply-To: ${messageIdHeader}`);
+      }
+      if (references) {
+        rawEmail.push(`References: ${references}`);
+      }
+
+      rawEmail.push(''); // Empty line before content
+      rawEmail.push(content);
+    }
 
     const emailMessage = rawEmail.join('\r\n');
     const encodedEmail = Buffer.from(emailMessage).toString('base64')

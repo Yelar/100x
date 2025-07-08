@@ -4,19 +4,73 @@ import { NextRequest, NextResponse } from 'next/server';
 import { OAuth2Client } from 'google-auth-library';
 import { applyRateLimit } from '@/lib/rate-limit';
 
+// Helper function to detect if content contains HTML
+function containsHtml(content: string): boolean {
+  return /<[^>]+>/.test(content);
+}
+
+// Helper function to convert HTML to plain text
+function htmlToPlainText(html: string): string {
+  return html
+    .replace(/<br\s*\/?>/gi, '\n')
+    .replace(/<\/p>/gi, '\n')
+    .replace(/<[^>]*>/g, '')
+    .replace(/&nbsp;/g, ' ')
+    .replace(/&amp;/g, '&')
+    .replace(/&lt;/g, '<')
+    .replace(/&gt;/g, '>')
+    .replace(/&quot;/g, '"')
+    .replace(/&#39;/g, "'")
+    .replace(/\n\n+/g, '\n\n')
+    .trim();
+}
+
 // Helper function to encode email to base64URL format
 function encodeEmail(to: string, subject: string, content: string) {
-  const emailLines = [
-    `To: ${to}`,
-    `Subject: ${subject}`,
-    'Content-Type: text/plain; charset=utf-8',
-    'MIME-Version: 1.0',
-    '',
-    content
-  ];
+  const isHtml = containsHtml(content);
   
-  const emailContent = emailLines.join('\r\n');
-  return Buffer.from(emailContent).toString('base64url').replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
+  if (isHtml) {
+    // Send as HTML email with multipart content
+    const boundary = `boundary_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+    const plainTextContent = htmlToPlainText(content);
+    
+    const emailLines = [
+      `To: ${to}`,
+      `Subject: ${subject}`,
+      'MIME-Version: 1.0',
+      `Content-Type: multipart/alternative; boundary="${boundary}"`,
+      '',
+      `--${boundary}`,
+      'Content-Type: text/plain; charset=utf-8',
+      'Content-Transfer-Encoding: 7bit',
+      '',
+      plainTextContent,
+      '',
+      `--${boundary}`,
+      'Content-Type: text/html; charset=utf-8',
+      'Content-Transfer-Encoding: 7bit',
+      '',
+      content,
+      '',
+      `--${boundary}--`
+    ];
+    
+    const emailContent = emailLines.join('\r\n');
+    return Buffer.from(emailContent).toString('base64url').replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
+  } else {
+    // Send as plain text
+    const emailLines = [
+      `To: ${to}`,
+      `Subject: ${subject}`,
+      'Content-Type: text/plain; charset=utf-8',
+      'MIME-Version: 1.0',
+      '',
+      content
+    ];
+    
+    const emailContent = emailLines.join('\r\n');
+    return Buffer.from(emailContent).toString('base64url').replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
+  }
 }
 
 export async function POST(req: NextRequest) {

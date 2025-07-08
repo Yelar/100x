@@ -74,7 +74,7 @@ export const RichTextEditor = forwardRef<RichTextEditorHandle, RichTextEditorPro
   ({ placeholder, content, onChange, onTextChange, className, autoSuggestion, onKeyDown, minHeight = '8rem' }, ref) => {
     const [linkUrl, setLinkUrl] = React.useState('');
     const [showLinkInput, setShowLinkInput] = React.useState(false);
-    const [cursorPosition, setCursorPosition] = React.useState<{ top: number; left: number } | null>(null);
+    const [cursorPosition, setCursorPosition] = React.useState<{ top: number; left: number; editorWidth: number; wouldOverflow: boolean } | null>(null);
 
     const editor = useEditor({
       extensions: [
@@ -83,7 +83,25 @@ export const RichTextEditor = forwardRef<RichTextEditorHandle, RichTextEditorPro
             levels: [1, 2, 3],
           },
         }),
-        TextStyle,
+        TextStyle.extend({
+          addAttributes() {
+            return {
+              ...this.parent?.(),
+              style: {
+                default: null,
+                parseHTML: element => element.getAttribute('style'),
+                renderHTML: attributes => {
+                  if (!attributes.style) {
+                    return {}
+                  }
+                  return {
+                    style: attributes.style,
+                  }
+                },
+              },
+            }
+          },
+        }),
         FontFamily.configure({
           types: ['textStyle'],
         }),
@@ -160,23 +178,25 @@ export const RichTextEditor = forwardRef<RichTextEditorHandle, RichTextEditorPro
         const pos = view.coordsAtPos($anchor.pos);
         const editorRect = view.dom.getBoundingClientRect();
         
-        let left = pos.left - editorRect.left;
+        const left = pos.left - editorRect.left;
         const top = pos.top - editorRect.top;
-        
-        // Adjust position if popup would overflow to the right
-        const popupWidth = 200; // max-width of autocomplete popup
         const editorWidth = editorRect.width;
         
-        if (left + popupWidth > editorWidth) {
-          left = Math.max(0, editorWidth - popupWidth - 10); // 10px margin from right edge
-        }
+        // Estimate if popup would overflow (assuming typical autocomplete length)
+        const estimatedPopupWidth = autoSuggestion ? Math.min(autoSuggestion.length * 8 + 100, 400) : 200;
+        const wouldOverflow = left + estimatedPopupWidth > editorWidth;
         
-        setCursorPosition({ top, left });
+        setCursorPosition({ 
+          top, 
+          left, 
+          editorWidth,
+          wouldOverflow
+        });
       } catch {
         // Ignore positioning errors
         setCursorPosition(null);
       }
-    }, [editor]);
+    }, [editor, autoSuggestion]);
 
     const addLink = useCallback(() => {
       if (!linkUrl) return;
@@ -213,7 +233,13 @@ export const RichTextEditor = forwardRef<RichTextEditorHandle, RichTextEditorPro
               {fontFamilies.map((font) => (
                 <DropdownMenuItem
                   key={font.value}
-                  onClick={() => editor.chain().focus().setFontFamily(font.value).run()}
+                  onClick={() => {
+                    if (font.value) {
+                      editor.chain().focus().setFontFamily(font.value).run();
+                    } else {
+                      editor.chain().focus().unsetFontFamily().run();
+                    }
+                  }}
                   style={{ fontFamily: font.value }}
                 >
                   {font.label}
@@ -233,7 +259,13 @@ export const RichTextEditor = forwardRef<RichTextEditorHandle, RichTextEditorPro
               {fontSizes.map((size) => (
                 <DropdownMenuItem
                   key={size}
-                  onClick={() => editor.chain().focus().setFontFamily(`inherit`).run()}
+                  onClick={() => {
+                    // Apply font size using TextStyle mark
+                    editor.chain()
+                      .focus()
+                      .setMark('textStyle', { style: `font-size: ${size}` })
+                      .run();
+                  }}
                   style={{ fontSize: size }}
                 >
                   {size}
@@ -288,10 +320,18 @@ export const RichTextEditor = forwardRef<RichTextEditorHandle, RichTextEditorPro
                     key={color}
                     className="w-6 h-6 rounded border border-gray-300 hover:scale-110 transition-transform"
                     style={{ backgroundColor: color }}
-                    onClick={() => editor.chain().focus().setColor(color).run()}
+                    onClick={() => {
+                      editor.chain().focus().setColor(color).run();
+                    }}
                   />
                 ))}
               </div>
+              <button
+                className="w-full mt-2 p-1 text-xs text-gray-600 hover:bg-gray-100 rounded"
+                onClick={() => editor.chain().focus().unsetColor().run()}
+              >
+                Reset Color
+              </button>
             </DropdownMenuContent>
           </DropdownMenu>
 
@@ -411,18 +451,21 @@ export const RichTextEditor = forwardRef<RichTextEditorHandle, RichTextEditorPro
           {/* Autocomplete Suggestion */}
           {autoSuggestion && cursorPosition && (
             <div 
-              className="pointer-events-none absolute bg-gray-100 dark:bg-gray-800 text-muted-foreground px-2 py-1 rounded shadow-sm text-sm border z-10"
+              className="pointer-events-none absolute bg-gray-100 dark:bg-gray-800 text-muted-foreground px-3 py-2 rounded shadow-sm text-sm border z-10 whitespace-nowrap"
               style={{
                 top: cursorPosition.top + 24,
-                left: cursorPosition.left,
-                maxWidth: '200px',
-                whiteSpace: 'nowrap',
-                overflow: 'hidden',
-                textOverflow: 'ellipsis'
+                ...(cursorPosition.wouldOverflow ? {
+                  right: cursorPosition.editorWidth - cursorPosition.left,
+                  left: 'auto'
+                } : {
+                  left: cursorPosition.left
+                })
               }}
             >
-              <span className="opacity-60">{autoSuggestion}</span>
-              <span className="text-xs text-muted-foreground/60 ml-2">Tab to accept</span>
+              <div className="flex items-center gap-2">
+                <span className="opacity-80">{autoSuggestion}</span>
+                <span className="text-xs text-muted-foreground/60 flex-shrink-0">↹ Tab</span>
+              </div>
             </div>
           )}
         </div>

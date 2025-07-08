@@ -3161,7 +3161,7 @@ export default function DashboardContent() {
             <li className="flex justify-between"><span className="font-medium">Focus Search</span><span className="text-muted-foreground">⌘ K  / ⌘ F</span></li>
             <li className="flex justify-between"><span className="font-medium">TLDR Current Email</span><span className="text-muted-foreground">⌘ ⇧ L</span></li>
             <li className="flex justify-between"><span className="font-medium">Summarize All Emails</span><span className="text-muted-foreground">⌘ ⇧ M</span></li>
-          </ul>
+          </ul> 
           <DialogFooter className="pt-4">
             <DialogClose asChild>
               <Button variant="outline">Close</Button>
