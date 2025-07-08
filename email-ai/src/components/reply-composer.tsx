@@ -5,6 +5,7 @@ import { Label } from "@/components/ui/label";
 import { Sparkles, X } from "lucide-react";
 import api from '@/lib/axios';
 import { useAutocompleteSettings } from '@/hooks/use-autocomplete-settings';
+import { RichTextEditor, RichTextEditorHandle } from "@/components/ui/rich-text-editor";
 
 interface ReplyComposerProps {
   recipientEmail: string;
@@ -36,6 +37,7 @@ export function ReplyComposer({
   onSend 
 }: ReplyComposerProps) {
   const [content, setContent] = React.useState('');
+  const [contentText, setContentText] = React.useState('');
   const [generating, setGenerating] = React.useState(false);
   const [generatingChoices, setGeneratingChoices] = React.useState(false);
   const [sending, setSending] = React.useState(false);
@@ -47,20 +49,21 @@ export function ReplyComposer({
   const { isAutocompleteEnabled, toggleAutocomplete } = useAutocompleteSettings();
   const [autoSuggestion, setAutoSuggestion] = React.useState('');
   const [autoAbortController, setAutoAbortController] = React.useState<AbortController | null>(null);
+  const editorRef = React.useRef<RichTextEditorHandle>(null);
 
   const handleGenerateReply = async () => {
-    if (!content.trim()) {
+    if (!contentText.trim()) {
       return;
     }
 
     try {
       setGenerating(true);
       const response = await api.post('/api/generate', {
-        prompt: `Improve this email reply while maintaining the same intent and key points:\n${content}`,
+        prompt: `Improve this email reply while maintaining the same intent and key points:\n${contentText}`,
         type: 'content',
         context: {
           type: 'email_reply',
-          userContent: content,
+          userContent: contentText,
           originalSubject,
           originalContent
         }
@@ -68,7 +71,7 @@ export function ReplyComposer({
 
       const data = response.data as { content?: string };
       if (data.content) {
-        setContent(data.content.trim());
+        editorRef.current?.setContent(data.content.trim());
       }
     } catch (error) {
       console.error('Error generating reply:', error);
@@ -104,7 +107,7 @@ export function ReplyComposer({
 
   const handleAcceptChoice = () => {
     if (selectedChoice) {
-      setContent(selectedChoice.content);
+      editorRef.current?.setContent(selectedChoice.content);
       setShowChoicesPreview(false);
       setGeneratedChoices([]);
       setSelectedChoice(null);
@@ -118,14 +121,14 @@ export function ReplyComposer({
   };
 
   const handleSend = async () => {
-    if (!content.trim()) return;
+    if (!contentText.trim()) return;
 
     try {
       setSending(true);
       await api.post('/api/emails/reply', {
         to: recipientEmail,
         subject: `Re: ${originalSubject}`,
-        content: content,
+        content: content, // Send HTML content
         originalMessageId: originalMessageId,
       });
       onSend();
@@ -142,8 +145,6 @@ export function ReplyComposer({
       setAutoSuggestion('');
       return;
     }
-    
-    const contentText = content;
     
     // Don't generate autocomplete if content is empty
     if (!contentText || contentText.trim() === '') {
@@ -300,7 +301,7 @@ export function ReplyComposer({
       clearTimeout(timeout);
       controller.abort();
     };
-  }, [content, isAutocompleteEnabled, autoSuggestion]);
+  }, [contentText, isAutocompleteEnabled, autoSuggestion]);
 
   return (
     <div className="space-y-4">
@@ -323,7 +324,7 @@ export function ReplyComposer({
                 </Label>
               </div>
               {/* Generate Choices Button - only show when content is empty */}
-              {!content.trim() && (
+              {!contentText.trim() && (
                 <Button
                   variant="outline"
                   size="sm"
@@ -342,7 +343,7 @@ export function ReplyComposer({
               )}
               
               {/* Improve Reply Button - only show when content exists */}
-              {content.trim() && (
+              {contentText.trim() && (
                 <Button
                   variant="outline"
                   size="sm"
@@ -421,28 +422,22 @@ export function ReplyComposer({
               </div>
             </div>
           ) : (
-            <div className="relative">
-              <textarea
-                value={content}
-                onChange={(e) => setContent(e.target.value)}
-                onKeyDown={(e) => {
-                  if (e.key === 'Tab' && autoSuggestion) {
-                    e.preventDefault();
-                    setContent(prev => prev + autoSuggestion);
-                    setAutoSuggestion('');
-                  }
-                }}
-                placeholder="Write your reply or generate choices to get started..."
-                className="w-full h-32 p-3 text-sm bg-background border border-input rounded-md focus:outline-none focus:ring-2 focus:ring-ring resize-y min-h-[8rem]"
-              />
-              {autoSuggestion && (
-                <div className="pointer-events-none absolute top-0 left-0 p-3 whitespace-pre-wrap text-sm text-muted-foreground select-none" style={{ whiteSpace: 'pre-wrap' }}>
-                  {/* Render existing content invisibly to align suggestion */}
-                  <span className="opacity-0">{content}</span>
-                  <span className="opacity-60">{autoSuggestion}</span>
-                </div>
-              )}
-            </div>
+            <RichTextEditor
+              ref={editorRef}
+              content={content}
+              onChange={setContent}
+              onTextChange={setContentText}
+              placeholder="Write your reply or generate choices to get started..."
+              autoSuggestion={autoSuggestion}
+              onKeyDown={(e) => {
+                if (e.key === 'Tab' && autoSuggestion) {
+                  e.preventDefault();
+                  setContentText(prev => prev + autoSuggestion);
+                  setAutoSuggestion('');
+                }
+              }}
+              minHeight="8rem"
+            />
           )}
 
           <div className="flex justify-end space-x-2">
@@ -455,7 +450,7 @@ export function ReplyComposer({
             </Button>
             <Button
               onClick={handleSend}
-              disabled={sending || !content.trim()}
+              disabled={sending || !contentText.trim()}
               className="h-8"
             >
               {sending ? 'Sending...' : 'Send'}

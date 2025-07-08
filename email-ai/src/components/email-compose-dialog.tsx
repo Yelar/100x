@@ -1,14 +1,14 @@
-import { useState, useImperativeHandle, forwardRef, useEffect, useCallback } from 'react';
+import { useState, useImperativeHandle, forwardRef, useEffect, useCallback, useRef } from 'react';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import { Textarea } from '@/components/ui/textarea';
 import { Label } from '@/components/ui/label';
 import { Switch } from '@/components/ui/switch';
 import { Loader2, Sparkles } from 'lucide-react';
 import { useToast } from '@/components/ui/use-toast';
 import debounce from 'lodash/debounce';
 import { useAutocompleteSettings } from '@/hooks/use-autocomplete-settings';
+import { RichTextEditor, RichTextEditorHandle } from '@/components/ui/rich-text-editor';
 
 export interface EmailComposeDialogHandle {
   /**
@@ -50,10 +50,12 @@ export const EmailComposeDialog = forwardRef<EmailComposeDialogHandle, EmailComp
     const [to, setTo] = useState('');
     const [subject, setSubject] = useState('');
     const [content, setContent] = useState('');
+    const [contentText, setContentText] = useState('');
     const [draftId, setDraftId] = useState<string | null>(null);
     const [generating, setGenerating] = useState<'idle' | 'subject' | 'content'>('idle');
     const { toast } = useToast();
     const { isAutocompleteEnabled, toggleAutocomplete } = useAutocompleteSettings();
+    const editorRef = useRef<RichTextEditorHandle>(null);
 
     const openDialog = async (arg1?: string, arg2?: string) => {
       // Case 1: open existing draft by ID
@@ -77,7 +79,7 @@ export const EmailComposeDialog = forwardRef<EmailComposeDialogHandle, EmailComp
           setDraftId(draftId);
           setTo(to);
           setSubject(subject);
-          setContent(content);
+          editorRef.current?.setContent(content);
         } catch (error) {
           console.error('Error loading draft:', error);
           toast({
@@ -91,7 +93,7 @@ export const EmailComposeDialog = forwardRef<EmailComposeDialogHandle, EmailComp
         setDraftId(null);
         setTo('');
         setSubject(arg1);
-        setContent(arg2);
+        editorRef.current?.setContent(arg2);
       }
       setOpen(true);
     };
@@ -115,8 +117,8 @@ export const EmailComposeDialog = forwardRef<EmailComposeDialogHandle, EmailComp
 
     // Create a debounced function to save draft
     const saveDraft = useCallback(
-      debounce(async (to: string, subject: string, content: string, draftId: string | null) => {
-        if (!to && !subject && !content) return;
+      debounce(async (to: string, subject: string, contentText: string, draftId: string | null) => {
+        if (!to && !subject && !contentText) return;
 
         try {
           const endpoint = '/api/emails/send';
@@ -124,7 +126,7 @@ export const EmailComposeDialog = forwardRef<EmailComposeDialogHandle, EmailComp
           const body = {
             to,
             subject,
-            content,
+            content: contentText,
             mode: 'draft',
             draftId
           };
@@ -160,12 +162,12 @@ export const EmailComposeDialog = forwardRef<EmailComposeDialogHandle, EmailComp
     // Save draft when content changes
     useEffect(() => {
       if (open) {
-        saveDraft(to, subject, content, draftId);
+        saveDraft(to, subject, contentText, draftId);
       }
       return () => {
         saveDraft.cancel();
       };
-    }, [to, subject, content, draftId, open, saveDraft]);
+    }, [to, subject, contentText, draftId, open, saveDraft]);
 
     const handleSubmit = async (e: React.FormEvent) => {
       e.preventDefault();
@@ -179,7 +181,7 @@ export const EmailComposeDialog = forwardRef<EmailComposeDialogHandle, EmailComp
           body: JSON.stringify({
             to,
             subject,
-            content,
+            content: content, // Send HTML content
             draftId
           }),
         });
@@ -193,7 +195,7 @@ export const EmailComposeDialog = forwardRef<EmailComposeDialogHandle, EmailComp
         });
         setTo('');
         setSubject('');
-        setContent('');
+        editorRef.current?.setContent('');
         setDraftId(null);
         setOpen(false);
         onEmailSent?.();
@@ -218,7 +220,7 @@ export const EmailComposeDialog = forwardRef<EmailComposeDialogHandle, EmailComp
           },
           body: JSON.stringify({
             type,
-            context: type === 'subject' ? content : subject,
+            context: type === 'subject' ? contentText : subject,
             tone: 'professional'
           }),
         });
@@ -231,7 +233,7 @@ export const EmailComposeDialog = forwardRef<EmailComposeDialogHandle, EmailComp
         if (type === 'subject') {
           setSubject(data.content);
         } else {
-          setContent(data.content);
+          editorRef.current?.setContent(data.content);
         }
         
         toast({
@@ -250,7 +252,7 @@ export const EmailComposeDialog = forwardRef<EmailComposeDialogHandle, EmailComp
     };
 
     const handleClose = () => {
-      if (!to && !subject && !content) {
+      if (!to && !subject && !contentText) {
         setOpen(false);
         return;
       }
@@ -335,15 +337,13 @@ export const EmailComposeDialog = forwardRef<EmailComposeDialogHandle, EmailComp
                   Message
                 </Label>
                 <div className="col-span-1 md:col-span-3 flex flex-col gap-2">
-                  <Textarea
-                    id="content"
-                    value={content}
-                    onChange={(e) => setContent(e.target.value)}
-                    className="flex-1"
-                    required
-                    disabled={loading}
-                    rows={4}
+                  <RichTextEditor
+                    ref={editorRef}
+                    content={content}
+                    onChange={setContent}
+                    onTextChange={setContentText}
                     placeholder="Type your message here..."
+                    minHeight="12rem"
                   />
                   <div className="flex justify-end">
                     <Button 

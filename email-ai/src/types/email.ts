@@ -16,4 +16,5 @@ export interface Email {
   snippet: string;
   body: string;
   attachments?: Attachment[];
+  avatar?: string;
 } 

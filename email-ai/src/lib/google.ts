@@ -1,5 +1,6 @@
 import { google, gmail_v1 } from 'googleapis';
 import { OAuth2Client } from 'google-auth-library';
+import { getGravatarUrl } from './utils';
 
 const CLIENT_SECRETS_FILE = process.env.GOOGLE_CLIENT_SECRETS || '{}';
 const SCOPES = [
@@ -236,17 +237,20 @@ export const getGmailMessages = async (accessToken: string, options: GetEmailsOp
       // Extract attachments
       const attachments = parts.length > 0 ? extractAttachments(parts) : [];
 
+      const fromHeader = headers.find(h => h.name === 'From')?.value || 'Unknown';
+
       return {
         id: msg.data.id,
         threadId: msg.data.threadId,
-        from: headers.find(h => h.name === 'From')?.value || 'Unknown',
+        from: fromHeader,
         subject: decodeSubject(headers.find(h => h.name === 'Subject')?.value || 'No Subject'),
         date: headers.find(h => h.name === 'Date')?.value || 'Unknown',
         snippet: msg.data.snippet || '',
         body: body,
         internalDate: msg.data.internalDate || '0',
         attachments: attachments.length > 0 ? attachments : undefined,
-        starred: msg.data.labelIds?.includes('STARRED') || false
+        starred: msg.data.labelIds?.includes('STARRED') || false,
+        avatar: getGravatarUrl(fromHeader)
       };
     })
   );
@@ -410,10 +414,12 @@ export const getEmailThread = async (accessToken: string, threadId: string) => {
         body = message.snippet || '';
       }
 
+      const fromHeader = headers.find(h => h.name === 'From')?.value || 'Unknown';
+
       return {
         id: message.id,
         threadId: message.threadId,
-        from: headers.find(h => h.name === 'From')?.value || 'Unknown',
+        from: fromHeader,
         to: headers.find(h => h.name === 'To')?.value || 'Unknown',
         subject: decodeSubject(headers.find(h => h.name === 'Subject')?.value || 'No Subject'),
         date: headers.find(h => h.name === 'Date')?.value || 'Unknown',
@@ -421,7 +427,8 @@ export const getEmailThread = async (accessToken: string, threadId: string) => {
         body: body,
         internalDate: message.internalDate || '0',
         attachments: (message.payload?.parts || []).some(p => p.filename) ? [] : undefined, // Placeholder
-        starred: message.labelIds?.includes('STARRED') || false
+        starred: message.labelIds?.includes('STARRED') || false,
+        avatar: getGravatarUrl(fromHeader)
       };
     })
   );

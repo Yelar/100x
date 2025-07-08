@@ -4,7 +4,7 @@ import * as React from 'react';
 import { useEffect, useState, useRef, useCallback, Suspense, lazy } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { Button } from "@/components/ui/button";
-import { Avatar, AvatarImage, AvatarFallback } from "@/components/ui/avatar";
+import { EmailAvatar } from "@/components/ui/email-avatar";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Input } from "@/components/ui/input";
 import { Switch } from "@/components/ui/switch";
@@ -44,6 +44,7 @@ import { formatEmailDate, formatTLDRSummary, formatFileSize, getFileTypeIcon, is
 import Header from './components/Header';
 import Sidebar from './components/Sidebar';
 import type { Folder } from './components/Sidebar';
+import { RichTextEditor, RichTextEditorHandle } from '@/components/ui/rich-text-editor';
 
 interface UserInfo {
   email: string; 
@@ -70,6 +71,7 @@ interface Email {
   internalDate?: string;
   attachments?: Attachment[];
   starred?: boolean;
+  avatar?: string;
 }
 
 interface EmailThread {
@@ -134,8 +136,10 @@ export default function DashboardContent() {
     subject: '',
     content: ''
   });
+  const [newEmailText, setNewEmailText] = useState('');
   const [emailChips, setEmailChips] = useState<string[]>([]);
   const [emailInput, setEmailInput] = useState('');
+  const editorRef = useRef<RichTextEditorHandle>(null);
   const [sending, setSending] = useState(false);
   const [generating, setGenerating] = useState<'idle' | 'subject' | 'content'>('idle');
   const [selectedTone, setSelectedTone] = useState('professional');
@@ -524,6 +528,9 @@ export default function DashboardContent() {
     
     const fetchData = async () => {
       try {
+        // Clear email cache to ensure fresh data with avatars
+        Object.keys(emailCache).forEach(key => delete emailCache[key]);
+        
         const cookies = document.cookie.split(';');
         const userInfoCookie = cookies
           .find(c => c.trim().startsWith('temp_user_info='))
@@ -585,7 +592,7 @@ export default function DashboardContent() {
   );
 
   const handleSendEmail = async () => {
-    if (emailChips.length === 0 || !newEmail.subject || !newEmail.content) {
+    if (emailChips.length === 0 || !newEmail.subject || !newEmailText.trim()) {
       alert('Please fill in all fields');
       return;
     }
@@ -617,6 +624,7 @@ export default function DashboardContent() {
         toast.success(`Email sent successfully to ${recipientCount} recipient${recipientCount !== 1 ? 's' : ''}${attachmentText}!`);
         setComposing(false);
         setNewEmail({ to: '', subject: '', content: '' });
+    editorRef.current?.setContent('');
         setEmailChips([]);
         setEmailInput('');
         setSelectedFiles([]);
@@ -644,7 +652,7 @@ export default function DashboardContent() {
         return;
       }
     } else if (type === 'content') {
-      prompt = newEmail.content;
+      prompt = newEmailText;
       if (!prompt.trim()) {
         alert('Please enter some content to generate or rewrite');
         return;
@@ -686,7 +694,7 @@ export default function DashboardContent() {
       setNewEmail(prev => ({ ...prev, subject: generatedPreview.subject! }));
     }
     if (generatedPreview.content) {
-      setNewEmail(prev => ({ ...prev, content: generatedPreview.content! }));
+      editorRef.current?.setContent(generatedPreview.content!);
     }
     setGeneratedPreview({ isVisible: false });
   };
@@ -937,19 +945,19 @@ export default function DashboardContent() {
       if (isMobile) {
         setIsMobileEmailView(true);
       }
-      
-      // Update URL and let the URL navigation effect handle the rest
-      const params = new URLSearchParams(window.location.search);
-      params.set('threadId', emailId); // Treat emailId as threadId since chat passes threadId
-      const newUrl = `/dashboard?${params.toString()}`;
-      console.log('Calling router.push with:', newUrl);
-      router.push(newUrl);
-      
-      // Check if URL actually changed after a short delay
-      setTimeout(() => {
-        console.log('URL after push:', window.location.href);
-        console.log('SearchParams after push:', searchParams.get('threadId'));
-      }, 100);
+     
+     // Update URL and let the URL navigation effect handle the rest
+     const params = new URLSearchParams(window.location.search);
+     params.set('threadId', emailId); // Treat emailId as threadId since chat passes threadId
+     const newUrl = `/dashboard?${params.toString()}`;
+     console.log('Calling router.push with:', newUrl);
+     router.push(newUrl);
+     
+     // Check if URL actually changed after a short delay
+     setTimeout(() => {
+       console.log('URL after push:', window.location.href);
+       console.log('SearchParams after push:', searchParams.get('threadId'));
+     }, 100);
     }
   }, [router, searchParams, emails, isMobile, threadData, handleToggleThread]);
 
@@ -1511,7 +1519,7 @@ export default function DashboardContent() {
       return;
     }
     
-    const content = newEmail.content;
+    const content = newEmailText;
     
     // Don't generate autocomplete if content is empty
     if (!content || content.trim() === '') {
@@ -1671,7 +1679,7 @@ export default function DashboardContent() {
       clearTimeout(timeout);
       controller.abort();
     };
-  }, [newEmail.content, isAutocompleteEnabled, selectedEmail, threadData, autoSuggestion, selectedTone]);
+  }, [newEmailText, isAutocompleteEnabled, selectedEmail, threadData, autoSuggestion, selectedTone]);
 
   // Add at the top of the component
   const [spoilerBlur, setSpoilerBlur] = useState(12); // px
@@ -1884,12 +1892,7 @@ export default function DashboardContent() {
                         style={{ minHeight: '64px' }}
                       >
                         <div className="flex-shrink-0 mr-4">
-                          <Avatar className="h-9 w-9">
-                            <AvatarImage src={undefined} alt={email.from} />
-                            <AvatarFallback className="bg-muted text-foreground font-bold">
-                              {email.from.trim()[0]?.toUpperCase()}
-                            </AvatarFallback>
-                          </Avatar>
+                          <EmailAvatar from={email.from} avatar={email.avatar} size="md" />
                         </div>
                         <div className="flex-1 min-w-0">
                           <div className="flex justify-between items-baseline">
@@ -2089,11 +2092,7 @@ export default function DashboardContent() {
                         </div>
                       </div>
                       <div className="flex items-center mb-3">
-                        <Avatar className="h-10 w-10 mr-3">
-                          <AvatarFallback className="bg-primary/10 text-primary">
-                            {selectedEmail.from.charAt(0).toUpperCase()}
-                          </AvatarFallback>
-                        </Avatar>
+                        <EmailAvatar from={selectedEmail.from} avatar={selectedEmail.avatar} size="lg" className="mr-3" />
                         <div>
                           <div className="flex items-center">
                             <span className="font-medium text-foreground">
@@ -2187,11 +2186,11 @@ export default function DashboardContent() {
           </div>
         ) : (
           /* Desktop: Show both panels side by side */
-          <ResizablePanelGroup 
-            direction="horizontal" 
-            className="flex-1"
-            onLayout={onResize}
-          >
+        <ResizablePanelGroup 
+          direction="horizontal" 
+          className="flex-1"
+          onLayout={onResize}
+        >
           {/* Email list */}
           <ResizablePanel 
             ref={refs.emailListRef}
@@ -2250,12 +2249,7 @@ export default function DashboardContent() {
                     style={{ minHeight: '64px' }}
                   >
                     <div className="flex-shrink-0 mr-4">
-                      <Avatar className="h-9 w-9">
-                        <AvatarImage src={undefined} alt={email.from} />
-                        <AvatarFallback className="bg-muted text-foreground font-bold">
-                          {email.from.trim()[0]?.toUpperCase()}
-                        </AvatarFallback>
-                      </Avatar>
+                      <EmailAvatar from={email.from} avatar={email.avatar} size="md" />
                     </div>
                     <div className="flex-1 min-w-0">
                       <div className="flex justify-between items-baseline">
@@ -2454,11 +2448,7 @@ export default function DashboardContent() {
                       </div>
                     </div>
                     <div className="flex items-center mb-3">
-                      <Avatar className="h-10 w-10 mr-3">
-                        <AvatarFallback className="bg-primary/10 text-primary">
-                          {selectedEmail.from.charAt(0).toUpperCase()}
-                        </AvatarFallback>
-                      </Avatar>
+                      <EmailAvatar from={selectedEmail.from} avatar={selectedEmail.avatar} size="lg" className="mr-3" />
                       <div>
                         <div className="flex items-center">
                           <span className="font-medium text-foreground">
@@ -2579,11 +2569,7 @@ export default function DashboardContent() {
                               <div className="p-4 border-b border-border/20 bg-muted/10">
                                 <div className="flex items-center justify-between">
                                   <div className="flex items-center gap-3">
-                                    <Avatar className="h-8 w-8 ring-2 ring-background">
-                                      <AvatarFallback className="bg-primary/10 text-primary text-sm font-medium">
-                                        {threadMsg.from.charAt(0).toUpperCase()}
-                                      </AvatarFallback>
-                                    </Avatar>
+                                    <EmailAvatar from={threadMsg.from} avatar={threadMsg.avatar} size="md" className="ring-2 ring-background" />
                                     <div>
                                       <div className="font-medium text-sm text-foreground">
                                         {threadMsg.from.split('<')[0] || threadMsg.from}
@@ -2879,26 +2865,23 @@ export default function DashboardContent() {
               ) : (
                 /* Normal Edit Mode */
                 <div className="relative w-full h-full">
-                <textarea
-                  value={newEmail.content}
-                  onChange={(e) => setNewEmail({ ...newEmail, content: e.target.value })}
+                  <RichTextEditor
+                    ref={editorRef}
+                    content={newEmail.content}
+                    onChange={(content) => setNewEmail({ ...newEmail, content })}
+                    onTextChange={setNewEmailText}
+                    placeholder="Write your email content here..."
+                    autoSuggestion={autoSuggestion}
                     onKeyDown={(e) => {
                       if (e.key === 'Tab' && autoSuggestion) {
                         e.preventDefault();
-                        setNewEmail(prev => ({ ...prev, content: prev.content + autoSuggestion }));
+                        setNewEmailText(prev => prev + autoSuggestion);
                         setAutoSuggestion('');
                       }
                     }}
-                  className="w-full h-full border border-border/60 rounded-lg p-4 text-sm resize-none focus:outline-none focus:ring-2 focus:ring-orange-500/20 focus:border-orange-500/40 bg-gray-50 dark:bg-gray-800/50 placeholder:text-muted-foreground transition-all"
-                  placeholder="Write your email content here..."
-                />
-                  {autoSuggestion && (
-                    <div className="pointer-events-none absolute top-0 left-0 p-4 whitespace-pre-wrap text-sm text-muted-foreground select-none" style={{ whiteSpace: 'pre-wrap' }}>
-                      {/* Render existing content invisibly to align suggestion */}
-                      <span className="opacity-0">{newEmail.content}</span>
-                      <span className="opacity-60">{autoSuggestion}</span>
-                    </div>
-                  )}
+                    minHeight="20rem"
+                    className="w-full h-full"
+                  />
                 </div>
               )}
             </div>
