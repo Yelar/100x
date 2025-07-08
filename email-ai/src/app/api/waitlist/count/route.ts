@@ -1,12 +1,9 @@
 import { NextResponse } from 'next/server';
-import connectToDatabase from '@/lib/mongodb';
-import mongoose from 'mongoose';
+import prisma from '@/lib/prisma';
 
 export async function GET() {
   try {
-    await connectToDatabase();
-    const Waitlist = mongoose.connection.collection('waitlist');
-    const count = await Waitlist.countDocuments();
+    const count = await prisma.waitlist.count();
     return NextResponse.json({ count });
   } catch (error) {
     console.error('Waitlist count error:', error);

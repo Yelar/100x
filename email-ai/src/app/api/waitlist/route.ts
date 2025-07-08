@@ -1,6 +1,5 @@
 import { NextResponse } from 'next/server';
-import connectToDatabase from '@/lib/mongodb';
-import mongoose from 'mongoose';
+import prisma from '@/lib/prisma';
 
 export async function POST(request: Request) {
   try {
@@ -8,14 +7,12 @@ export async function POST(request: Request) {
     if (!email || typeof email !== 'string') {
       return NextResponse.json({ error: 'Invalid email' }, { status: 400 });
     }
-    await connectToDatabase();
-    const Waitlist = mongoose.connection.collection('waitlist');
-    const existing = await Waitlist.findOne({ email });
+    const existing = await prisma.waitlist.findUnique({ where: { email } });
     if (existing) {
         console.log('Already on waitlist');
       return NextResponse.json({ message: 'Already on waitlist' }, { status: 200 });
     }
-    await Waitlist.insertOne({ email, createdAt: new Date() });
+    await prisma.waitlist.create({ data: { email } });
     return NextResponse.json({ message: 'Added to waitlist' }, { status: 201 });
   } catch (error) {
     console.error('Waitlist error:', error);

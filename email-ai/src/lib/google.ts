@@ -23,7 +23,7 @@ interface ClientSecrets {
 let clientSecrets: ClientSecrets;
 try {
   clientSecrets = JSON.parse(CLIENT_SECRETS_FILE);
-} catch (e) {
+} catch (e) { 
   console.error('Error parsing client secrets:', e);
   clientSecrets = {};
 }

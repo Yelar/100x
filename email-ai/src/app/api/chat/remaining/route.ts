@@ -1,7 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { cookies } from 'next/headers';
-import connectToDatabase from '@/lib/mongodb';
-import ChatUsage from '@/models/ChatUsage';
+import prisma from '@/lib/prisma';
 import { getAccessToken } from '@/lib/auth';
 
 const DAILY_LIMIT = 20;
@@ -23,10 +22,10 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ error: 'Email is required' }, { status: 400 });
     }
 
-    await connectToDatabase();
-
     const todayStr = new Date().toISOString().split('T')[0];
-    const usage = await ChatUsage.findOne({ userEmail: email, date: todayStr });
+    const usage = await prisma.chatUsage.findUnique({
+      where: { userEmail_date: { userEmail: email, date: todayStr } },
+    });
     const remaining = Math.max(0, DAILY_LIMIT - (usage?.count || 0));
 
     return NextResponse.json({ limit: DAILY_LIMIT, remaining });

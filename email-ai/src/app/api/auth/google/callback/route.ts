@@ -1,7 +1,6 @@
 import { NextResponse } from 'next/server';
 import { getTokens, getUserInfo } from '@/lib/google';
-import connectToDatabase from '@/lib/mongodb';
-import User from '@/models/User';
+import prisma from '@/lib/prisma';
 
 export async function GET(request: Request) {
   try {
@@ -21,22 +20,25 @@ export async function GET(request: Request) {
     // Get user info
     const userInfo = await getUserInfo(tokens.access_token!);
 
-    // Connect to MongoDB and save user data
-    await connectToDatabase();
-    
-    // Update or create user in database
-    await User.findOneAndUpdate(
-      { email: userInfo.email },
-      {
-        email: userInfo.email,
-        name: userInfo.name,
-        picture: userInfo.picture,
-        accessToken: tokens.access_token,
+    // Upsert user in Postgres via Prisma
+    await prisma.user.upsert({
+      where: { email: userInfo.email! },
+      update: {
+        name: userInfo.name || '',
+        picture: userInfo.picture || '',
+        accessToken: tokens.access_token!,
         refreshToken: tokens.refresh_token || '',
-        lastLogin: new Date()
+        lastLogin: new Date(),
       },
-      { upsert: true, new: true }
-    );
+      create: {
+        email: userInfo.email!,
+        name: userInfo.name || '',
+        picture: userInfo.picture || '',
+        accessToken: tokens.access_token!,
+        refreshToken: tokens.refresh_token || '',
+        lastLogin: new Date(),
+      },
+    });
 
     // Create redirect response
     const redirectUrl = new URL('/dashboard', request.url);
@@ -100,22 +102,25 @@ export async function POST(request: Request) {
     // Get user info
     const userInfo = await getUserInfo(tokens.access_token!);
 
-    // Connect to MongoDB and save user data
-    await connectToDatabase();
-    
-    // Update or create user in database
-    await User.findOneAndUpdate(
-      { email: userInfo.email },
-      {
-        email: userInfo.email,
-        name: userInfo.name,
-        picture: userInfo.picture,
-        accessToken: tokens.access_token,
+    // Upsert user in Postgres via Prisma
+    await prisma.user.upsert({
+      where: { email: userInfo.email! },
+      update: {
+        name: userInfo.name || '',
+        picture: userInfo.picture || '',
+        accessToken: tokens.access_token!,
         refreshToken: tokens.refresh_token || '',
-        lastLogin: new Date()
+        lastLogin: new Date(),
       },
-      { upsert: true, new: true }
-    );
+      create: {
+        email: userInfo.email!,
+        name: userInfo.name || '',
+        picture: userInfo.picture || '',
+        accessToken: tokens.access_token!,
+        refreshToken: tokens.refresh_token || '',
+        lastLogin: new Date(),
+      },
+    });
 
     // Create response with cookies
     const response = NextResponse.json({

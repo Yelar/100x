@@ -3,8 +3,7 @@ import { streamText } from 'ai';
 import { cookies } from 'next/headers';
 import { NextRequest, NextResponse } from 'next/server';
 import { applyRateLimit } from '@/lib/rate-limit';
-import connectToDatabase from '@/lib/mongodb';
-import ChatUsage from '@/models/ChatUsage';
+import prisma from '@/lib/prisma';
 // import { tools, ToolResult as ImportedToolResult } from '@/lib/tools';
 
 export const maxDuration = 60; // Increased to allow for email content fetching
@@ -539,11 +538,13 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'User email is required for chat usage tracking' }, { status: 400 });
     }
 
-    // Connect to database and enforce daily limit
-    await connectToDatabase();
+    // Enforce daily chat limit (tracked in Postgres via Prisma)
     const todayStr = new Date().toISOString().split('T')[0];
 
-    let usage = await ChatUsage.findOne({ userEmail: email, date: todayStr });
+    let usage = await prisma.chatUsage.findUnique({
+      where: { userEmail_date: { userEmail: email, date: todayStr } },
+    });
+
     if (usage && usage.count >= 20) {
       return NextResponse.json(
         { error: 'Daily chat limit reached', remaining: 0 },
@@ -552,10 +553,16 @@ export async function POST(request: NextRequest) {
     }
 
     if (!usage) {
-      usage = await ChatUsage.create({ userEmail: email, date: todayStr, count: 0 });
+      usage = await prisma.chatUsage.create({
+        data: { userEmail: email, date: todayStr, count: 0 },
+      });
     }
-    usage.count += 1;
-    await usage.save();
+
+    usage = await prisma.chatUsage.update({
+      where: { id: usage.id },
+      data: { count: usage.count + 1 },
+    });
+
     const remainingChats = Math.max(0, 20 - usage.count);
 
     if (!apiKey) {
