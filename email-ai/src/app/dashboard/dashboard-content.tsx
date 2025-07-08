@@ -2706,7 +2706,7 @@ export default function DashboardContent() {
 
       {/* Email compose dialog */}
       <Dialog open={composing} onOpenChange={setComposing}>
-        <DialogContent className="max-w-5xl w-[90vw] h-[85vh] p-0 flex flex-col gap-0 overflow-hidden border-2 border-border/30 rounded-lg">
+        <DialogContent className="max-w-5xl w-[90vw] h-[85vh] p-0 flex flex-col gap-0 border-2 border-border/30 rounded-lg">
           {/* Hidden title for accessibility */}
           <VisuallyHidden>
             <DialogTitle>Compose Email</DialogTitle>
@@ -2739,7 +2739,7 @@ export default function DashboardContent() {
           </div>
 
           {/* Content */}
-          <div className="flex-1 flex flex-col px-4 pt-2 pb-4 space-y-3 overflow-hidden bg-white dark:bg-gray-900">
+          <div className="flex-1 flex flex-col px-4 pt-2 pb-4 space-y-3 bg-white dark:bg-gray-900">
             {/* To field */}
             <div className="flex items-center gap-4">
               <span className="text-sm font-medium w-12 text-muted-foreground">To:</span>
@@ -2809,7 +2809,7 @@ export default function DashboardContent() {
         </div>
         
             {/* Content area */}
-            <div className="flex-1 relative overflow-hidden">
+            <div className="flex-1 relative">
               {generatedPreview.isVisible ? (
                 <div className="w-full h-full flex flex-col items-end justify-end pr-4 pb-4">
                   <div className="w-full max-w-sm bg-white dark:bg-gray-800 border border-border/60 rounded-lg shadow-lg" style={{ minHeight: '420px', maxHeight: '70vh' }}>
@@ -2864,7 +2864,7 @@ export default function DashboardContent() {
                 </div>
               ) : (
                 /* Normal Edit Mode */
-                <div className="relative w-full h-full">
+                <div className="relative w-full h-full overflow-visible">
                   <RichTextEditor
                     ref={editorRef}
                     content={newEmail.content}

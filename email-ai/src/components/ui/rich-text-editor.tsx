@@ -99,6 +99,25 @@ export const RichTextEditor = forwardRef<RichTextEditorHandle, RichTextEditorPro
                   }
                 },
               },
+              fontSize: {
+                default: null,
+                parseHTML: element => {
+                  const style = element.getAttribute('style');
+                  if (style) {
+                    const match = style.match(/font-size:\s*([^;]+)/);
+                    return match ? match[1] : null;
+                  }
+                  return null;
+                },
+                renderHTML: attributes => {
+                  if (!attributes.fontSize) {
+                    return {}
+                  }
+                  return {
+                    style: `font-size: ${attributes.fontSize}`,
+                  }
+                },
+              },
             }
           },
         }),
@@ -219,28 +238,30 @@ export const RichTextEditor = forwardRef<RichTextEditorHandle, RichTextEditorPro
     }
 
     return (
-      <div className="border border-input rounded-md focus-within:ring-2 focus-within:ring-ring bg-background h-full flex flex-col">
+      <div className="border border-input rounded-md focus-within:ring-2 focus-within:ring-ring bg-background h-full flex flex-col relative">
         {/* Toolbar */}
         <div className="border-b border-border p-2 flex flex-wrap items-center gap-1 flex-shrink-0">
           {/* Font Family */}
-          <DropdownMenu>
+          <DropdownMenu modal={false}>
             <DropdownMenuTrigger asChild>
               <Button variant="ghost" size="sm" className="h-8">
                 <Type className="h-4 w-4" />
               </Button>
             </DropdownMenuTrigger>
-            <DropdownMenuContent>
+            <DropdownMenuContent className="z-[9999]">
               {fontFamilies.map((font) => (
                 <DropdownMenuItem
                   key={font.value}
-                  onClick={() => {
+                  onClick={(e) => {
+                    e.preventDefault();
                     if (font.value) {
                       editor.chain().focus().setFontFamily(font.value).run();
                     } else {
                       editor.chain().focus().unsetFontFamily().run();
                     }
                   }}
-                  style={{ fontFamily: font.value }}
+                  style={{ fontFamily: font.value || 'inherit' }}
+                  className={editor.isActive('textStyle', { fontFamily: font.value }) ? 'bg-accent' : ''}
                 >
                   {font.label}
                 </DropdownMenuItem>
@@ -249,28 +270,39 @@ export const RichTextEditor = forwardRef<RichTextEditorHandle, RichTextEditorPro
           </DropdownMenu>
 
           {/* Font Size */}
-          <DropdownMenu>
+          <DropdownMenu modal={false}>
             <DropdownMenuTrigger asChild>
               <Button variant="ghost" size="sm" className="h-8 text-xs">
                 Size
               </Button>
             </DropdownMenuTrigger>
-            <DropdownMenuContent>
+            <DropdownMenuContent className="z-[9999]">
               {fontSizes.map((size) => (
                 <DropdownMenuItem
                   key={size}
-                  onClick={() => {
-                    // Apply font size using TextStyle mark
+                  onClick={(e) => {
+                    e.preventDefault();
+                    // Apply font size using TextStyle mark with fontSize attribute
                     editor.chain()
                       .focus()
-                      .setMark('textStyle', { style: `font-size: ${size}` })
+                      .setMark('textStyle', { fontSize: size })
                       .run();
                   }}
                   style={{ fontSize: size }}
+                  className={editor.isActive('textStyle', { fontSize: size }) ? 'bg-accent' : ''}
                 >
                   {size}
                 </DropdownMenuItem>
               ))}
+              <DropdownMenuItem
+                onClick={(e) => {
+                  e.preventDefault();
+                  editor.chain().focus().unsetMark('textStyle').run();
+                }}
+                className="border-t mt-1 pt-1"
+              >
+                Reset Size
+              </DropdownMenuItem>
             </DropdownMenuContent>
           </DropdownMenu>
 
@@ -307,28 +339,33 @@ export const RichTextEditor = forwardRef<RichTextEditorHandle, RichTextEditorPro
           <div className="w-px h-6 bg-border mx-1" />
 
           {/* Text Color */}
-          <DropdownMenu>
+          <DropdownMenu modal={false}>
             <DropdownMenuTrigger asChild>
               <Button variant="ghost" size="sm" className="h-8">
                 <Palette className="h-4 w-4" />
               </Button>
             </DropdownMenuTrigger>
-            <DropdownMenuContent>
+            <DropdownMenuContent className="z-[9999]">
               <div className="grid grid-cols-4 gap-1 p-2">
                 {colors.map((color) => (
                   <button
                     key={color}
-                    className="w-6 h-6 rounded border border-gray-300 hover:scale-110 transition-transform"
+                    className="w-6 h-6 rounded border border-gray-300 hover:scale-110 transition-transform focus:outline-none focus:ring-2 focus:ring-blue-500"
                     style={{ backgroundColor: color }}
-                    onClick={() => {
+                    onClick={(e) => {
+                      e.preventDefault();
                       editor.chain().focus().setColor(color).run();
                     }}
+                    title={color}
                   />
                 ))}
               </div>
               <button
-                className="w-full mt-2 p-1 text-xs text-gray-600 hover:bg-gray-100 rounded"
-                onClick={() => editor.chain().focus().unsetColor().run()}
+                className="w-full mt-2 p-1 text-xs text-gray-600 hover:bg-gray-100 dark:text-gray-400 dark:hover:bg-gray-700 rounded"
+                onClick={(e) => {
+                  e.preventDefault();
+                  editor.chain().focus().unsetColor().run();
+                }}
               >
                 Reset Color
               </button>
