@@ -7,7 +7,8 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
 import { Separator } from "@/components/ui/separator";
-import { Moon, Sun, Monitor, Settings, ArrowLeft } from "lucide-react";
+import { Moon, Sun, Monitor, Settings, ArrowLeft, Trash2 } from "lucide-react";
+import { Dialog, DialogTrigger, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter, DialogClose } from "@/components/ui/dialog";
 import { useRouter } from 'next/navigation';
 import { useAutocompleteSettings } from '@/hooks/use-autocomplete-settings';
 import { toast } from 'sonner';
@@ -39,6 +40,23 @@ export default function SettingsPage() {
   const handleAutocompleteToggle = (enabled: boolean) => {
     toggleAutocomplete(enabled);
     toast.success(`AI Autocomplete ${enabled ? 'enabled' : 'disabled'}`);
+  };
+
+  const handleDeleteAccount = async () => {
+    try {
+      const res = await fetch('/api/account', { method: 'DELETE' });
+      if (res.ok) {
+        toast.success('Account deleted');
+        localStorage.removeItem('user_info');
+        router.push('/login');
+      } else {
+        const data = await res.json();
+        toast.error(data.error || 'Failed to delete account');
+      }
+    } catch (error) {
+      console.error(error);
+      toast.error('Failed to delete account');
+    }
   };
 
   return (
@@ -139,6 +157,42 @@ export default function SettingsPage() {
                   onCheckedChange={handleAutocompleteToggle}
                 />
               </div>
+            </CardContent>
+          </Card>
+
+          <Separator />
+
+          {/* Account */}
+          <Card>
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2 text-destructive">
+                <Trash2 className="h-5 w-5" />
+                Delete Account
+              </CardTitle>
+              <CardDescription>
+                Permanently remove your account and data
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+              <Dialog>
+                <DialogTrigger asChild>
+                  <Button variant="destructive">Delete Account</Button>
+                </DialogTrigger>
+                <DialogContent className="sm:max-w-[425px] p-6 space-y-4">
+                  <DialogHeader>
+                    <DialogTitle>Are you absolutely sure?</DialogTitle>
+                    <DialogDescription>
+                      This action cannot be undone. This will permanently delete your account and remove your data from our servers.
+                    </DialogDescription>
+                  </DialogHeader>
+                  <DialogFooter>
+                    <DialogClose asChild>
+                      <Button variant="secondary">Cancel</Button>
+                    </DialogClose>
+                    <Button variant="destructive" onClick={handleDeleteAccount}>Yes, delete</Button>
+                  </DialogFooter>
+                </DialogContent>
+              </Dialog>
             </CardContent>
           </Card>
 
