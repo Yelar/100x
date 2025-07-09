@@ -2272,7 +2272,7 @@ export default function DashboardContent() {
             defaultSize={sizes.emailListSize} 
             minSize={20}
             maxSize={40}
-            className="border-r border-border/50 flex flex-col overflow-hidden bg-gradient-to-b from-white/50 to-white/30 dark:from-background/50 dark:to-background/30 rounded-r-xl"
+            className="flex flex-col overflow-hidden bg-gradient-to-b from-white/50 to-white/30 dark:from-background/50 dark:to-background/30 rounded-r-xl"
           >
             <div className="flex-none p-2 border-b border-border/50 flex items-center bg-white/50 dark:bg-background/50 rounded-t-xl">
               <Button 
@@ -2437,7 +2437,7 @@ export default function DashboardContent() {
             ref={refs.emailContentRef}
             defaultSize={sizes.emailContentSize} 
             minSize={40}
-            className="flex flex-col overflow-hidden bg-gradient-to-br from-white/50 to-orange-50/30 dark:from-background/50 dark:to-orange-900/5 rounded-l-xl"
+            className="flex flex-col overflow-hidden bg-gradient-to-br from-white/50 to-orange-50/30 dark:from-background/50 dark:to-orange-900/5"
           >
             {selectedEmail ? (
               <div className="flex-1 overflow-y-auto email-content-container">
