@@ -139,6 +139,13 @@ export default function DashboardContent() {
   const [newEmailText, setNewEmailText] = useState('');
   const [emailChips, setEmailChips] = useState<string[]>([]);
   const [emailInput, setEmailInput] = useState('');
+  // CC & BCC recipients
+  const [ccChips, setCcChips] = useState<string[]>([]);
+  const [ccInput, setCcInput] = useState('');
+  const [bccChips, setBccChips] = useState<string[]>([]);
+  const [bccInput, setBccInput] = useState('');
+  const [showCc, setShowCc] = useState(false);
+  const [showBcc, setShowBcc] = useState(false);
   const editorRef = useRef<RichTextEditorHandle>(null);
   const [sending, setSending] = useState(false);
   const [generating, setGenerating] = useState<'idle' | 'subject' | 'content'>('idle');
@@ -240,6 +247,52 @@ export default function DashboardContent() {
     } else if (e.key === 'Backspace' && !emailInput && emailChips.length > 0) {
       // Remove last chip when backspace is pressed on empty input
       setEmailChips(prev => prev.slice(0, -1));
+    }
+  };
+
+  // CC chip handlers
+  const addCcChip = (email: string) => {
+    const trimmedEmail = email.trim();
+    if (trimmedEmail && !ccChips.includes(trimmedEmail)) {
+      setCcChips([...ccChips, trimmedEmail]);
+    }
+  };
+
+  const removeCcChip = (emailToRemove: string) => {
+    setCcChips(ccChips.filter(email => email !== emailToRemove));
+  };
+
+  const handleCcInputKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
+    if ((e.key === ' ' || e.key === ',' || e.key === 'Enter') && ccInput.trim()) {
+      e.preventDefault();
+      addCcChip(ccInput);
+      setCcInput('');
+    } else if (e.key === 'Backspace' && !ccInput && ccChips.length > 0) {
+      // Remove last chip when backspace is pressed on empty input
+      setCcChips(prev => prev.slice(0, -1));
+    }
+  };
+
+  // BCC chip handlers
+  const addBccChip = (email: string) => {
+    const trimmedEmail = email.trim();
+    if (trimmedEmail && !bccChips.includes(trimmedEmail)) {
+      setBccChips([...bccChips, trimmedEmail]);
+    }
+  };
+
+  const removeBccChip = (emailToRemove: string) => {
+    setBccChips(bccChips.filter(email => email !== emailToRemove));
+  };
+
+  const handleBccInputKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
+    if ((e.key === ' ' || e.key === ',' || e.key === 'Enter') && bccInput.trim()) {
+      e.preventDefault();
+      addBccChip(bccInput);
+      setBccInput('');
+    } else if (e.key === 'Backspace' && !bccInput && bccChips.length > 0) {
+      // Remove last chip when backspace is pressed on empty input
+      setBccChips(prev => prev.slice(0, -1));
     }
   };
 
@@ -603,6 +656,17 @@ export default function DashboardContent() {
       // Prepare form data for attachments
       const formData = new FormData();
       formData.append('to', emailChips.join(', '));
+      
+      // Add CC if present
+      if (ccChips.length > 0) {
+        formData.append('cc', ccChips.join(', '));
+      }
+      
+      // Add BCC if present
+      if (bccChips.length > 0) {
+        formData.append('bcc', bccChips.join(', '));
+      }
+      
       formData.append('subject', newEmail.subject);
       formData.append('content', newEmail.content);
       
@@ -619,14 +683,20 @@ export default function DashboardContent() {
       const data = await response.json();
       
       if (data.success) {
-        const recipientCount = emailChips.length;
+        const recipientCount = emailChips.length + ccChips.length + bccChips.length;
         const attachmentText = selectedFiles.length > 0 ? ` with ${selectedFiles.length} attachment${selectedFiles.length !== 1 ? 's' : ''}` : '';
         toast.success(`Email sent successfully to ${recipientCount} recipient${recipientCount !== 1 ? 's' : ''}${attachmentText}!`);
         setComposing(false);
         setNewEmail({ to: '', subject: '', content: '' });
-    editorRef.current?.setContent('');
+        editorRef.current?.setContent('');
         setEmailChips([]);
         setEmailInput('');
+        setCcChips([]);
+        setCcInput('');
+        setBccChips([]);
+        setBccInput('');
+        setShowCc(false);
+        setShowBcc(false);
         setSelectedFiles([]);
         setSelectedTone('professional');
         setShowToneDropdown(false);
@@ -690,12 +760,17 @@ export default function DashboardContent() {
 
   // Accept generated content
   const acceptGeneratedContent = () => {
-    if (generatedPreview.subject) {
-      setNewEmail(prev => ({ ...prev, subject: generatedPreview.subject! }));
-    }
+    setNewEmail(prev => ({
+      ...prev,
+      subject: generatedPreview.subject ?? prev.subject,
+      content: generatedPreview.content ?? prev.content,
+    }));
+
     if (generatedPreview.content) {
-      editorRef.current?.setContent(generatedPreview.content!);
+      editorRef.current?.setContent(generatedPreview.content);
+      setNewEmailText(generatedPreview.content);
     }
+
     setGeneratedPreview({ isVisible: false });
   };
 
@@ -2776,10 +2851,88 @@ export default function DashboardContent() {
                 </div>
               </div>
               <div className="flex items-center gap-4 text-sm text-muted-foreground">
-                <button type="button" className="hover:text-foreground transition-colors px-2 py-1 rounded hover:bg-gray-100 dark:hover:bg-gray-800">Cc</button>
-                <button type="button" className="hover:text-foreground transition-colors px-2 py-1 rounded hover:bg-gray-100 dark:hover:bg-gray-800">Bcc</button>
+                <button type="button" onClick={() => setShowCc(!showCc)} className="hover:text-foreground transition-colors px-2 py-1 rounded hover:bg-gray-100 dark:hover:bg-gray-800">Cc</button>
+                <button type="button" onClick={() => setShowBcc(!showBcc)} className="hover:text-foreground transition-colors px-2 py-1 rounded hover:bg-gray-100 dark:hover:bg-gray-800">Bcc</button>
               </div>
             </div>
+
+            {/* Cc field */}
+            {showCc && (
+              <div className="flex items-center gap-4 mt-2">
+                <span className="text-sm font-medium w-12 text-muted-foreground">Cc:</span>
+                <div className="flex-1 border border-border/60 rounded-md bg-gray-50 dark:bg-gray-800/50 p-2 min-h-[2.5rem] focus-within:ring-2 focus-within:ring-orange-500/20 focus-within:border-orange-500/40">
+                  <div className="flex flex-wrap gap-1 items-center">
+                    {ccChips.map((email) => (
+                      <span
+                        key={email}
+                        className="inline-flex items-center gap-1 bg-orange-100 dark:bg-orange-900/30 text-orange-800 dark:text-orange-200 px-2 py-1 rounded text-sm border border-orange-200 dark:border-orange-700/50"
+                      >
+                        {email}
+                        <button
+                          type="button"
+                          onClick={() => removeCcChip(email)}
+                          className="hover:bg-orange-200 dark:hover:bg-orange-800/50 rounded-full w-4 h-4 flex items-center justify-center text-xs font-medium transition-colors"
+                        >
+                          ×
+                        </button>
+                      </span>
+                    ))}
+                    <Input
+                      value={ccInput}
+                      onChange={(e) => setCcInput(e.target.value)}
+                      onKeyDown={handleCcInputKeyDown}
+                      onBlur={() => {
+                        if (ccInput.trim()) {
+                          addCcChip(ccInput);
+                          setCcInput('');
+                        }
+                      }}
+                      placeholder={ccChips.length === 0 ? "Enter Cc recipients" : "Add another..."}
+                      className="border-0 shadow-none focus-visible:ring-0 p-0 h-auto flex-1 min-w-[200px] placeholder:text-muted-foreground bg-transparent"
+                    />
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {/* Bcc field */}
+            {showBcc && (
+              <div className="flex items-center gap-4 mt-2">
+                <span className="text-sm font-medium w-12 text-muted-foreground">Bcc:</span>
+                <div className="flex-1 border border-border/60 rounded-md bg-gray-50 dark:bg-gray-800/50 p-2 min-h-[2.5rem] focus-within:ring-2 focus-within:ring-orange-500/20 focus-within:border-orange-500/40">
+                  <div className="flex flex-wrap gap-1 items-center">
+                    {bccChips.map((email) => (
+                      <span
+                        key={email}
+                        className="inline-flex items-center gap-1 bg-orange-100 dark:bg-orange-900/30 text-orange-800 dark:text-orange-200 px-2 py-1 rounded text-sm border border-orange-200 dark:border-orange-700/50"
+                      >
+                        {email}
+                        <button
+                          type="button"
+                          onClick={() => removeBccChip(email)}
+                          className="hover:bg-orange-200 dark:hover:bg-orange-800/50 rounded-full w-4 h-4 flex items-center justify-center text-xs font-medium transition-colors"
+                        >
+                          ×
+                        </button>
+                      </span>
+                    ))}
+                    <Input
+                      value={bccInput}
+                      onChange={(e) => setBccInput(e.target.value)}
+                      onKeyDown={handleBccInputKeyDown}
+                      onBlur={() => {
+                        if (bccInput.trim()) {
+                          addBccChip(bccInput);
+                          setBccInput('');
+                        }
+                      }}
+                      placeholder={bccChips.length === 0 ? "Enter Bcc recipients" : "Add another..."}
+                      className="border-0 shadow-none focus-visible:ring-0 p-0 h-auto flex-1 min-w-[200px] placeholder:text-muted-foreground bg-transparent"
+                    />
+                  </div>
+                </div>
+              </div>
+            )}
 
             {/* Subject field */}
             <div className="flex items-center gap-4">

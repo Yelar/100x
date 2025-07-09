@@ -26,7 +26,7 @@ function htmlToPlainText(html: string): string {
 }
 
 // Helper function to encode email to base64URL format
-function encodeEmail(to: string, subject: string, content: string) {
+function encodeEmail(to: string, cc: string | null, bcc: string | null, subject: string, content: string) {
   const isHtml = containsHtml(content);
   
   if (isHtml) {
@@ -36,6 +36,8 @@ function encodeEmail(to: string, subject: string, content: string) {
     
     const emailLines = [
       `To: ${to}`,
+      ...(cc ? [`Cc: ${cc}`] : []),
+      ...(bcc ? [`Bcc: ${bcc}`] : []),
       `Subject: ${subject}`,
       'MIME-Version: 1.0',
       `Content-Type: multipart/alternative; boundary="${boundary}"`,
@@ -61,6 +63,8 @@ function encodeEmail(to: string, subject: string, content: string) {
     // Send as plain text
     const emailLines = [
       `To: ${to}`,
+      ...(cc ? [`Cc: ${cc}`] : []),
+      ...(bcc ? [`Bcc: ${bcc}`] : []),
       `Subject: ${subject}`,
       'Content-Type: text/plain; charset=utf-8',
       'MIME-Version: 1.0',
@@ -79,7 +83,7 @@ export async function POST(req: NextRequest) {
     const rateLimitResponse = await applyRateLimit(req, 'email');
     if (rateLimitResponse) return rateLimitResponse;
 
-    let to, subject, content, mode, draftId;
+    let to, cc, bcc, subject, content, mode, draftId;
     
     // Check if the request is FormData or JSON
     const contentType = req.headers.get('content-type') || '';
@@ -88,6 +92,8 @@ export async function POST(req: NextRequest) {
       // Handle FormData
       const formData = await req.formData();
       to = formData.get('to') as string;
+      cc = formData.get('cc') as string | null;
+      bcc = formData.get('bcc') as string | null;
       subject = formData.get('subject') as string;
       content = formData.get('content') as string;
       mode = formData.get('mode') as string;
@@ -105,6 +111,8 @@ export async function POST(req: NextRequest) {
       // Handle JSON
       const body = await req.json();
       to = body.to;
+      cc = body.cc;
+      bcc = body.bcc;
       subject = body.subject;
       content = body.content;
       mode = body.mode;
@@ -120,7 +128,7 @@ export async function POST(req: NextRequest) {
     auth.setCredentials({ access_token: accessToken });
     const gmail = google.gmail({ version: 'v1', auth });
 
-    const raw = encodeEmail(to, subject, content);
+    const raw = encodeEmail(to, cc || null, bcc || null, subject, content);
 
     if (mode === 'draft') {
       // Save as draft
