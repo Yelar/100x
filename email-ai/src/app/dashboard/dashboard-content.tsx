@@ -767,8 +767,8 @@ export default function DashboardContent() {
     }));
 
     if (generatedPreview.content) {
+      // The editor's onUpdate callback will automatically sync the state
       editorRef.current?.setContent(generatedPreview.content);
-      setNewEmailText(generatedPreview.content);
     }
 
     setGeneratedPreview({ isVisible: false });

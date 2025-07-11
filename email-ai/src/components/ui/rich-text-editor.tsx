@@ -77,6 +77,7 @@ export const RichTextEditor = forwardRef<RichTextEditorHandle, RichTextEditorPro
     const [cursorPosition, setCursorPosition] = React.useState<{ top: number; left: number; editorWidth: number; wouldOverflow: boolean } | null>(null);
 
     const editor = useEditor({
+      immediatelyRender: false, // Fix SSR hydration mismatch
       extensions: [
         StarterKit.configure({
           heading: {

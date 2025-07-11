@@ -71,6 +71,7 @@ export function ReplyComposer({
 
       const data = response.data as { content?: string };
       if (data.content) {
+        // The editor's onUpdate callback will automatically sync the state
         editorRef.current?.setContent(data.content.trim());
       }
     } catch (error) {
@@ -106,12 +107,27 @@ export function ReplyComposer({
   };
 
   const handleAcceptChoice = () => {
-    if (selectedChoice) {
-      editorRef.current?.setContent(selectedChoice.content);
-      setShowChoicesPreview(false);
-      setGeneratedChoices([]);
-      setSelectedChoice(null);
-    }
+    if (!selectedChoice) return;
+
+    // When the choices preview is open, the RichTextEditor is unmounted, so the
+    // `editorRef` instance is not available. Instead of trying to call
+    // `editorRef.current?.setContent`, persist the chosen content into React
+    // state. Once `showChoicesPreview` is set to false the editor mounts again
+    // and receives the updated `content` prop, ensuring the selected reply is
+    // rendered correctly.
+
+    // 1. Update HTML content state (this is what the editor consumes on mount)
+    setContent(selectedChoice.content);
+
+    // 2. Update plain-text version for validations / send logic
+    const tmp = document.createElement('div');
+    tmp.innerHTML = selectedChoice.content;
+    setContentText(tmp.textContent ?? tmp.innerText ?? selectedChoice.content);
+
+    // 3. Close preview UI and reset helper state
+    setShowChoicesPreview(false);
+    setGeneratedChoices([]);
+    setSelectedChoice(null);
   };
 
   const handleRejectChoices = () => {

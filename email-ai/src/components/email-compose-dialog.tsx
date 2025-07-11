@@ -79,6 +79,7 @@ export const EmailComposeDialog = forwardRef<EmailComposeDialogHandle, EmailComp
           setDraftId(draftId);
           setTo(to);
           setSubject(subject);
+          // The editor's onUpdate callback will automatically sync the state
           editorRef.current?.setContent(content);
         } catch (error) {
           console.error('Error loading draft:', error);
@@ -93,6 +94,7 @@ export const EmailComposeDialog = forwardRef<EmailComposeDialogHandle, EmailComp
         setDraftId(null);
         setTo('');
         setSubject(arg1);
+        // The editor's onUpdate callback will automatically sync the state
         editorRef.current?.setContent(arg2);
       }
       setOpen(true);
@@ -233,6 +235,7 @@ export const EmailComposeDialog = forwardRef<EmailComposeDialogHandle, EmailComp
         if (type === 'subject') {
           setSubject(data.content);
         } else {
+          // The editor's onUpdate callback will automatically sync the state
           editorRef.current?.setContent(data.content);
         }
         
