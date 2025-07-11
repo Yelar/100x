@@ -805,7 +805,7 @@ export default function DashboardContent() {
   };
 
   // Generate TLDR summary for email
-  const handleGenerateTLDR = async (email: Email) => {
+  const handleGenerateTLDR = useCallback(async (email: Email) => {
     if (isGeneratingSummary) return;
     
     setIsGeneratingSummary(true);
@@ -831,7 +831,7 @@ export default function DashboardContent() {
     } finally {
       setIsGeneratingSummary(false);
     }
-  };
+  }, [isGeneratingSummary]);
 
   // Enhanced handleStarEmail to properly manage starred emails across folders
   const handleStarEmail = async (emailId: string, currentlyStarred: boolean) => {
@@ -955,7 +955,7 @@ export default function DashboardContent() {
     }
   };
 
-  const handleSummarize = async () => {
+  const handleSummarize = useCallback(async () => {
     if (!emails.length) return;
     
     setIsSummarizing(true);
@@ -983,7 +983,7 @@ export default function DashboardContent() {
     } finally {
       setIsSummarizing(false);
     }
-  };
+  }, [emails]);
 
   const handleEmailClickById = useCallback((emailId: string) => {
     console.log('Opening email from chat:', emailId);
@@ -1505,12 +1505,26 @@ export default function DashboardContent() {
   const [chatOpen, setChatOpen] = useState(false);
   const [shortcutsOpen, setShortcutsOpen] = useState(false);
 
+  // Navigate to folder function
+  const navigateFolder = useCallback((folder: 'inbox' | 'sent' | 'trash' | 'drafts') => {
+    setCurrentFolder(folder);
+    setSelectedEmail(null);
+    setSelectedFlag(null);
+    const params = new URLSearchParams(window.location.search);
+    params.delete('threadId');
+    params.set('folder', folder);
+    router.replace(`/dashboard?${params.toString()}`, { scroll: false });
+  }, [router]);
+
   // Global keyboard shortcuts
   useEffect(() => {
     const handler = (e: KeyboardEvent) => {
       const cmd = e.metaKey || e.ctrlKey;
       if (!cmd) return;
+      
       const key = e.key.toLowerCase();
+      const target = e.target as HTMLElement;
+      
       // Cmd+N: new compose
       if (key === 'n') {
         e.preventDefault();
@@ -1553,9 +1567,13 @@ export default function DashboardContent() {
       }
       // Cmd+K or Cmd+F: focus search
       if ((key === 'k' || key === 'f') && !e.shiftKey) {
-        e.preventDefault();
-        const el = document.getElementById('dashboard-search-input') as HTMLInputElement | null;
-        el?.focus();
+        // For search shortcuts, only prevent default if we're actually handling it
+        // This allows normal Cmd+F behavior in rich text editors when appropriate
+        const searchInput = document.getElementById('dashboard-search-input') as HTMLInputElement | null;
+        if (searchInput && (key === 'k' || (key === 'f' && target !== searchInput))) {
+          e.preventDefault();
+          searchInput.focus();
+        }
       }
       // Cmd+Shift+L : TLDR summary of selected email
       if (key === 'l' && e.shiftKey) {
@@ -1570,19 +1588,11 @@ export default function DashboardContent() {
         handleSummarize();
       }
     };
-    window.addEventListener('keydown', handler);
-    return () => window.removeEventListener('keydown', handler);
-  }, []);
+    window.addEventListener('keydown', handler, true); // Use capture phase to ensure it runs before other handlers
+    return () => window.removeEventListener('keydown', handler, true);
+  }, [navigateFolder, selectedEmail, handleGenerateTLDR, handleSummarize]);
 
-  const navigateFolder = (folder: 'inbox' | 'sent' | 'trash' | 'drafts') => {
-    setCurrentFolder(folder);
-    setSelectedEmail(null);
-    setSelectedFlag(null);
-    const params = new URLSearchParams(window.location.search);
-    params.delete('threadId');
-    params.set('folder', folder);
-    router.replace(`/dashboard?${params.toString()}`, { scroll: false });
-  };
+
 
   const [autoSuggestion, setAutoSuggestion] = useState('');
   const [autoAbortController, setAutoAbortController] = useState<AbortController | null>(null);
