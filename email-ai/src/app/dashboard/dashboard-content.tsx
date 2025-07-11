@@ -7,7 +7,6 @@ import { Button } from "@/components/ui/button";
 import { EmailAvatar } from "@/components/ui/email-avatar";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Input } from "@/components/ui/input";
-import { Switch } from "@/components/ui/switch";
 import { 
   Mail, 
   Star, 
@@ -2801,16 +2800,7 @@ export default function DashboardContent() {
           <div className="flex items-center justify-between px-3 py-2 border-b border-border/20 flex-none">
             <h2 className="text-base font-medium text-foreground">New Message</h2>
             <div className="flex items-center gap-4">
-              <div className="flex items-center space-x-2">
-                <Switch
-                  id="autocomplete-dashboard"
-                  checked={isAutocompleteEnabled}
-                  onCheckedChange={toggleAutocomplete}
-                />
-                <label htmlFor="autocomplete-dashboard" className="text-sm text-muted-foreground">
-                  AI Autocomplete
-                </label>
-              </div>
+              {/* AI Autocomplete toggle moved into editor toolbar */}
             <DialogClose asChild>
               <Button
                 variant="ghost"
@@ -3035,6 +3025,8 @@ export default function DashboardContent() {
                     onTextChange={setNewEmailText}
                     placeholder="Write your email content here..."
                     autoSuggestion={autoSuggestion}
+                    isAutocompleteEnabled={isAutocompleteEnabled}
+                    onToggleAutocomplete={toggleAutocomplete}
                     onKeyDown={(e) => {
                       if (e.key === 'Tab' && autoSuggestion) {
                         e.preventDefault();
@@ -3050,8 +3042,8 @@ export default function DashboardContent() {
             </div>
 
             {/* Footer */}
-            <div className="flex items-center justify-between pt-4 border-t border-border/20">
-              <div className="flex-1 flex items-center gap-3">
+            <div className="flex flex-wrap items-center gap-3 pt-4 border-t border-border/20">
+              <div className="flex flex-wrap items-center gap-3">
                 <Button
                   onClick={handleSendEmail}
                   disabled={sending}
@@ -3094,8 +3086,8 @@ export default function DashboardContent() {
                   )}
                 </Button>
               </div>
-              {/* Tone and Generate controls - stacked on mobile, side by side on desktop */}
-              <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2 ml-auto">
+              {/* Tone and Generate controls */}
+              <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2">
                 <div className="relative tone-dropdown-container">
                   <Button
                     variant="outline"

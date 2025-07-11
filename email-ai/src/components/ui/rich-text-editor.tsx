@@ -11,6 +11,7 @@ import Underline from '@tiptap/extension-underline';
 import TextAlign from '@tiptap/extension-text-align';
 import { Button } from './button';
 import { Input } from './input';
+import { Switch } from './switch';
 import {
   Bold,
   Italic,
@@ -49,6 +50,10 @@ interface RichTextEditorProps {
   autoSuggestion?: string;
   onKeyDown?: (event: React.KeyboardEvent) => void;
   minHeight?: string;
+  /** Whether AI autocomplete is active. If undefined, the toggle is hidden */
+  isAutocompleteEnabled?: boolean;
+  /** Handler to toggle AI autocomplete */
+  onToggleAutocomplete?: (checked: boolean) => void;
 }
 
 const fontFamilies = [
@@ -71,7 +76,7 @@ const colors = [
 ];
 
 export const RichTextEditor = forwardRef<RichTextEditorHandle, RichTextEditorProps>(
-  ({ placeholder, content, onChange, onTextChange, className, autoSuggestion, onKeyDown, minHeight = '8rem' }, ref) => {
+  ({ placeholder, content, onChange, onTextChange, className, autoSuggestion, onKeyDown, minHeight = '8rem', isAutocompleteEnabled, onToggleAutocomplete }, ref) => {
     const [linkUrl, setLinkUrl] = React.useState('');
     const [showLinkInput, setShowLinkInput] = React.useState(false);
     const [cursorPosition, setCursorPosition] = React.useState<{ top: number; left: number; editorWidth: number; wouldOverflow: boolean } | null>(null);
@@ -479,6 +484,23 @@ export const RichTextEditor = forwardRef<RichTextEditorHandle, RichTextEditorPro
             >
               <Unlink className="h-4 w-4" />
             </Button>
+          )}
+
+          {/* AI Autocomplete Toggle */}
+          {typeof isAutocompleteEnabled === 'boolean' && onToggleAutocomplete && (
+            <div className="ml-auto flex items-center gap-1 pl-2 border-l border-border/50">
+              <Switch
+                id="autocomplete-rte-toggle"
+                checked={isAutocompleteEnabled}
+                onCheckedChange={onToggleAutocomplete}
+              />
+              <label
+                htmlFor="autocomplete-rte-toggle"
+                className="text-[11px] text-muted-foreground select-none"
+              >
+                AI
+              </label>
+            </div>
           )}
         </div>
 
