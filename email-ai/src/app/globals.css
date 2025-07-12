@@ -694,3 +694,17 @@
   z-index: 999 !important;
   background-color: rgba(0, 0, 0, 0.8) !important;
 }
+
+/* Link styling for email content containers */
+.email-content-raw a,
+.email-content-safe-display a {
+  @apply text-blue-600 underline;
+}
+.email-content-raw a:hover,
+.email-content-safe-display a:hover {
+  @apply text-blue-800;
+}
+.email-content-raw a:visited,
+.email-content-safe-display a:visited {
+  @apply text-purple-700;
+}

@@ -121,7 +121,11 @@ export function processEmailContent(emailBody: string): string {
   if (isPlainText) {
     const formattedContent = emailBody
       .split('\n')
-      .map(line => line.trim() ? `<p class="text-foreground">${escapeHtml(line)}</p>` : '<br>')
+      .map(line => {
+        const escaped = escapeHtml(line);
+        const withLinks = linkify(escaped);
+        return line.trim() ? `<p class="text-foreground">${withLinks}</p>` : '<br>';
+      })
       .join('');
 
     return `<div class="email-content-safe-display bg-background">${formattedContent}</div>`;
@@ -170,4 +174,13 @@ function escapeHtml(text: string): string {
   const div = document.createElement('div');
   div.textContent = text;
   return div.innerHTML;
+} 
+
+// Convert bare URLs in plain text into clickable links
+function linkify(text: string): string {
+  const urlRegex = /(https?:\/\/[^\s]+)/g;
+  return text.replace(urlRegex, (url) => {
+    const safeUrl = escapeHtml(url);
+    return `<a href="${safeUrl}" target="_blank" rel="noopener noreferrer">${safeUrl}</a>`;
+  });
 } 
