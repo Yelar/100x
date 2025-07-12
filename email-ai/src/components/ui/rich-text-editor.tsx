@@ -9,6 +9,9 @@ import Color from '@tiptap/extension-color';
 import Link from '@tiptap/extension-link';
 import Underline from '@tiptap/extension-underline';
 import TextAlign from '@tiptap/extension-text-align';
+import BulletList from '@tiptap/extension-bullet-list';
+import OrderedList from '@tiptap/extension-ordered-list';
+import ListItem from '@tiptap/extension-list-item';
 import { Button } from './button';
 import { Input } from './input';
 import { Switch } from './switch';
@@ -122,6 +125,26 @@ export const RichTextEditor = forwardRef<RichTextEditorHandle, RichTextEditorPro
           heading: {
             levels: [1, 2, 3],
           },
+          // Exclude default list extensions to add them explicitly
+          bulletList: false,
+          orderedList: false,
+          listItem: false,
+        }),
+        // Add list extensions explicitly with proper styling
+        BulletList.configure({
+          HTMLAttributes: {
+            class: 'list-disc list-outside ml-6 space-y-1 my-2',
+          },
+        }),
+        OrderedList.configure({
+          HTMLAttributes: {
+            class: 'list-decimal list-outside ml-6 space-y-1 my-2',
+          },
+        }),
+        ListItem.configure({
+          HTMLAttributes: {
+            class: 'ml-0 pl-2',
+          },
         }),
         TextStyle.extend({
           addAttributes() {
@@ -181,7 +204,7 @@ export const RichTextEditor = forwardRef<RichTextEditorHandle, RichTextEditorPro
       content: content || '',
       editorProps: {
         attributes: {
-          class: `prose prose-sm sm:prose lg:prose-lg xl:prose-2xl mx-auto focus:outline-none p-3 flex-1 h-full ${className || ''}`,
+          class: `prose prose-sm sm:prose lg:prose-lg xl:prose-2xl mx-auto focus:outline-none p-3 flex-1 h-full prose-ul:list-disc prose-ol:list-decimal prose-li:ml-0 prose-ul:ml-6 prose-ol:ml-6 prose-ul:my-2 prose-ol:my-2 ${className || ''}`,
           style: `min-height: ${minHeight}; height: 100%;`,
           placeholder: placeholder || 'Type here...',
         },
