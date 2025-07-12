@@ -417,8 +417,15 @@ export default function DashboardContent() {
             mainEmail: threadData.mainEmail
           }
         }));
-        // Set as selected email
-        setSelectedEmail(threadData.mainEmail);
+        // Set as selected email ONLY if user hasn't navigated away
+        setSelectedEmail(prev => {
+          // If no email is currently selected OR the selected email still belongs to this thread, update it
+          if (!prev || prev.threadId === threadId) {
+            return threadData.mainEmail!;
+          }
+          // Otherwise, user has moved on; keep current selection
+          return prev;
+        });
         return threadData.mainEmail;
       }
     } catch (error) {
