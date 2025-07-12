@@ -113,6 +113,7 @@ export const RichTextEditor = forwardRef<RichTextEditorHandle, RichTextEditorPro
     const [linkUrl, setLinkUrl] = React.useState('');
     const [showLinkInput, setShowLinkInput] = React.useState(false);
     const [cursorPosition, setCursorPosition] = React.useState<{ top: number; left: number; editorWidth: number; wouldOverflow: boolean } | null>(null);
+    const toneDropdownRef = React.useRef<HTMLDivElement>(null);
 
     const editor = useEditor({
       immediatelyRender: false, // Fix SSR hydration mismatch
@@ -223,6 +224,20 @@ export const RichTextEditor = forwardRef<RichTextEditorHandle, RichTextEditorPro
         editor.commands.setContent(content);
       }
     }, [editor, content]);
+
+    // Handle click outside to close tone dropdown
+    useEffect(() => {
+      const handleClickOutside = (event: MouseEvent) => {
+        if (showToneDropdown && toneDropdownRef.current && !toneDropdownRef.current.contains(event.target as Node)) {
+          onToggleToneDropdown?.(false);
+        }
+      };
+
+      if (showToneDropdown) {
+        document.addEventListener('mousedown', handleClickOutside);
+        return () => document.removeEventListener('mousedown', handleClickOutside);
+      }
+    }, [showToneDropdown, onToggleToneDropdown]);
 
     const updateCursorPosition = useCallback(() => {
       if (!editor) return;
@@ -539,7 +554,7 @@ export const RichTextEditor = forwardRef<RichTextEditorHandle, RichTextEditorPro
           {/* Tone Selection */}
           {toneOptions && selectedTone && onToneChange && onToggleToneDropdown && (
             <div className="flex items-center gap-1 pl-2 border-l border-border/50">
-              <div className="relative">
+              <div className="relative" ref={toneDropdownRef}>
                 <Button
                   variant="outline"
                   size="sm"
@@ -551,14 +566,16 @@ export const RichTextEditor = forwardRef<RichTextEditorHandle, RichTextEditorPro
                   <span className="text-xs">▼</span>
                 </Button>
                 {showToneDropdown && (
-                  <div className="absolute bottom-full right-0 mb-2 w-48 bg-white dark:bg-gray-800 border border-border rounded-lg shadow-lg z-10 p-1">
+                  <div className="absolute top-full right-0 mt-2 w-48 bg-white dark:bg-gray-800 border border-border rounded-lg shadow-lg z-[9999] p-1">
                     <div className="text-xs font-medium text-muted-foreground px-2 py-1 border-b border-border/50 mb-1">
                       Email Tone
                     </div>
                     {toneOptions.map((tone) => (
                       <button
                         key={tone.value}
-                        onClick={() => {
+                        onMouseDown={(e) => {
+                          e.preventDefault();
+                          e.stopPropagation();
                           onToneChange(tone.value);
                           onToggleToneDropdown(false);
                         }}
