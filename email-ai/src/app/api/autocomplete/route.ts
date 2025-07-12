@@ -15,7 +15,7 @@ Conversation Context (for understanding the email topic):
 
 User's partial sentence: "{textBeforeCursor}"
 
-Continue this sentence naturally in a {tone} tone:`;
+Continue this sentence naturally in a {tone} tone, using NO MORE THAN 10 words:`;
 
 function buildPrompt(vars: Record<string,string>): string {
   let prompt = PROMPT_TEMPLATE;
@@ -123,7 +123,7 @@ export async function POST(request: NextRequest) {
             content: sentence
           }
         ],
-        max_tokens: 24,
+        max_tokens: 12,
         temperature: 0.3,
         top_p: 0.9,
         stop: ['\n', '.', '!', '?']
