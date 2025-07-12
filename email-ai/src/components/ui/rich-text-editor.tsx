@@ -24,7 +24,8 @@ import {
   ListOrdered,
   Type,
   Palette,
-  Unlink
+  Unlink,
+  Sparkles
 } from 'lucide-react';
 import {
   DropdownMenu,
@@ -54,6 +55,20 @@ interface RichTextEditorProps {
   isAutocompleteEnabled?: boolean;
   /** Handler to toggle AI autocomplete */
   onToggleAutocomplete?: (checked: boolean) => void;
+  /** Tone options for email composition */
+  toneOptions?: Array<{ value: string; label: string; emoji: string }>;
+  /** Currently selected tone */
+  selectedTone?: string;
+  /** Handler to change tone */
+  onToneChange?: (tone: string) => void;
+  /** Whether to show tone dropdown */
+  showToneDropdown?: boolean;
+  /** Handler to toggle tone dropdown */
+  onToggleToneDropdown?: (show: boolean) => void;
+  /** Handler to generate content */
+  onGenerateContent?: () => void;
+  /** Whether content is being generated */
+  isGenerating?: boolean;
 }
 
 const fontFamilies = [
@@ -76,7 +91,25 @@ const colors = [
 ];
 
 export const RichTextEditor = forwardRef<RichTextEditorHandle, RichTextEditorProps>(
-  ({ placeholder, content, onChange, onTextChange, className, autoSuggestion, onKeyDown, minHeight = '8rem', isAutocompleteEnabled, onToggleAutocomplete }, ref) => {
+  ({ 
+    placeholder, 
+    content, 
+    onChange, 
+    onTextChange, 
+    className, 
+    autoSuggestion, 
+    onKeyDown, 
+    minHeight = '8rem', 
+    isAutocompleteEnabled, 
+    onToggleAutocomplete,
+    toneOptions,
+    selectedTone,
+    onToneChange,
+    showToneDropdown,
+    onToggleToneDropdown,
+    onGenerateContent,
+    isGenerating
+  }, ref) => {
     const [linkUrl, setLinkUrl] = React.useState('');
     const [showLinkInput, setShowLinkInput] = React.useState(false);
     const [cursorPosition, setCursorPosition] = React.useState<{ top: number; left: number; editorWidth: number; wouldOverflow: boolean } | null>(null);
@@ -488,7 +521,7 @@ export const RichTextEditor = forwardRef<RichTextEditorHandle, RichTextEditorPro
 
           {/* AI Autocomplete Toggle */}
           {typeof isAutocompleteEnabled === 'boolean' && onToggleAutocomplete && (
-            <div className="ml-auto flex items-center gap-1 pl-2 border-l border-border/50">
+            <div className="flex items-center gap-1 pl-2 border-l border-border/50">
               <Switch
                 id="autocomplete-rte-toggle"
                 checked={isAutocompleteEnabled}
@@ -500,6 +533,69 @@ export const RichTextEditor = forwardRef<RichTextEditorHandle, RichTextEditorPro
               >
                 AI
               </label>
+            </div>
+          )}
+
+          {/* Tone Selection */}
+          {toneOptions && selectedTone && onToneChange && onToggleToneDropdown && (
+            <div className="flex items-center gap-1 pl-2 border-l border-border/50">
+              <div className="relative">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => onToggleToneDropdown(!showToneDropdown)}
+                  className="gap-2 border-border/60 hover:bg-gray-50 dark:hover:bg-gray-800 h-8 text-xs"
+                >
+                  {toneOptions.find(t => t.value === selectedTone)?.emoji}
+                  <span className="text-xs">{toneOptions.find(t => t.value === selectedTone)?.label.split(' ')[1]}</span>
+                  <span className="text-xs">▼</span>
+                </Button>
+                {showToneDropdown && (
+                  <div className="absolute bottom-full right-0 mb-2 w-48 bg-white dark:bg-gray-800 border border-border rounded-lg shadow-lg z-10 p-1">
+                    <div className="text-xs font-medium text-muted-foreground px-2 py-1 border-b border-border/50 mb-1">
+                      Email Tone
+                    </div>
+                    {toneOptions.map((tone) => (
+                      <button
+                        key={tone.value}
+                        onClick={() => {
+                          onToneChange(tone.value);
+                          onToggleToneDropdown(false);
+                        }}
+                        className={`w-full text-left px-2 py-1.5 text-xs rounded hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors flex items-center gap-2 ${
+                          selectedTone === tone.value ? 'bg-orange-100 dark:bg-orange-900/30 text-orange-800 dark:text-orange-200' : 'text-foreground'
+                        }`}
+                      >
+                        <span>{tone.emoji}</span>
+                        <span>{tone.label.split(' ')[1]}</span>
+                      </button>
+                    ))}
+                  </div>
+                )}
+              </div>
+            </div>
+          )}
+
+          {/* Generate Button */}
+          {onGenerateContent && (
+            <div className="flex items-center gap-1 pl-2 border-l border-border/50">
+              <Button 
+                onClick={onGenerateContent}
+                disabled={isGenerating}
+                className="bg-gradient-to-r from-purple-600 to-blue-600 hover:from-purple-700 hover:to-blue-700 text-white px-3 shadow-sm transition-all hover:shadow-md h-8 text-xs"
+              >
+                {isGenerating ? (
+                  <>
+                    <span className="animate-spin mr-1">⟳</span>
+                    Generating...
+                  </>
+                ) : (
+                  <>
+                    <Sparkles className="h-3 w-3 mr-1" />
+                    Generate
+                  </>
+                )}
+              </Button>
             </div>
           )}
         </div>

@@ -3043,6 +3043,13 @@ export default function DashboardContent() {
                     }}
                     minHeight="20rem"
                     className="w-full h-full"
+                    toneOptions={toneOptions}
+                    selectedTone={selectedTone}
+                    onToneChange={setSelectedTone}
+                    showToneDropdown={showToneDropdown}
+                    onToggleToneDropdown={setShowToneDropdown}
+                    onGenerateContent={() => handleGenerateContent('content')}
+                    isGenerating={generating === 'content'}
                   />
                 </div>
               )}
@@ -3093,60 +3100,7 @@ export default function DashboardContent() {
                   )}
                 </Button>
               </div>
-              {/* Tone and Generate controls */}
-              <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2">
-                <div className="relative tone-dropdown-container">
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    onClick={() => setShowToneDropdown(!showToneDropdown)}
-                    className="gap-2 border-border/60 hover:bg-gray-50 dark:hover:bg-gray-800 w-full sm:w-auto"
-                  >
-                    {toneOptions.find(t => t.value === selectedTone)?.emoji}
-                    <span className="text-xs">{toneOptions.find(t => t.value === selectedTone)?.label.split(' ')[1]}</span>
-                    <span className="text-xs">▼</span>
-                  </Button>
-                  {showToneDropdown && (
-                    <div className="absolute bottom-full right-0 mb-2 w-48 bg-white dark:bg-gray-800 border border-border rounded-lg shadow-lg z-10 p-1">
-                      <div className="text-xs font-medium text-muted-foreground px-2 py-1 border-b border-border/50 mb-1">
-                        Email Tone
-                      </div>
-                      {toneOptions.map((tone) => (
-                        <button
-                          key={tone.value}
-                          onClick={() => {
-                            setSelectedTone(tone.value);
-                            setShowToneDropdown(false);
-                          }}
-                          className={`w-full text-left px-2 py-1.5 text-xs rounded hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors flex items-center gap-2 ${
-                            selectedTone === tone.value ? 'bg-orange-100 dark:bg-orange-900/30 text-orange-800 dark:text-orange-200' : 'text-foreground'
-                          }`}
-                        >
-                          <span>{tone.emoji}</span>
-                          <span>{tone.label.split(' ')[1]}</span>
-                        </button>
-                      ))}
-                    </div>
-                  )}
-                </div>
-                <Button 
-                  onClick={() => handleGenerateContent('content')}
-                  disabled={generating !== 'idle'}
-                  className="bg-gradient-to-r from-purple-600 to-blue-600 hover:from-purple-700 hover:to-blue-700 text-white px-4 shadow-sm transition-all hover:shadow-md h-8 text-sm w-full sm:w-auto"
-                >
-                  {generating === 'content' ? (
-                    <>
-                      <span className="animate-spin mr-2">⟳</span>
-                      Generating...
-                    </>
-                  ) : (
-                    <>
-                      <Sparkles className="h-4 w-4 mr-2" />
-                      Generate
-                    </>
-                  )}
-                </Button>
-              </div>
+
             </div>
 
             {/* Attachments preview */}
